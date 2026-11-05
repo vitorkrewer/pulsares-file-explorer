@@ -81,3 +81,4 @@ func TestCompareDirectoriesAndComputeHashes(t *testing.T) {
 		t.Fatalf("expected non-empty MD5, SHA1, SHA256: %+v", hashes)
 	}
 }
+

@@ -5,6 +5,8 @@ import {
   FolderDiffItem,
   FileHashes,
   ItemTag,
+  ArchiveEntry,
+  RemoteProfile,
   previewBatchRename,
   executeBatchRename,
   compareDirectories,
@@ -12,6 +14,12 @@ import {
   listItemTags,
   setItemTag,
   removeItemTag,
+  listArchive,
+  createArchive,
+  extractArchive,
+  listRemoteProfiles,
+  saveRemoteProfile,
+  deleteRemoteProfile,
 } from '../../lib/wails';
 import { useBrowserStore } from '../browser/store';
 import { useDualPaneStore } from '../panes/store';
@@ -71,6 +79,14 @@ interface ProductivityState {
 
   tagsByPath: Record<string, ItemTag>;
 
+  archiveOpen: boolean;
+  archivePath: string;
+  archiveEntries: ArchiveEntry[];
+  archiveLoading: boolean;
+
+  remoteOpen: boolean;
+  remoteProfiles: RemoteProfile[];
+
   togglePalette: () => void;
   closePalette: () => void;
 
@@ -96,6 +112,16 @@ interface ProductivityState {
   loadTags: () => Promise<void>;
   assignTagToSelection: (tagName: string, color: string) => Promise<void>;
   clearTagFromSelection: () => Promise<void>;
+
+  openArchiveModal: (targetArchivePath?: string) => Promise<void>;
+  closeArchiveModal: () => void;
+  compressSelection: (archiveName: string, format: 'zip' | 'tar.gz') => Promise<void>;
+  extractCurrentArchive: (destDir?: string) => Promise<void>;
+
+  openRemoteModal: () => Promise<void>;
+  closeRemoteModal: () => void;
+  addRemoteProfile: (profile: Omit<RemoteProfile, 'id'>) => Promise<void>;
+  removeRemoteProfile: (id: number) => Promise<void>;
 }
 
 export const useProductivityStore = create<ProductivityState>((set, get) => ({
@@ -121,6 +147,14 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
   shortcuts: DEFAULT_SHORTCUTS,
 
   tagsByPath: {},
+
+  archiveOpen: false,
+  archivePath: '',
+  archiveEntries: [],
+  archiveLoading: false,
+
+  remoteOpen: false,
+  remoteProfiles: [],
 
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
   closePalette: () => set({ paletteOpen: false }),
@@ -260,4 +294,79 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
     }
     await get().loadTags();
   },
+
+  openArchiveModal: async (targetArchivePath) => {
+    const selected = Array.from(useBrowserStore.getState().selectedPaths);
+    const candidate = targetArchivePath || selected[0] || '';
+    const isArchive = /\.(zip|tar\.gz|tgz|tar)$/i.test(candidate);
+
+    set({
+      archiveOpen: true,
+      archivePath: isArchive ? candidate : '',
+      archiveEntries: [],
+      archiveLoading: isArchive,
+    });
+
+    if (isArchive) {
+      try {
+        const entries = await listArchive(candidate);
+        set({ archiveEntries: entries, archiveLoading: false });
+      } catch {
+        set({ archiveLoading: false });
+      }
+    }
+  },
+
+  closeArchiveModal: () => set({ archiveOpen: false, archiveEntries: [], archivePath: '' }),
+
+  compressSelection: async (archiveName, format) => {
+    const browser = useBrowserStore.getState();
+    const sources = Array.from(browser.selectedPaths);
+    if (sources.length === 0 || !browser.currentPath) return;
+
+    const sep = browser.currentPath.includes('\\') ? '\\' : '/';
+    const ext = format === 'tar.gz' ? '.tar.gz' : '.zip';
+    const base = archiveName.trim() || 'compactado';
+    const fileName = base.toLowerCase().endsWith(ext) ? base : `${base}${ext}`;
+    const destPath = browser.currentPath.endsWith(sep)
+      ? `${browser.currentPath}${fileName}`
+      : `${browser.currentPath}${sep}${fileName}`;
+
+    await createArchive(sources, destPath);
+    set({ archiveOpen: false });
+    browser.refresh();
+  },
+
+  extractCurrentArchive: async (destDir) => {
+    const { archivePath } = get();
+    const browser = useBrowserStore.getState();
+    if (!archivePath) return;
+    const targetDir = destDir?.trim() || browser.currentPath;
+    if (!targetDir) return;
+
+    await extractArchive(archivePath, targetDir);
+    set({ archiveOpen: false });
+    browser.refresh();
+  },
+
+  openRemoteModal: async () => {
+    set({ remoteOpen: true });
+    const profiles = await listRemoteProfiles();
+    set({ remoteProfiles: profiles });
+  },
+
+  closeRemoteModal: () => set({ remoteOpen: false }),
+
+  addRemoteProfile: async (profile) => {
+    await saveRemoteProfile({ id: 0, ...profile });
+    const profiles = await listRemoteProfiles();
+    set({ remoteProfiles: profiles });
+  },
+
+  removeRemoteProfile: async (id) => {
+    await deleteRemoteProfile(id);
+    const profiles = await listRemoteProfiles();
+    set({ remoteProfiles: profiles });
+  },
 }));
+

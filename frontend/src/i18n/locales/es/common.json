@@ -230,6 +230,20 @@
     "tagAssign": "Asignar etiqueta",
     "tagClear": "Quitar etiqueta"
   },
+  "archive": {
+    "title": "Archivos Comprimidos (.zip / .tar.gz)",
+    "compressSelection": "Comprimir selección",
+    "inspecting": "Contenido del archivo",
+    "extractHere": "Extraer en la carpeta actual"
+  },
+  "remote": {
+    "title": "Conexiones Remotas (SFTP / WebDAV)",
+    "hostPlaceholder": "Servidor / Host (ej.: sftp.ejemplo.com)",
+    "userPlaceholder": "Usuario",
+    "pathPlaceholder": "Ruta remota (ej.: /var/www)",
+    "saveProfile": "Guardar conexión",
+    "empty": "No hay conexiones remotas guardadas."
+  },
   "settings": {
     "title": "Configuración",
     "language": "Idioma",

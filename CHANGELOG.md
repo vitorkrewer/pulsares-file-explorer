@@ -2,6 +2,20 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [1.0.0] - 2026-11-05
+
+### Adicionado
+
+- Teste de upgrade e migração idempotente do banco SQLite desde o esquema `0.1.0` até `1.0.0` (`TestStorage_MigrationUpgradeAndTagsRemoteSavedSearches`), preservando todas as configurações e dados do usuário.
+- Validação completa de todos os pacotes Go (`vfs`, `listing`, `tree`, `ops`, `terminal`, `thumbs`, `search`, `watch`, `productivity`, `archive`, `storage`, `platform`) e paridade 100% entre os catálogos `pt-BR`, `en` e `es`.
+
+## [0.10.0] - 2026-11-05
+
+### Adicionado
+
+- Pacote `internal/vfs/archive` com suporte a inspeção sem extração (`ListArchive`), criação recursiva (`CreateArchive`) e extração segura (`ExtractArchive` com proteção anti-**Zip-Slip**) para formatos `.zip`, `.tar`, `.tar.gz` e `.tgz`.
+- Persistência e gerenciamento de perfis de **Conexões Remotas (`SFTP` / `WebDAV`)** na tabela `remote_profiles` do SQLite e modais integrados à **Paleta de Comandos (`Ctrl+Shift+P`)** para compactar, inspecionar/extrair pacotes e gerenciar servidores remotos.
+
 ## [0.9.0] - 2026-11-05
 
 ### Adicionado

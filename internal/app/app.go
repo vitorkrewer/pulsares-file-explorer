@@ -14,6 +14,7 @@ import (
 	"pulsares-file-explorer/internal/thumbs"
 	"pulsares-file-explorer/internal/tree"
 	"pulsares-file-explorer/internal/vfs"
+	"pulsares-file-explorer/internal/vfs/archive"
 	"pulsares-file-explorer/internal/vfs/local"
 	"pulsares-file-explorer/internal/watch"
 )
@@ -503,6 +504,40 @@ func (a *App) DeleteSavedSearch(id int64) error {
 		return nil
 	}
 	return a.storage.DeleteSavedSearch(id)
+}
+
+func (a *App) ListArchive(archivePath string) ([]archive.ArchiveEntry, error) {
+	return archive.ListArchive(archivePath)
+}
+
+func (a *App) CreateArchive(sources []string, destArchivePath string) error {
+	return archive.CreateArchive(sources, destArchivePath)
+}
+
+func (a *App) ExtractArchive(archivePath string, destDir string) (int, error) {
+	return archive.ExtractArchive(archivePath, destDir)
+}
+
+func (a *App) SaveRemoteProfile(profile storage.RemoteProfile) (int64, error) {
+	if a.storage == nil {
+		return 0, nil
+	}
+	return a.storage.SaveRemoteProfile(profile)
+}
+
+func (a *App) ListRemoteProfiles() []storage.RemoteProfile {
+	if a.storage == nil {
+		return nil
+	}
+	items, _ := a.storage.ListRemoteProfiles()
+	return items
+}
+
+func (a *App) DeleteRemoteProfile(id int64) error {
+	if a.storage == nil {
+		return nil
+	}
+	return a.storage.DeleteRemoteProfile(id)
 }
 
 func (a *App) GetDrives() []platform.DriveInfo {

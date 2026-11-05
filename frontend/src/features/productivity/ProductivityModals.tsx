@@ -6,6 +6,9 @@ import {
   FolderGit2,
   Hash,
   Keyboard,
+  Archive,
+  Server,
+  Trash2,
   X,
   CheckCircle2,
   AlertTriangle,
@@ -55,7 +58,30 @@ export const ProductivityModals: React.FC = () => {
     resetShortcuts,
     assignTagToSelection,
     clearTagFromSelection,
+    archiveOpen,
+    archivePath,
+    archiveEntries,
+    archiveLoading,
+    openArchiveModal,
+    closeArchiveModal,
+    compressSelection,
+    extractCurrentArchive,
+    remoteOpen,
+    remoteProfiles,
+    openRemoteModal,
+    closeRemoteModal,
+    addRemoteProfile,
+    removeRemoteProfile,
   } = useProductivityStore();
+
+  const [archiveNameInput, setArchiveNameInput] = useState('arquivo');
+  const [archiveFormat, setArchiveFormat] = useState<'zip' | 'tar.gz'>('zip');
+  const [remoteName, setRemoteName] = useState('');
+  const [remoteProtocol, setRemoteProtocol] = useState<'sftp' | 'webdav'>('sftp');
+  const [remoteHost, setRemoteHost] = useState('');
+  const [remotePort, setRemotePort] = useState(22);
+  const [remoteUser, setRemoteUser] = useState('');
+  const [remotePath, setRemotePath] = useState('/');
 
   const { currentPath, refresh } = useBrowserStore();
   const { openPrompt, openProperties, undo, redo } = useOperationsStore();
@@ -77,6 +103,18 @@ export const ProductivityModals: React.FC = () => {
 
   const commands = useMemo(
     () => [
+      {
+        id: 'archive-manager',
+        label: t('archive.title'),
+        shortcut: '',
+        run: () => void openArchiveModal(),
+      },
+      {
+        id: 'remote-manager',
+        label: t('remote.title'),
+        shortcut: '',
+        run: () => void openRemoteModal(),
+      },
       {
         id: 'batch-rename',
         label: t('productivity.batchRenameTitle'),
@@ -182,6 +220,8 @@ export const ProductivityModals: React.FC = () => {
     ],
     [
       t,
+      openArchiveModal,
+      openRemoteModal,
       openBatchRename,
       openCompare,
       openHashModal,
@@ -592,6 +632,199 @@ export const ProductivityModals: React.FC = () => {
               <button type="button" style={styles.primaryBtn} onClick={closeShortcutsModal}>
                 {t('ops.confirm')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Modal de Arquivos Compactados (.zip / .tar.gz) */}
+      {archiveOpen && (
+        <div style={styles.backdrop} onClick={closeArchiveModal}>
+          <div style={{ ...styles.modal, width: 580 }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <span style={styles.titleRow}>
+                <Archive size={15} style={{ color: 'var(--accent)' }} />
+                {t('archive.title')}
+              </span>
+              <button type="button" style={styles.iconBtn} onClick={closeArchiveModal}>
+                <X size={14} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={archiveNameInput}
+                onChange={(e) => setArchiveNameInput(e.target.value)}
+                placeholder={t('ops.namePlaceholder')}
+                style={{ ...styles.input, flex: 1 }}
+              />
+              <select
+                value={archiveFormat}
+                onChange={(e) => setArchiveFormat(e.target.value as 'zip' | 'tar.gz')}
+                style={styles.input}
+              >
+                <option value="zip">.zip</option>
+                <option value="tar.gz">.tar.gz</option>
+              </select>
+              <button
+                type="button"
+                style={styles.primaryBtn}
+                onClick={() => void compressSelection(archiveNameInput, archiveFormat)}
+              >
+                {t('archive.compressSelection')}
+              </button>
+            </div>
+
+            {archivePath && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                  <span>
+                    <strong>{t('archive.inspecting')}:</strong> {archivePath}
+                  </span>
+                  <button
+                    type="button"
+                    style={styles.secondaryBtn}
+                    onClick={() => void extractCurrentArchive()}
+                  >
+                    {t('archive.extractHere')}
+                  </button>
+                </div>
+
+                <div style={styles.tableBox}>
+                  {archiveLoading ? (
+                    <div style={styles.emptyMsg}>{t('tree.loading')}</div>
+                  ) : archiveEntries.length === 0 ? (
+                    <div style={styles.emptyMsg}>{t('status.empty')}</div>
+                  ) : (
+                    archiveEntries.map((entry) => (
+                      <div key={entry.path} style={styles.previewRow}>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {entry.isDir ? `📁 ${entry.path}` : `📄 ${entry.path}`}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {entry.isDir ? '—' : formatBytes(entry.size, i18n.language)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 7. Modal de Conexões Remotas (SFTP / WebDAV) */}
+      {remoteOpen && (
+        <div style={styles.backdrop} onClick={closeRemoteModal}>
+          <div style={{ ...styles.modal, width: 600 }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <span style={styles.titleRow}>
+                <Server size={15} style={{ color: 'var(--accent)' }} />
+                {t('remote.title')}
+              </span>
+              <button type="button" style={styles.iconBtn} onClick={closeRemoteModal}>
+                <X size={14} />
+              </button>
+            </div>
+
+            <div style={styles.gridForm}>
+              <input
+                type="text"
+                placeholder={t('ops.namePlaceholder')}
+                value={remoteName}
+                onChange={(e) => setRemoteName(e.target.value)}
+                style={styles.input}
+              />
+              <select
+                value={remoteProtocol}
+                onChange={(e) => {
+                  const proto = e.target.value as 'sftp' | 'webdav';
+                  setRemoteProtocol(proto);
+                  setRemotePort(proto === 'webdav' ? 443 : 22);
+                }}
+                style={styles.input}
+              >
+                <option value="sftp">SFTP / SSH</option>
+                <option value="webdav">WebDAV (HTTPS)</option>
+              </select>
+              <input
+                type="text"
+                placeholder={t('remote.hostPlaceholder')}
+                value={remoteHost}
+                onChange={(e) => setRemoteHost(e.target.value)}
+                style={styles.input}
+              />
+              <input
+                type="number"
+                value={remotePort}
+                onChange={(e) => setRemotePort(Number(e.target.value) || 22)}
+                style={styles.input}
+              />
+              <input
+                type="text"
+                placeholder={t('remote.userPlaceholder')}
+                value={remoteUser}
+                onChange={(e) => setRemoteUser(e.target.value)}
+                style={styles.input}
+              />
+              <input
+                type="text"
+                placeholder={t('remote.pathPlaceholder')}
+                value={remotePath}
+                onChange={(e) => setRemotePath(e.target.value)}
+                style={styles.input}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                style={styles.primaryBtn}
+                onClick={() => {
+                  if (!remoteName.trim() || !remoteHost.trim()) return;
+                  void addRemoteProfile({
+                    name: remoteName.trim(),
+                    protocol: remoteProtocol,
+                    host: remoteHost.trim(),
+                    port: remotePort,
+                    username: remoteUser.trim(),
+                    remotePath: remotePath.trim() || '/',
+                  });
+                  setRemoteName('');
+                  setRemoteHost('');
+                }}
+              >
+                {t('remote.saveProfile')}
+              </button>
+            </div>
+
+            <div style={styles.tableBox}>
+              {remoteProfiles.length === 0 ? (
+                <div style={styles.emptyMsg}>{t('remote.empty')}</div>
+              ) : (
+                remoteProfiles.map((p) => (
+                  <div key={p.id} style={styles.previewRow}>
+                    <div style={{ flex: 1 }}>
+                      <strong>{p.name}</strong>{' '}
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        ({p.protocol.toUpperCase()} • {p.username ? `${p.username}@` : ''}
+                        {p.host}:{p.port}
+                        {p.remotePath})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      style={styles.iconBtn}
+                      onClick={() => void removeRemoteProfile(p.id)}
+                      title={t('ops.trash')}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

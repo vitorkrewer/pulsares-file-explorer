@@ -72,6 +72,8 @@ const requiredProductivityKeys = [
   'paletteTitle', 'palettePlaceholder', 'batchRenameTitle',
   'compareTitle', 'hashTitle', 'shortcutsTitle', 'shortcutConflict'
 ];
+const requiredArchiveKeys = ['title', 'compressSelection', 'inspecting', 'extractHere'];
+const requiredRemoteKeys = ['title', 'hostPlaceholder', 'userPlaceholder', 'pathPlaceholder', 'saveProfile', 'empty'];
 
 for (const lang of ['pt-BR', 'en', 'es']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
@@ -112,6 +114,12 @@ for (const lang of ['pt-BR', 'en', 'es']) {
   for (const prodKey of requiredProductivityKeys) {
     assert.ok(typeof data.productivity?.[prodKey] === 'string' && data.productivity[prodKey].length > 0);
   }
+  for (const archKey of requiredArchiveKeys) {
+    assert.ok(typeof data.archive?.[archKey] === 'string' && data.archive[archKey].length > 0);
+  }
+  for (const remKey of requiredRemoteKeys) {
+    assert.ok(typeof data.remote?.[remKey] === 'string' && data.remote[remKey].length > 0);
+  }
 }
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.9.0) passaram com sucesso.');
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.0.0) passaram com sucesso.');

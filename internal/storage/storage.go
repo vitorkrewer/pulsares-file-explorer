@@ -65,6 +65,17 @@ type SavedSearch struct {
 	CreatedAt string `json:"createdAt"`
 }
 
+type RemoteProfile struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Protocol   string `json:"protocol"` // "sftp" | "webdav"
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	RemotePath string `json:"remotePath"`
+	CreatedAt  string `json:"createdAt"`
+}
+
 func Open() (*DB, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -171,6 +182,17 @@ func (db *DB) migrate() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
 		query_json TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS remote_profiles (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		protocol TEXT NOT NULL,
+		host TEXT NOT NULL,
+		port INTEGER NOT NULL DEFAULT 22,
+		username TEXT NOT NULL DEFAULT '',
+		remote_path TEXT NOT NULL DEFAULT '/',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	`
@@ -541,5 +563,51 @@ func (db *DB) ListSavedSearches() ([]SavedSearch, error) {
 
 func (db *DB) DeleteSavedSearch(id int64) error {
 	_, err := db.Exec("DELETE FROM saved_searches WHERE id = ?", id)
+	return err
+}
+
+func (db *DB) SaveRemoteProfile(p RemoteProfile) (int64, error) {
+	port := p.Port
+	if port <= 0 {
+		if strings.ToLower(p.Protocol) == "webdav" {
+			port = 443
+		} else {
+			port = 22
+		}
+	}
+	remotePath := strings.TrimSpace(p.RemotePath)
+	if remotePath == "" {
+		remotePath = "/"
+	}
+	res, err := db.Exec(`
+		INSERT INTO remote_profiles (name, protocol, host, port, username, remote_path)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, strings.TrimSpace(p.Name), strings.ToLower(strings.TrimSpace(p.Protocol)), strings.TrimSpace(p.Host), port, strings.TrimSpace(p.Username), remotePath)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (db *DB) ListRemoteProfiles() ([]RemoteProfile, error) {
+	rows, err := db.Query("SELECT id, name, protocol, host, port, username, remote_path, created_at FROM remote_profiles ORDER BY name ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []RemoteProfile
+	for rows.Next() {
+		var p RemoteProfile
+		if err := rows.Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.Username, &p.RemotePath, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) DeleteRemoteProfile(id int64) error {
+	_, err := db.Exec("DELETE FROM remote_profiles WHERE id = ?", id)
 	return err
 }

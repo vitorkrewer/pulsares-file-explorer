@@ -296,6 +296,26 @@ export interface SavedSearch {
   createdAt: string;
 }
 
+export interface ArchiveEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  compressedSize: number;
+  modTime: number;
+}
+
+export interface RemoteProfile {
+  id: number;
+  name: string;
+  protocol: 'sftp' | 'webdav';
+  host: string;
+  port: number;
+  username: string;
+  remotePath: string;
+  createdAt?: string;
+}
+
 // Declaração de objetos injetados pelo Wails runtime
 declare global {
   interface Window {
@@ -370,6 +390,12 @@ declare global {
           SaveSearch: (name: string, queryJson: string) => Promise<number>;
           ListSavedSearches: () => Promise<SavedSearch[]>;
           DeleteSavedSearch: (id: number) => Promise<void>;
+          ListArchive: (archivePath: string) => Promise<ArchiveEntry[]>;
+          CreateArchive: (sources: string[], destArchivePath: string) => Promise<void>;
+          ExtractArchive: (archivePath: string, destDir: string) => Promise<number>;
+          SaveRemoteProfile: (profile: RemoteProfile) => Promise<number>;
+          ListRemoteProfiles: () => Promise<RemoteProfile[]>;
+          DeleteRemoteProfile: (id: number) => Promise<void>;
           GetDrives: () => Promise<DriveInfo[]>;
           GetSetting: (key: string) => Promise<string>;
           SetSetting: (key: string, val: string) => Promise<void>;
@@ -860,6 +886,48 @@ export async function listSavedSearches(): Promise<SavedSearch[]> {
 export async function deleteSavedSearch(id: number): Promise<void> {
   if (isWailsAvailable()) {
     return window.go!.app.App.DeleteSavedSearch(id);
+  }
+}
+
+export async function listArchive(archivePath: string): Promise<ArchiveEntry[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListArchive(archivePath);
+    return res || [];
+  }
+  return [];
+}
+
+export async function createArchive(sources: string[], destArchivePath: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.CreateArchive(sources, destArchivePath);
+  }
+}
+
+export async function extractArchive(archivePath: string, destDir: string): Promise<number> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.ExtractArchive(archivePath, destDir);
+  }
+  return 0;
+}
+
+export async function saveRemoteProfile(profile: RemoteProfile): Promise<number> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.SaveRemoteProfile(profile);
+  }
+  return 0;
+}
+
+export async function listRemoteProfiles(): Promise<RemoteProfile[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListRemoteProfiles();
+    return res || [];
+  }
+  return [];
+}
+
+export async function deleteRemoteProfile(id: number): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.DeleteRemoteProfile(id);
   }
 }
 

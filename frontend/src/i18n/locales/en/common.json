@@ -230,6 +230,20 @@
     "tagAssign": "Assign tag",
     "tagClear": "Clear tag"
   },
+  "archive": {
+    "title": "Archives (.zip / .tar.gz)",
+    "compressSelection": "Compress selection",
+    "inspecting": "Archive contents",
+    "extractHere": "Extract to current folder"
+  },
+  "remote": {
+    "title": "Remote Connections (SFTP / WebDAV)",
+    "hostPlaceholder": "Server / Host (e.g. sftp.example.com)",
+    "userPlaceholder": "Username",
+    "pathPlaceholder": "Remote path (e.g. /var/www)",
+    "saveProfile": "Save connection",
+    "empty": "No remote connections saved."
+  },
   "settings": {
     "title": "Settings",
     "language": "Language",
