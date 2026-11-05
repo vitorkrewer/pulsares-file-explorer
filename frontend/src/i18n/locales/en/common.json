@@ -50,6 +50,27 @@
     "dropHere": "Drop here to copy (or Shift to move)",
     "activatePane": "Make primary pane"
   },
+  "terminal": {
+    "title": "Terminal",
+    "togglePanel": "Toggle integrated terminal (Ctrl+`)",
+    "newTab": "New terminal in current folder (Ctrl+Shift+`)",
+    "closeTab": "Close terminal tab",
+    "selectProfile": "Default terminal profile",
+    "cdCurrentFolder": "Go to current folder",
+    "followOsc7": "Follow terminal folder (OSC 7)",
+    "splitTerminal": "Split terminal side by side",
+    "searchPlaceholder": "Search terminal output (Ctrl+Shift+F)...",
+    "clearOutput": "Clear output (Ctrl+L)",
+    "maximizePanel": "Maximize terminal panel",
+    "restorePanel": "Restore panel height",
+    "hidePanel": "Hide terminal panel (Ctrl+`)",
+    "inputPlaceholder": "Type a command or drag files to quote paths...",
+    "processExited": "[Process exited with code {{code}}]",
+    "emptyState": "No active terminal session. Click + to start.",
+    "confirmActiveProcessTitle": "Active process in terminal",
+    "confirmActiveProcessMessage": "There are child processes running in this terminal session. Do you want to terminate them and close the tab?",
+    "confirmKillProcess": "Terminate and close"
+  },
   "ops": {
     "title": "File operations",
     "newFolder": "New folder (Ctrl+Shift+N)",

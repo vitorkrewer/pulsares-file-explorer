@@ -290,3 +290,4 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
   },
 };
+

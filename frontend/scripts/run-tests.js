@@ -31,7 +31,7 @@ const sample = ['arquivo10.txt', 'arquivo2.txt', 'Arquivo1.txt'];
 sample.sort((a, b) => collator.compare(a, b));
 assert.deepEqual(sample, ['Arquivo1.txt', 'arquivo2.txt', 'arquivo10.txt']);
 
-// 3. Garantir que códigos de erro e namespaces (0.1.0 a 0.4.0) existem nos 3 catálogos
+// 3. Garantir que códigos de erro e namespaces (0.1.0 a 0.5.0) existem nos 3 catálogos
 const requiredErrorKeys = ['notFound', 'permissionDenied', 'generic'];
 const requiredTabKeys = ['newTab', 'closeTab', 'duplicateTab', 'pinTab', 'unpinTab', 'closeOthers', 'closeRight', 'reopenClosed'];
 const requiredTreeKeys = ['title', 'followActiveTab', 'refresh', 'loading', 'empty', 'symlink'];
@@ -42,6 +42,12 @@ const requiredOpsKeys = [
 ];
 const requiredSidebarKeys = ['favorites', 'addFavorite', 'removeFavorite', 'drives', 'freeOf', 'recent'];
 const requiredPaneKeys = ['single', 'splitHorizontal', 'splitVertical', 'copyToOther', 'moveToOther'];
+const requiredTerminalKeys = [
+  'title', 'togglePanel', 'newTab', 'closeTab', 'selectProfile',
+  'cdCurrentFolder', 'followOsc7', 'splitTerminal', 'searchPlaceholder',
+  'clearOutput', 'maximizePanel', 'restorePanel', 'hidePanel',
+  'inputPlaceholder', 'processExited', 'confirmActiveProcessTitle'
+];
 
 for (const lang of ['pt-BR', 'en', 'es']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
@@ -64,6 +70,9 @@ for (const lang of ['pt-BR', 'en', 'es']) {
   for (const paneKey of requiredPaneKeys) {
     assert.ok(typeof data.panes?.[paneKey] === 'string' && data.panes[paneKey].length > 0);
   }
+  for (const termKey of requiredTerminalKeys) {
+    assert.ok(typeof data.terminal?.[termKey] === 'string' && data.terminal[termKey].length > 0);
+  }
 }
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.4.0) passaram com sucesso.');
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.5.0) passaram com sucesso.');

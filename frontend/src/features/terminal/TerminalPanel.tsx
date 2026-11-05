@@ -1,0 +1,856 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useTerminalStore, TerminalTabSession } from './store';
+import { useBrowserStore } from '../browser/store';
+import {
+  subscribeEvent,
+  TerminalDataEvent,
+  TerminalExitEvent,
+  openPath,
+} from '../../lib/wails';
+
+interface PaneViewProps {
+  session: TerminalTabSession;
+  fontSize: number;
+  searchQuery: string;
+  onNavigatePath: (path: string) => void;
+}
+
+const TerminalViewport: React.FC<PaneViewProps> = ({
+  session,
+  fontSize,
+  searchQuery,
+  onNavigatePath,
+}) => {
+  const { t } = useTranslation();
+  const {
+    sendInput,
+    setInputDraft,
+    appendQuotedPathsToDraft,
+    clearOutput,
+    resizeSession,
+  } = useTerminalStore();
+
+  const outputRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [cmdHistory, setCmdHistory] = useState<string[]>([]);
+  const [historyIdx, setHistoryIdx] = useState<number>(-1);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  useEffect(() => {
+    if (outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+    }
+  }, [session.output]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const cols = Math.max(40, Math.floor(rect.width / (fontSize * 0.62)));
+        const rows = Math.max(8, Math.floor(rect.height / (fontSize * 1.45)));
+        void resizeSession(session.id, cols, rows);
+      }, 120);
+    });
+    observer.observe(el);
+    return () => {
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [session.id, fontSize, resizeSession]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const cmd = session.inputDraft;
+      if (cmd.trim()) {
+        setCmdHistory((prev) => [...prev.slice(-49), cmd]);
+      }
+      setHistoryIdx(-1);
+      setInputDraft(session.id, '');
+      void sendInput(session.id, `${cmd}\r\n`);
+      return;
+    }
+
+    if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'c') {
+      const sel = window.getSelection()?.toString();
+      if (!sel) {
+        e.preventDefault();
+        void sendInput(session.id, '\x03');
+      }
+      return;
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+      e.preventDefault();
+      clearOutput(session.id);
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (cmdHistory.length === 0) return;
+      const nextIdx = historyIdx < 0 ? cmdHistory.length - 1 : Math.max(0, historyIdx - 1);
+      setHistoryIdx(nextIdx);
+      setInputDraft(session.id, cmdHistory[nextIdx]);
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIdx < 0) return;
+      const nextIdx = historyIdx + 1;
+      if (nextIdx >= cmdHistory.length) {
+        setHistoryIdx(-1);
+        setInputDraft(session.id, '');
+      } else {
+        setHistoryIdx(nextIdx);
+        setInputDraft(session.id, cmdHistory[nextIdx]);
+      }
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const raw = e.dataTransfer.getData('application/x-pulsares-paths');
+    if (!raw) return;
+    try {
+      const paths = JSON.parse(raw) as string[];
+      if (Array.isArray(paths) && paths.length > 0) {
+        void appendQuotedPathsToDraft(session.id, paths);
+      }
+    } catch {
+      // Ignora payload inválido
+    }
+  };
+
+  const renderLineWithLinksAndSearch = (line: string, idx: number) => {
+    const trimmed = line.trim();
+    const urlMatch = trimmed.match(/(https?:\/\/[^\s"'<>]+)/);
+    const winPathMatch = trimmed.match(/([A-Za-z]:\\[^\s"'<>|*?\r\n]+)/);
+
+    const matchesSearch =
+      searchQuery.trim().length > 0 &&
+      line.toLowerCase().includes(searchQuery.trim().toLowerCase());
+
+    return (
+      <div
+        key={idx}
+        style={{
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
+          backgroundColor: matchesSearch ? 'rgba(234, 179, 8, 0.25)' : 'transparent',
+          lineHeight: 1.45,
+        }}
+      >
+        <span>{line}</span>
+        {urlMatch && (
+          <button
+            type="button"
+            onClick={() => void openPath(urlMatch[1])}
+            style={{
+              marginLeft: '8px',
+              fontSize: '11px',
+              color: 'var(--accent-primary)',
+              background: 'none',
+              border: 'none',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            ↗
+          </button>
+        )}
+        {winPathMatch && (
+          <button
+            type="button"
+            onClick={() => onNavigatePath(winPathMatch[1])}
+            title={winPathMatch[1]}
+            style={{
+              marginLeft: '8px',
+              fontSize: '11px',
+              color: 'var(--accent-primary)',
+              background: 'none',
+              border: 'none',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            📂
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const lines = session.output ? session.output.split('\n') : [];
+
+  return (
+    <div
+      ref={containerRef}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('application/x-pulsares-paths')) {
+          e.preventDefault();
+          setIsDragOver(true);
+        }
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={handleDrop}
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        minHeight: 0,
+        backgroundColor: 'var(--bg-primary)',
+        outline: isDragOver ? '2px dashed var(--accent-primary)' : 'none',
+        outlineOffset: '-2px',
+        fontFamily: 'var(--font-mono)',
+        fontSize: `${fontSize}px`,
+      }}
+    >
+      <div
+        ref={outputRef}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '8px 12px',
+          color: 'var(--text-primary)',
+          userSelect: 'text',
+        }}
+      >
+        <div
+          style={{
+            color: 'var(--text-muted)',
+            fontSize: '11px',
+            marginBottom: '6px',
+          }}
+        >
+          {session.cwd}
+        </div>
+        {lines.map((line, idx) => renderLineWithLinksAndSearch(line, idx))}
+        {session.exited && (
+          <div style={{ color: 'var(--warning)', marginTop: '6px', fontSize: '12px' }}>
+            {t('terminal.processExited', { code: session.exitCode ?? 0 })}
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 12px',
+          borderTop: '1px solid var(--border-subtle)',
+          backgroundColor: 'var(--bg-secondary)',
+        }}
+      >
+        <span style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>{'>'}</span>
+        <input
+          type="text"
+          value={session.inputDraft}
+          disabled={session.exited}
+          onChange={(e) => setInputDraft(session.id, e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={t('terminal.inputPlaceholder')}
+          aria-label={t('terminal.inputPlaceholder')}
+          style={{
+            flex: 1,
+            backgroundColor: 'transparent',
+            border: 'none',
+            outline: 'none',
+            color: 'var(--text-primary)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: `${fontSize}px`,
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+export const TerminalPanel: React.FC = () => {
+  const { t } = useTranslation();
+  const {
+    visible,
+    height,
+    maximized,
+    profiles,
+    defaultProfileId,
+    sessions,
+    activeTabId,
+    splitTabId,
+    followOsc7,
+    fontSize,
+    searchOpen,
+    searchQuery,
+    confirmCloseTabId,
+    initTerminalStore,
+    setPanelVisible,
+    setPanelHeight,
+    toggleMaximized,
+    setDefaultProfile,
+    setFollowOsc7,
+    setFontSize,
+    setSearchOpen,
+    setSearchQuery,
+    createSession,
+    setActiveTab,
+    toggleSplitWithTab,
+    renameTab,
+    requestCloseTab,
+    cancelCloseTab,
+    changeDirectoryInSession,
+    clearOutput,
+    handleBackendData,
+    handleBackendExit,
+  } = useTerminalStore();
+
+  const { currentPath, navigateTo } = useBrowserStore();
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const isResizingRef = useRef(false);
+
+  useEffect(() => {
+    void initTerminalStore(currentPath || '/');
+  }, [currentPath, initTerminalStore]);
+
+  useEffect(() => {
+    const unsubData = subscribeEvent<TerminalDataEvent>('terminal:data', (ev) => {
+      handleBackendData(ev.id, ev.chunk, ev.rawLen, ev.cwdOsc7);
+      if (ev.cwdOsc7 && useTerminalStore.getState().followOsc7) {
+        void navigateTo(ev.cwdOsc7);
+      }
+    });
+    const unsubExit = subscribeEvent<TerminalExitEvent>('terminal:exit', (ev) => {
+      handleBackendExit(ev.id, ev.exitCode);
+    });
+    return () => {
+      unsubData();
+      unsubExit();
+    };
+  }, [handleBackendData, handleBackendExit, navigateTo]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const newHeight = window.innerHeight - e.clientY - 26;
+      setPanelHeight(newHeight);
+    };
+    const onMouseUp = () => {
+      if (isResizingRef.current) {
+        isResizingRef.current = false;
+        document.body.style.cursor = '';
+      }
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [setPanelHeight]);
+
+  if (!visible) return null;
+
+  const activeSession =
+    sessions.find((s) => s.id === activeTabId) || sessions[0] || null;
+  const splitSession =
+    splitTabId && splitTabId !== activeSession?.id
+      ? sessions.find((s) => s.id === splitTabId) || null
+      : null;
+
+  return (
+    <section
+      aria-label={t('terminal.title')}
+      style={{
+        height: maximized ? 'calc(100vh - 120px)' : `${height}px`,
+        display: 'flex',
+        flexDirection: 'column',
+        borderTop: '1px solid var(--border-subtle)',
+        backgroundColor: 'var(--bg-secondary)',
+        position: 'relative',
+        flexShrink: 0,
+      }}
+    >
+      {/* Divisor superior redimensionável */}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          isResizingRef.current = true;
+          document.body.style.cursor = 'row-resize';
+        }}
+        onDoubleClick={() => setPanelHeight(260)}
+        style={{
+          height: '4px',
+          cursor: 'row-resize',
+          backgroundColor: 'transparent',
+          width: '100%',
+        }}
+      />
+
+      {/* Barra de cabeçalho do terminal */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '4px 10px',
+          borderBottom: '1px solid var(--border-subtle)',
+          gap: '8px',
+          flexWrap: 'wrap',
+        }}
+      >
+        {/* Abas de terminal */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflowX: 'auto' }}>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              color: 'var(--text-secondary)',
+              marginRight: '6px',
+            }}
+          >
+            {t('terminal.title')}
+          </span>
+
+          {sessions.map((sess) => {
+            const isActive = sess.id === activeSession?.id;
+            return (
+              <div
+                key={sess.id}
+                onClick={() => setActiveTab(sess.id)}
+                onDoubleClick={() => {
+                  setEditingTabId(sess.id);
+                  setEditingTitle(sess.title);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '3px 8px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  backgroundColor: isActive ? 'var(--bg-tertiary)' : 'transparent',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  border: isActive
+                    ? '1px solid var(--accent-primary)'
+                    : '1px solid var(--border-subtle)',
+                }}
+              >
+                {editingTabId === sess.id ? (
+                  <input
+                    type="text"
+                    value={editingTitle}
+                    autoFocus
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                    onBlur={() => {
+                      renameTab(sess.id, editingTitle);
+                      setEditingTabId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        renameTab(sess.id, editingTitle);
+                        setEditingTabId(null);
+                      } else if (e.key === 'Escape') {
+                        setEditingTabId(null);
+                      }
+                    }}
+                    style={{
+                      width: '90px',
+                      fontSize: '12px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--accent-primary)',
+                    }}
+                  />
+                ) : (
+                  <span>{sess.title}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void requestCloseTab(sess.id);
+                  }}
+                  title={t('terminal.closeTab')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    padding: '0 2px',
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => void createSession(currentPath || '/', defaultProfileId)}
+            title={t('terminal.newTab')}
+            style={{
+              padding: '2px 8px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              fontSize: '12px',
+            }}
+          >
+            +
+          </button>
+
+          <select
+            value={defaultProfileId}
+            onChange={(e) => setDefaultProfile(e.target.value)}
+            aria-label={t('terminal.selectProfile')}
+            title={t('terminal.selectProfile')}
+            style={{
+              fontSize: '11px',
+              padding: '2px 6px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Ações do painel do terminal */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {activeSession && (
+            <button
+              type="button"
+              onClick={() =>
+                void changeDirectoryInSession(activeSession.id, currentPath || '/')
+              }
+              title={t('terminal.cdCurrentFolder')}
+              style={{
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-subtle)',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '11px',
+              }}
+            >
+              📂 {t('terminal.cdCurrentFolder')}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setFollowOsc7(!followOsc7)}
+            title={t('terminal.followOsc7')}
+            style={{
+              padding: '2px 7px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: followOsc7 ? 'var(--bg-selected)' : 'var(--bg-primary)',
+              color: 'var(--text-secondary)',
+              fontSize: '11px',
+            }}
+          >
+            ⇄ OSC7
+          </button>
+
+          {sessions.length > 1 && (
+            <button
+              type="button"
+              onClick={() => toggleSplitWithTab()}
+              title={t('terminal.splitTerminal')}
+              style={{
+                padding: '2px 7px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-subtle)',
+                backgroundColor: splitSession ? 'var(--bg-selected)' : 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '11px',
+              }}
+            >
+              ◫
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setSearchOpen(!searchOpen)}
+            title={t('terminal.searchPlaceholder')}
+            style={{
+              padding: '2px 7px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: searchOpen ? 'var(--bg-selected)' : 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              fontSize: '11px',
+            }}
+          >
+            🔍
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFontSize(fontSize - 1)}
+            title="A-"
+            style={{
+              padding: '2px 6px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-secondary)',
+              fontSize: '11px',
+            }}
+          >
+            A-
+          </button>
+          <button
+            type="button"
+            onClick={() => setFontSize(fontSize + 1)}
+            title="A+"
+            style={{
+              padding: '2px 6px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-secondary)',
+              fontSize: '11px',
+            }}
+          >
+            A+
+          </button>
+
+          {activeSession && (
+            <button
+              type="button"
+              onClick={() => clearOutput(activeSession.id)}
+              title={t('terminal.clearOutput')}
+              style={{
+                padding: '2px 7px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-subtle)',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-secondary)',
+                fontSize: '11px',
+              }}
+            >
+              ⌫
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={toggleMaximized}
+            title={maximized ? t('terminal.restorePanel') : t('terminal.maximizePanel')}
+            style={{
+              padding: '2px 7px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              fontSize: '11px',
+            }}
+          >
+            {maximized ? '🗗' : '⤢'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPanelVisible(false)}
+            title={t('terminal.hidePanel')}
+            style={{
+              padding: '2px 7px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              fontSize: '11px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {/* Barra de busca na saída */}
+      {searchOpen && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '4px 12px',
+            borderBottom: '1px solid var(--border-subtle)',
+            backgroundColor: 'var(--bg-tertiary)',
+          }}
+        >
+          <input
+            type="text"
+            value={searchQuery}
+            autoFocus
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('terminal.searchPlaceholder')}
+            style={{
+              flex: 1,
+              padding: '3px 8px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              fontSize: '12px',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery('');
+              setSearchOpen(false);
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '12px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Área das sessões (única ou dividida lado a lado) */}
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+        {activeSession ? (
+          <>
+            <TerminalViewport
+              session={activeSession}
+              fontSize={fontSize}
+              searchQuery={searchQuery}
+              onNavigatePath={(p) => void navigateTo(p)}
+            />
+            {splitSession && (
+              <>
+                <div
+                  style={{
+                    width: '1px',
+                    backgroundColor: 'var(--border-subtle)',
+                    flexShrink: 0,
+                  }}
+                />
+                <TerminalViewport
+                  session={splitSession}
+                  fontSize={fontSize}
+                  searchQuery={searchQuery}
+                  onNavigatePath={(p) => void navigateTo(p)}
+                />
+              </>
+            )}
+          </>
+        ) : (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-muted)',
+              fontSize: '12px',
+            }}
+          >
+            {t('terminal.emptyState')}
+          </div>
+        )}
+      </div>
+
+      {/* Modal de confirmação ao fechar aba com processos filhos ativos */}
+      {confirmCloseTabId && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 250,
+          }}
+        >
+          <div
+            style={{
+              width: '400px',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
+            <strong style={{ fontSize: '14px' }}>{t('terminal.confirmActiveProcessTitle')}</strong>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              {t('terminal.confirmActiveProcessMessage')}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={cancelCloseTab}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-subtle)',
+                  backgroundColor: 'var(--bg-tertiary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '12px',
+                }}
+              >
+                {t('ops.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => void requestCloseTab(confirmCloseTabId, true)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  backgroundColor: 'var(--danger)',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                {t('terminal.confirmKillProcess')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};

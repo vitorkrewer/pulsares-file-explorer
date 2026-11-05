@@ -7,11 +7,13 @@ import { OperationsPanel } from '../features/operations/OperationsPanel';
 import { Sidebar } from '../features/sidebar/Sidebar';
 import { DetailsView } from '../features/browser/DetailsView';
 import { SecondaryPane } from '../features/panes/SecondaryPane';
+import { TerminalPanel } from '../features/terminal/TerminalPanel';
 import { StatusBar } from '../features/browser/StatusBar';
 import { useBrowserStore } from '../features/browser/store';
 import { useFolderTreeStore } from '../features/sidebar/folder-tree/store';
 import { useOperationsStore } from '../features/operations/store';
 import { useDualPaneStore } from '../features/panes/store';
+import { useTerminalStore } from '../features/terminal/store';
 import { getInitialState, enqueueOperation } from '../lib/wails';
 import { resolveLanguage } from '../i18n/config';
 
@@ -58,6 +60,12 @@ export const App: React.FC = () => {
     copyToOppositePane,
     moveToOppositePane,
   } = useDualPaneStore();
+  const {
+    togglePanel: toggleTerminalPanel,
+    createSession: createTerminalSession,
+    visible: terminalVisible,
+    setSearchOpen: setTerminalSearchOpen,
+  } = useTerminalStore();
   const [theme, setTheme] = useState<string>('dark');
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -107,7 +115,7 @@ export const App: React.FC = () => {
     }
   }, [currentPath, refreshSidebarMeta]);
 
-  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 a 0.4.0)
+  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 a 0.5.0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const targetEl = e.target as HTMLElement | null;
@@ -119,8 +127,25 @@ export const App: React.FC = () => {
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
 
-      // Focar barra de endereço: Ctrl+L ou Alt+D
-      if ((mod && key === 'l') || (e.altKey && key === 'd')) {
+      // Atalhos do Terminal Integrado funcionam mesmo com foco no input do terminal (Ctrl+` / Ctrl+Shift+`)
+      if (mod && (e.key === '`' || e.code === 'Backquote')) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          void createTerminalSession(currentPath || '/');
+        } else {
+          void toggleTerminalPanel(currentPath || '/');
+        }
+        return;
+      }
+
+      if (mod && e.shiftKey && key === 'f' && terminalVisible) {
+        e.preventDefault();
+        setTerminalSearchOpen(true);
+        return;
+      }
+
+      // Focar barra de endereço: Ctrl+L ou Alt+D (exceto quando no input do terminal)
+      if (!isInputFocused && ((mod && key === 'l') || (e.altKey && key === 'd'))) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('pulsares:focus-address-bar'));
         return;
@@ -251,6 +276,11 @@ export const App: React.FC = () => {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [
+    currentPath,
+    terminalVisible,
+    toggleTerminalPanel,
+    createTerminalSession,
+    setTerminalSearchOpen,
     layoutMode,
     selectedPaths,
     copyToOppositePane,
@@ -340,47 +370,50 @@ export const App: React.FC = () => {
       <OperationsToolbar />
       <div style={styles.mainContent}>
         <Sidebar />
-        <div
-          ref={workspaceRef}
-          style={{
-            ...styles.panesContainer,
-            flexDirection: layoutMode === 'split-v' ? 'column' : 'row',
-          }}
-        >
+        <div style={styles.rightColumn}>
           <div
-            onClick={() => setFocusedPane('primary')}
-            draggable={selectedPaths.size > 0}
-            onDragStart={(e) => {
-              if (selectedPaths.size > 0) {
-                e.dataTransfer.setData(
-                  'application/x-pulsares-paths',
-                  JSON.stringify(Array.from(selectedPaths))
-                );
-              }
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handlePrimaryDrop}
+            ref={workspaceRef}
             style={{
-              ...styles.primaryPaneWrapper,
-              flex: layoutMode === 'single' ? 1 : `0 0 ${Math.round(splitRatio * 100)}%`,
+              ...styles.panesContainer,
+              flexDirection: layoutMode === 'split-v' ? 'column' : 'row',
             }}
           >
-            <DetailsView />
-          </div>
-
-          {layoutMode !== 'single' && (
-            <>
-              <div
-                role="separator"
-                style={
-                  layoutMode === 'split-h' ? styles.verticalSplitter : styles.horizontalSplitter
+            <div
+              onClick={() => setFocusedPane('primary')}
+              draggable={selectedPaths.size > 0}
+              onDragStart={(e) => {
+                if (selectedPaths.size > 0) {
+                  e.dataTransfer.setData(
+                    'application/x-pulsares-paths',
+                    JSON.stringify(Array.from(selectedPaths))
+                  );
                 }
-                onMouseDown={handleSplitDragStart}
-                onDoubleClick={() => setSplitRatio(0.5)}
-              />
-              <SecondaryPane />
-            </>
-          )}
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handlePrimaryDrop}
+              style={{
+                ...styles.primaryPaneWrapper,
+                flex: layoutMode === 'single' ? 1 : `0 0 ${Math.round(splitRatio * 100)}%`,
+              }}
+            >
+              <DetailsView />
+            </div>
+
+            {layoutMode !== 'single' && (
+              <>
+                <div
+                  role="separator"
+                  style={
+                    layoutMode === 'split-h' ? styles.verticalSplitter : styles.horizontalSplitter
+                  }
+                  onMouseDown={handleSplitDragStart}
+                  onDoubleClick={() => setSplitRatio(0.5)}
+                />
+                <SecondaryPane />
+              </>
+            )}
+          </div>
+          <TerminalPanel />
         </div>
       </div>
       <OperationsPanel />
@@ -402,11 +435,19 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     display: 'flex',
   },
+  rightColumn: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
   panesContainer: {
     flex: 1,
     display: 'flex',
     overflow: 'hidden',
-    height: '100%',
+    minHeight: 0,
   },
   primaryPaneWrapper: {
     display: 'flex',

@@ -17,11 +17,13 @@ import {
   Square,
   Star,
   ArrowRightLeft,
+  TerminalSquare,
 } from 'lucide-react';
 import { useOperationsStore } from './store';
 import { useBrowserStore, getTabLabel } from '../browser/store';
 import { useDualPaneStore } from '../panes/store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
+import { useTerminalStore } from '../terminal/store';
 
 export const OperationsToolbar: React.FC = () => {
   const { t } = useTranslation('common');
@@ -49,6 +51,7 @@ export const OperationsToolbar: React.FC = () => {
     moveToOppositePane,
   } = useDualPaneStore();
   const { favorites, toggleFavorite } = useFolderTreeStore();
+  const { visible: terminalVisible, togglePanel: toggleTerminal } = useTerminalStore();
 
   const hasSelection = selectedPaths.size > 0;
   const hasSingleSelection = selectedPaths.size === 1;
@@ -179,6 +182,19 @@ export const OperationsToolbar: React.FC = () => {
       </div>
 
       <div style={styles.group}>
+        {/* Alternador do Terminal Integrado (Ctrl+`) */}
+        <button
+          type="button"
+          style={terminalVisible ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => void toggleTerminal(currentPath || '/')}
+          title={t('terminal.togglePanel')}
+        >
+          <TerminalSquare size={14} />
+          <span>{t('terminal.title')}</span>
+        </button>
+
+        <span style={styles.divider} />
+
         {/* Alternadores de Layout (Painel Único / Duplo Horizontal / Duplo Vertical) */}
         <button
           type="button"

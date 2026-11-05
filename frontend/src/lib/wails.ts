@@ -52,6 +52,29 @@ export interface RecentItem {
   lastVisited: string;
 }
 
+export type ShellKind = 'powershell' | 'cmd' | 'posix' | 'fish' | 'wsl';
+
+export interface TerminalProfile {
+  id: string;
+  name: string;
+  path: string;
+  args?: string[];
+  env?: Record<string, string>;
+  kind: ShellKind;
+}
+
+export interface TerminalDataEvent {
+  id: string;
+  chunk: string;
+  rawLen: number;
+  cwdOsc7?: string;
+}
+
+export interface TerminalExitEvent {
+  id: string;
+  exitCode: number;
+}
+
 export interface InitialState {
   systemLanguage: string;
   homeDir: string;
@@ -160,6 +183,15 @@ declare global {
           AddFavorite: (path: string, label: string) => Promise<void>;
           RemoveFavorite: (path: string) => Promise<void>;
           ListRecent: () => Promise<RecentItem[]>;
+          TerminalProfiles: () => Promise<TerminalProfile[]>;
+          TerminalStart: (profileId: string, cwd: string, cols: number, rows: number) => Promise<string>;
+          TerminalWrite: (sessionId: string, data: string) => Promise<void>;
+          TerminalResize: (sessionId: string, cols: number, rows: number) => Promise<void>;
+          TerminalAck: (sessionId: string, byteCount: number) => Promise<void>;
+          TerminalKill: (sessionId: string) => Promise<void>;
+          TerminalHasRunningChildren: (sessionId: string) => Promise<boolean>;
+          TerminalChangeDir: (sessionId: string, path: string) => Promise<void>;
+          TerminalQuotePaths: (sessionId: string, paths: string[]) => Promise<string>;
           SaveSession: (data: string) => Promise<void>;
           LoadSession: () => Promise<string>;
           OpenPath: (path: string) => Promise<void>;
@@ -364,6 +396,74 @@ export async function listRecent(): Promise<RecentItem[]> {
     return res || [];
   }
   return [];
+}
+
+export async function terminalProfiles(): Promise<TerminalProfile[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.TerminalProfiles();
+    return res || [];
+  }
+  return [
+    { id: 'pwsh', name: 'PowerShell 7', path: 'pwsh.exe', kind: 'powershell' },
+    { id: 'cmd', name: 'Prompt de Comando (cmd)', path: 'cmd.exe', kind: 'cmd' },
+    { id: 'bash', name: 'Bash', path: '/bin/bash', kind: 'posix' },
+  ];
+}
+
+export async function terminalStart(
+  profileId: string,
+  cwd: string,
+  cols = 100,
+  rows = 28
+): Promise<string> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TerminalStart(profileId, cwd, cols, rows);
+  }
+  return `mock-term-${Date.now()}`;
+}
+
+export async function terminalWrite(sessionId: string, data: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TerminalWrite(sessionId, data);
+  }
+}
+
+export async function terminalResize(sessionId: string, cols: number, rows: number): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TerminalResize(sessionId, cols, rows);
+  }
+}
+
+export async function terminalAck(sessionId: string, byteCount: number): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TerminalAck(sessionId, byteCount);
+  }
+}
+
+export async function terminalKill(sessionId: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TerminalKill(sessionId);
+  }
+}
+
+export async function terminalHasRunningChildren(sessionId: string): Promise<boolean> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TerminalHasRunningChildren(sessionId);
+  }
+  return false;
+}
+
+export async function terminalChangeDir(sessionId: string, path: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TerminalChangeDir(sessionId, path);
+  }
+}
+
+export async function terminalQuotePaths(sessionId: string, paths: string[]): Promise<string> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TerminalQuotePaths(sessionId, paths);
+  }
+  return paths.map((p) => `'${p.replace(/'/g, "''")}'`).join(' ');
 }
 
 export async function getDrives(): Promise<DriveInfo[]> {

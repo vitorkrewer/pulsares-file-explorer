@@ -2,6 +2,16 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [0.5.0] - 2026-11-05
+
+### Adicionado
+
+- Serviço `internal/terminal` com detecção automática de perfis de shell por sistema operacional (PowerShell 7, Windows PowerShell, Prompt de Comando `cmd`, Git Bash, WSL, Bash, Zsh, Fish e POSIX `sh`), perfis personalizados e variáveis de ambiente (`TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=PulsaresExplorer`).
+- Fluxo de saída em lotes (~8 ms ou 64 KB) codificado em base64 UTF-8 com controle de contrapressão (`Ack` de 1 MB), evitando sobrecarga na ponte Wails em saídas intensas.
+- Citação segura de caminhos (`QuotePath` e `FormatChangeDirCommand`) específica para a sintaxe de cada shell (`powershell`, `cmd`, `posix`, `fish`, `wsl`), cobrindo espaços, acentos e aspas.
+- Encerramento completo da árvore de processos filhos ao fechar uma sessão de terminal (`Kill`) e verificação de processos filhos em execução (`HasRunningChildren`) com modal de confirmação antes de fechar a aba.
+- Painel inferior recolhível (`` Ctrl+` ``), redimensionável (duplo clique restaura altura padrão) e maximizável (`TerminalPanel`), com abas de terminal (`` Ctrl+Shift+` ``), renomeação inline, divisão lado a lado, comando "Ir para a pasta atual", sincronização opcional de diretório via sequência ANSI `OSC 7`, busca na saída (`Ctrl+Shift+F`), ajuste de fonte, links clicáveis e persistência de estado/metadados.
+
 ## [0.4.0] - 2026-11-05
 
 ### Adicionado

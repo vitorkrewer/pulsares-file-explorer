@@ -50,6 +50,27 @@
     "dropHere": "Suelte aquí para copiar (o Mayús para mover)",
     "activatePane": "Hacer panel principal"
   },
+  "terminal": {
+    "title": "Terminal",
+    "togglePanel": "Alternar terminal integrado (Ctrl+`)",
+    "newTab": "Nuevo terminal en la carpeta actual (Ctrl+Shift+`)",
+    "closeTab": "Cerrar pestaña del terminal",
+    "selectProfile": "Perfil predeterminado del terminal",
+    "cdCurrentFolder": "Ir a la carpeta actual",
+    "followOsc7": "Seguir carpeta del terminal (OSC 7)",
+    "splitTerminal": "Dividir terminal lado a lado",
+    "searchPlaceholder": "Buscar en la salida del terminal (Ctrl+Shift+F)...",
+    "clearOutput": "Limpiar salida (Ctrl+L)",
+    "maximizePanel": "Maximizar panel del terminal",
+    "restorePanel": "Restaurar altura del panel",
+    "hidePanel": "Ocultar panel del terminal (Ctrl+`)",
+    "inputPlaceholder": "Escriba un comando o arrastre archivos para citar rutas...",
+    "processExited": "[Proceso finalizado con código {{code}}]",
+    "emptyState": "No hay sesión de terminal activa. Haga clic en + para iniciar.",
+    "confirmActiveProcessTitle": "Proceso en ejecución en el terminal",
+    "confirmActiveProcessMessage": "Hay procesos hijos en ejecución en esta sesión de terminal. ¿Desea terminarlos y cerrar la pestaña?",
+    "confirmKillProcess": "Terminar y cerrar"
+  },
   "ops": {
     "title": "Operaciones de archivo",
     "newFolder": "Nueva carpeta (Ctrl+Shift+N)",

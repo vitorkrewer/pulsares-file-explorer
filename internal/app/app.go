@@ -8,18 +8,20 @@ import (
 	"pulsares-file-explorer/internal/ops"
 	"pulsares-file-explorer/internal/platform"
 	"pulsares-file-explorer/internal/storage"
+	"pulsares-file-explorer/internal/terminal"
 	"pulsares-file-explorer/internal/tree"
 	"pulsares-file-explorer/internal/vfs"
 	"pulsares-file-explorer/internal/vfs/local"
 )
 
 type App struct {
-	ctx     context.Context
-	fs      vfs.FileSystem
-	listing *listing.Manager
-	tree    *tree.Service
-	ops     *ops.Manager
-	storage *storage.DB
+	ctx      context.Context
+	fs       vfs.FileSystem
+	listing  *listing.Manager
+	tree     *tree.Service
+	ops      *ops.Manager
+	terminal *terminal.Service
+	storage  *storage.DB
 }
 
 type InitialState struct {
@@ -36,8 +38,9 @@ type InitialState struct {
 func NewApp() *App {
 	localFS := local.New()
 	return &App{
-		fs:   localFS,
-		tree: tree.NewService(localFS),
+		fs:       localFS,
+		tree:     tree.NewService(localFS),
+		terminal: terminal.New(nil),
 	}
 }
 
@@ -54,6 +57,11 @@ func (a *App) Startup(ctx context.Context) {
 
 	a.listing = listing.NewManager(a.fs, emitter)
 	a.ops = ops.NewManager(a.storage, emitter)
+	if a.terminal == nil {
+		a.terminal = terminal.New(emitter)
+	} else {
+		a.terminal.SetEmitter(emitter)
+	}
 }
 
 func (a *App) Shutdown(ctx context.Context) {
@@ -252,6 +260,46 @@ func (a *App) ListRecent() []storage.RecentItem {
 	}
 	rec, _ := a.storage.ListRecent(12)
 	return rec
+}
+
+func (a *App) TerminalProfiles() ([]terminal.Profile, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.terminal.Profiles(ctx)
+}
+
+func (a *App) TerminalStart(profileID string, cwd string, cols int, rows int) (string, error) {
+	return a.terminal.Start(profileID, cwd, cols, rows)
+}
+
+func (a *App) TerminalWrite(sessionID string, data string) error {
+	return a.terminal.Write(sessionID, []byte(data))
+}
+
+func (a *App) TerminalResize(sessionID string, cols int, rows int) error {
+	return a.terminal.Resize(sessionID, cols, rows)
+}
+
+func (a *App) TerminalAck(sessionID string, byteCount int) error {
+	return a.terminal.Ack(sessionID, byteCount)
+}
+
+func (a *App) TerminalKill(sessionID string) error {
+	return a.terminal.Kill(sessionID)
+}
+
+func (a *App) TerminalHasRunningChildren(sessionID string) (bool, error) {
+	return a.terminal.HasRunningChildren(sessionID)
+}
+
+func (a *App) TerminalChangeDir(sessionID string, path string) error {
+	return a.terminal.ChangeDir(sessionID, path)
+}
+
+func (a *App) TerminalQuotePaths(sessionID string, paths []string) (string, error) {
+	return a.terminal.QuotePathsForSession(sessionID, paths)
 }
 
 func (a *App) SaveSession(data string) error {

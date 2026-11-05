@@ -10,7 +10,7 @@ O Explorador do Windows é pesado, trava em pastas grandes, não tem painel dupl
 
 - **Rápido**: listagem em streaming e virtualizada; pastas com 100 mil itens abrem sem travar.
 - **Multitarefa**: várias abas, painel duplo, sessão restaurada.
-- **Árvore de pastas**: painel lateral recolhível com navegação hierárquica rápida.
+- **Árvore de pastas**: painel latveral recolhível com navegação hierárquica rápida.
 - **Terminal integrado**: painel inferior estilo VS Code, aberto na pasta da aba ativa.
 - **Multilíngue**: português (Brasil), inglês e espanhol.
 - **Seguro**: fila de operações com pausa, cancelamento, resolução de conflitos, verificação e desfazer.
