@@ -387,3 +387,4 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
     },
   };
 });
+

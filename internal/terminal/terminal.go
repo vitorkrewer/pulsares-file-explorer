@@ -736,3 +736,4 @@ func checkChildProcesses(pid int) bool {
 	err := exec.Command("pgrep", "-P", fmt.Sprintf("%d", pid)).Run()
 	return err == nil
 }
+

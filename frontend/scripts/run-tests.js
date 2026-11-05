@@ -31,7 +31,7 @@ const sample = ['arquivo10.txt', 'arquivo2.txt', 'Arquivo1.txt'];
 sample.sort((a, b) => collator.compare(a, b));
 assert.deepEqual(sample, ['Arquivo1.txt', 'arquivo2.txt', 'arquivo10.txt']);
 
-// 3. Garantir que códigos de erro e namespaces (0.1.0 a 0.5.0) existem nos 3 catálogos
+// 3. Garantir que códigos de erro e namespaces (0.1.0 a 0.6.0) existem nos 3 catálogos
 const requiredErrorKeys = ['notFound', 'permissionDenied', 'generic'];
 const requiredTabKeys = ['newTab', 'closeTab', 'duplicateTab', 'pinTab', 'unpinTab', 'closeOthers', 'closeRight', 'reopenClosed'];
 const requiredTreeKeys = ['title', 'followActiveTab', 'refresh', 'loading', 'empty', 'symlink'];
@@ -47,6 +47,16 @@ const requiredTerminalKeys = [
   'cdCurrentFolder', 'followOsc7', 'splitTerminal', 'searchPlaceholder',
   'clearOutput', 'maximizePanel', 'restorePanel', 'hidePanel',
   'inputPlaceholder', 'processExited', 'confirmActiveProcessTitle'
+];
+const requiredViewKeys = [
+  'details', 'list', 'grid', 'columns', 'gridSize',
+  'sizeSmall', 'sizeMedium', 'sizeLarge', 'groupBy',
+  'groupNone', 'groupType', 'groupDate', 'groupSize', 'toggleDensity'
+];
+const requiredPreviewKeys = [
+  'title', 'togglePanel', 'quickLook', 'selectItem',
+  'noPreview', 'openDefault', 'truncated', 'folderItems',
+  'zoomIn', 'zoomOut', 'zoomReset'
 ];
 
 for (const lang of ['pt-BR', 'en', 'es']) {
@@ -73,6 +83,12 @@ for (const lang of ['pt-BR', 'en', 'es']) {
   for (const termKey of requiredTerminalKeys) {
     assert.ok(typeof data.terminal?.[termKey] === 'string' && data.terminal[termKey].length > 0);
   }
+  for (const viewKey of requiredViewKeys) {
+    assert.ok(typeof data.views?.[viewKey] === 'string' && data.views[viewKey].length > 0);
+  }
+  for (const prevKey of requiredPreviewKeys) {
+    assert.ok(typeof data.preview?.[prevKey] === 'string' && data.preview[prevKey].length > 0);
+  }
 }
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.5.0) passaram com sucesso.');
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.6.0) passaram com sucesso.');

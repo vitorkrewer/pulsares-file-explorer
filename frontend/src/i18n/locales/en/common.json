@@ -50,6 +50,35 @@
     "dropHere": "Drop here to copy (or Shift to move)",
     "activatePane": "Make primary pane"
   },
+  "views": {
+    "details": "Details view",
+    "list": "Compact list view",
+    "grid": "Thumbnail grid view",
+    "columns": "Columns view (Miller)",
+    "gridSize": "Thumbnail size",
+    "sizeSmall": "Small",
+    "sizeMedium": "Medium",
+    "sizeLarge": "Large",
+    "groupBy": "Group by",
+    "groupNone": "No grouping",
+    "groupType": "Group by type",
+    "groupDate": "Group by date",
+    "groupSize": "Group by size",
+    "toggleDensity": "Toggle density (compact / comfortable)"
+  },
+  "preview": {
+    "title": "Preview",
+    "togglePanel": "Toggle preview panel",
+    "quickLook": "Quick Look (Space)",
+    "selectItem": "Select a file to preview",
+    "noPreview": "Preview not available for this format",
+    "openDefault": "Open in default app",
+    "truncated": "Large file: showing first 64 KB only",
+    "folderItems": "Folder with {{count}} items",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Reset zoom (100%)"
+  },
   "terminal": {
     "title": "Terminal",
     "togglePanel": "Toggle integrated terminal (Ctrl+`)",

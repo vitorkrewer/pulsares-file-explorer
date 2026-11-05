@@ -6,6 +6,8 @@ import { OperationsToolbar } from '../features/operations/OperationsToolbar';
 import { OperationsPanel } from '../features/operations/OperationsPanel';
 import { Sidebar } from '../features/sidebar/Sidebar';
 import { DetailsView } from '../features/browser/DetailsView';
+import { AlternativeViews } from '../features/preview/AlternativeViews';
+import { PreviewPanel } from '../features/preview/PreviewPanel';
 import { SecondaryPane } from '../features/panes/SecondaryPane';
 import { TerminalPanel } from '../features/terminal/TerminalPanel';
 import { StatusBar } from '../features/browser/StatusBar';
@@ -14,6 +16,7 @@ import { useFolderTreeStore } from '../features/sidebar/folder-tree/store';
 import { useOperationsStore } from '../features/operations/store';
 import { useDualPaneStore } from '../features/panes/store';
 import { useTerminalStore } from '../features/terminal/store';
+import { usePreviewStore } from '../features/preview/store';
 import { getInitialState, enqueueOperation } from '../lib/wails';
 import { resolveLanguage } from '../i18n/config';
 
@@ -66,8 +69,19 @@ export const App: React.FC = () => {
     visible: terminalVisible,
     setSearchOpen: setTerminalSearchOpen,
   } = useTerminalStore();
+  const {
+    viewMode,
+    quickLookOpen,
+    toggleQuickLook,
+    closeQuickLook,
+    density,
+  } = usePreviewStore();
   const [theme, setTheme] = useState<string>('dark');
   const workspaceRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-density', density);
+  }, [density]);
 
   useEffect(() => {
     const cleanupBrowser = initListener();
@@ -115,13 +129,14 @@ export const App: React.FC = () => {
     }
   }, [currentPath, refreshSidebarMeta]);
 
-  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 a 0.5.0)
+  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 a 0.6.0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const targetEl = e.target as HTMLElement | null;
       const isInputFocused =
         targetEl?.tagName === 'INPUT' ||
         targetEl?.tagName === 'TEXTAREA' ||
+        targetEl?.tagName === 'SELECT' ||
         targetEl?.isContentEditable;
 
       const mod = e.ctrlKey || e.metaKey;
@@ -155,6 +170,11 @@ export const App: React.FC = () => {
 
       // Teclas diretas sem modificador Ctrl/Cmd
       if (!mod && !e.altKey) {
+        if (e.code === 'Space' && selectedPaths.size > 0) {
+          e.preventDefault();
+          toggleQuickLook();
+          return;
+        }
         if (e.key === 'F5') {
           e.preventDefault();
           if (layoutMode !== 'single' && selectedPaths.size > 0) {
@@ -184,7 +204,11 @@ export const App: React.FC = () => {
           return;
         }
         if (e.key === 'Escape') {
-          clearSelection();
+          if (quickLookOpen) {
+            closeQuickLook();
+          } else {
+            clearSelection();
+          }
           return;
         }
       }
@@ -281,6 +305,9 @@ export const App: React.FC = () => {
     toggleTerminalPanel,
     createTerminalSession,
     setTerminalSearchOpen,
+    quickLookOpen,
+    toggleQuickLook,
+    closeQuickLook,
     layoutMode,
     selectedPaths,
     copyToOppositePane,
@@ -371,47 +398,50 @@ export const App: React.FC = () => {
       <div style={styles.mainContent}>
         <Sidebar />
         <div style={styles.rightColumn}>
-          <div
-            ref={workspaceRef}
-            style={{
-              ...styles.panesContainer,
-              flexDirection: layoutMode === 'split-v' ? 'column' : 'row',
-            }}
-          >
+          <div style={styles.upperRow}>
             <div
-              onClick={() => setFocusedPane('primary')}
-              draggable={selectedPaths.size > 0}
-              onDragStart={(e) => {
-                if (selectedPaths.size > 0) {
-                  e.dataTransfer.setData(
-                    'application/x-pulsares-paths',
-                    JSON.stringify(Array.from(selectedPaths))
-                  );
-                }
-              }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handlePrimaryDrop}
+              ref={workspaceRef}
               style={{
-                ...styles.primaryPaneWrapper,
-                flex: layoutMode === 'single' ? 1 : `0 0 ${Math.round(splitRatio * 100)}%`,
+                ...styles.panesContainer,
+                flexDirection: layoutMode === 'split-v' ? 'column' : 'row',
               }}
             >
-              <DetailsView />
-            </div>
-
-            {layoutMode !== 'single' && (
-              <>
-                <div
-                  role="separator"
-                  style={
-                    layoutMode === 'split-h' ? styles.verticalSplitter : styles.horizontalSplitter
+              <div
+                onClick={() => setFocusedPane('primary')}
+                draggable={selectedPaths.size > 0}
+                onDragStart={(e) => {
+                  if (selectedPaths.size > 0) {
+                    e.dataTransfer.setData(
+                      'application/x-pulsares-paths',
+                      JSON.stringify(Array.from(selectedPaths))
+                    );
                   }
-                  onMouseDown={handleSplitDragStart}
-                  onDoubleClick={() => setSplitRatio(0.5)}
-                />
-                <SecondaryPane />
-              </>
-            )}
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handlePrimaryDrop}
+                style={{
+                  ...styles.primaryPaneWrapper,
+                  flex: layoutMode === 'single' ? 1 : `0 0 ${Math.round(splitRatio * 100)}%`,
+                }}
+              >
+                {viewMode === 'details' ? <DetailsView /> : <AlternativeViews />}
+              </div>
+
+              {layoutMode !== 'single' && (
+                <>
+                  <div
+                    role="separator"
+                    style={
+                      layoutMode === 'split-h' ? styles.verticalSplitter : styles.horizontalSplitter
+                    }
+                    onMouseDown={handleSplitDragStart}
+                    onDoubleClick={() => setSplitRatio(0.5)}
+                  />
+                  <SecondaryPane />
+                </>
+              )}
+            </div>
+            <PreviewPanel />
           </div>
           <TerminalPanel />
         </div>
@@ -439,6 +469,13 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  upperRow: {
+    flex: 1,
+    display: 'flex',
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',

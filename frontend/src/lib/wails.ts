@@ -75,6 +75,33 @@ export interface TerminalExitEvent {
   exitCode: number;
 }
 
+export type PreviewKind =
+  | 'image'
+  | 'markdown'
+  | 'code'
+  | 'text'
+  | 'media'
+  | 'pdf'
+  | 'binary'
+  | 'folder';
+
+export interface PreviewData {
+  path: string;
+  name: string;
+  kind: PreviewKind;
+  extension: string;
+  mimeType: string;
+  size: number;
+  modTime: string;
+  textContent?: string;
+  truncated?: boolean;
+  lineCount?: number;
+  dataUri?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  childCount?: number;
+}
+
 export interface InitialState {
   systemLanguage: string;
   homeDir: string;
@@ -156,6 +183,9 @@ declare global {
         App: {
           GetInitialState: () => Promise<InitialState>;
           ListDirectory: (tabId: string, requestId: string, path: string) => Promise<void>;
+          ListDirectorySnapshot: (path: string, showHidden: boolean) => Promise<Entry[]>;
+          GetThumbnail: (path: string, maxDim: number) => Promise<string>;
+          GetPreview: (path: string, maxTextBytes: number) => Promise<PreviewData>;
           ExpandPath: (path: string) => Promise<string>;
           AutocompletePath: (partial: string, showHidden: boolean) => Promise<string[]>;
           CancelListing: (tabId: string) => Promise<void>;
@@ -233,6 +263,37 @@ export async function listDirectory(tabId: string, requestId: string, path: stri
     return window.go!.app.App.ListDirectory(tabId, requestId, path);
   }
   console.warn('[Wails Mock] listDirectory', { tabId, requestId, path });
+}
+
+export async function listDirectorySnapshot(path: string, showHidden: boolean): Promise<Entry[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListDirectorySnapshot(path, showHidden);
+    return res || [];
+  }
+  return [];
+}
+
+export async function getThumbnail(path: string, maxDim = 128): Promise<string> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.GetThumbnail(path, maxDim);
+  }
+  return '';
+}
+
+export async function getPreview(path: string, maxTextBytes = 65536): Promise<PreviewData> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.GetPreview(path, maxTextBytes);
+  }
+  return {
+    path,
+    name: path.split(/[/\\]/).pop() || path,
+    kind: 'text',
+    extension: '',
+    mimeType: 'text/plain',
+    size: 0,
+    modTime: new Date().toISOString(),
+    textContent: '',
+  };
 }
 
 export async function expandPath(path: string): Promise<string> {

@@ -50,6 +50,35 @@
     "dropHere": "Suelte aquí para copiar (o Mayús para mover)",
     "activatePane": "Hacer panel principal"
   },
+  "views": {
+    "details": "Vista de detalles",
+    "list": "Vista de lista compacta",
+    "grid": "Vista de cuadrícula con miniaturas",
+    "columns": "Vista de columnas (Miller)",
+    "gridSize": "Tamaño de miniaturas",
+    "sizeSmall": "Pequeño",
+    "sizeMedium": "Mediano",
+    "sizeLarge": "Grande",
+    "groupBy": "Agrupar por",
+    "groupNone": "Sin agrupar",
+    "groupType": "Agrupar por tipo",
+    "groupDate": "Agrupar por fecha",
+    "groupSize": "Agrupar por tamaño",
+    "toggleDensity": "Alternar densidad (compacta / cómoda)"
+  },
+  "preview": {
+    "title": "Vista previa",
+    "togglePanel": "Alternar panel de vista previa",
+    "quickLook": "Vista rápida (Espacio)",
+    "selectItem": "Seleccione un archivo para ver la vista previa",
+    "noPreview": "Vista previa no disponible para este formato",
+    "openDefault": "Abrir en la aplicación predeterminada",
+    "truncated": "Archivo grande: mostrando solo los primeros 64 KB",
+    "folderItems": "Carpeta con {{count}} elementos",
+    "zoomIn": "Acercar",
+    "zoomOut": "Alejar",
+    "zoomReset": "Restablecer zoom (100%)"
+  },
   "terminal": {
     "title": "Terminal",
     "togglePanel": "Alternar terminal integrado (Ctrl+`)",

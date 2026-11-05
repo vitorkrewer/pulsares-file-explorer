@@ -2,6 +2,15 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [0.6.0] - 2026-11-05
+
+### Adicionado
+
+- Serviço `internal/thumbs` com geração assíncrona limitada de miniaturas de imagem (`png`, `jpg`, `jpeg`, `gif`, `svg`), cache em disco com poda automática por orçamento LRU (`maxCacheBytes`) e leitura segura de prévia (`ReadPreview`) para imagens, texto/código, Markdown, PDF, áudio/vídeo e binários.
+- Novos modos de visualização no navegador de arquivos (`AlternativeViews`): **Lista compacta**, **Grade de miniaturas** (tamanhos pequeno, médio e grande) e **Colunas Miller** (estilo Finder com navegação em cascata).
+- Agrupamento dinâmico de itens por **tipo**, **data** ou **tamanho**, além de alternância de densidade visual (**confortável** / **compacta**).
+- Painel lateral direito de **Prévia** (`PreviewPanel`) com zoom de imagem, renderização de Markdown, visualização de código/texto com truncamento seguro em 64 KB, reprodutor nativo de áudio/vídeo/PDF e **Prévia Rápida em tela cheia (`Espaço`, estilo Quick Look)**.
+
 ## [0.5.0] - 2026-11-05
 
 ### Adicionado

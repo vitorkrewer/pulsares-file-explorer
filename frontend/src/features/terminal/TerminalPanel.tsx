@@ -854,3 +854,4 @@ export const TerminalPanel: React.FC = () => {
     </section>
   );
 };
+

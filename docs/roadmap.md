@@ -8,8 +8,8 @@ Cada etapa é uma versão *minor* registrada no [`CHANGELOG.md`](../CHANGELOG.md
 | 0.2.0 | Abas, sessão e painel lateral com árvore de pastas | Concluída |
 | 0.3.0 | Operações de arquivo e fila de jobs | Concluída |
 | 0.4.0 | Painel duplo, barra lateral e arrastar e soltar interno | Concluída |
-| 0.5.0 | Terminal integrado (painel inferior) | Em andamento |
-| 0.6.0 | Modos de visualização, miniaturas e prévia | Planejada |
+| 0.5.0 | Terminal integrado (painel inferior) | Concluída |
+| 0.6.0 | Modos de visualização, miniaturas e prévia | Em andamento |
 | 0.7.0 | Busca e filtros | Planejada |
 | 0.8.0 | Integração com o sistema operacional | Planejada |
 | 0.9.0 | Produtividade (paleta, atalhos, renomeação em lote, etiquetas) | Planejada |

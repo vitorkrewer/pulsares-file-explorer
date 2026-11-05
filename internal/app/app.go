@@ -9,6 +9,7 @@ import (
 	"pulsares-file-explorer/internal/platform"
 	"pulsares-file-explorer/internal/storage"
 	"pulsares-file-explorer/internal/terminal"
+	"pulsares-file-explorer/internal/thumbs"
 	"pulsares-file-explorer/internal/tree"
 	"pulsares-file-explorer/internal/vfs"
 	"pulsares-file-explorer/internal/vfs/local"
@@ -21,6 +22,7 @@ type App struct {
 	tree     *tree.Service
 	ops      *ops.Manager
 	terminal *terminal.Service
+	thumbs   *thumbs.Service
 	storage  *storage.DB
 }
 
@@ -41,6 +43,7 @@ func NewApp() *App {
 		fs:       localFS,
 		tree:     tree.NewService(localFS),
 		terminal: terminal.New(nil),
+		thumbs:   thumbs.New("", 64*1024*1024),
 	}
 }
 
@@ -61,6 +64,9 @@ func (a *App) Startup(ctx context.Context) {
 		a.terminal = terminal.New(emitter)
 	} else {
 		a.terminal.SetEmitter(emitter)
+	}
+	if a.thumbs == nil {
+		a.thumbs = thumbs.New("", 64*1024*1024)
 	}
 }
 
@@ -117,6 +123,46 @@ func (a *App) ListDirectory(tabID string, requestID string, path string) {
 		Path:     resolved,
 	}
 	a.listing.Start(tabID, requestID, loc, 500)
+}
+
+func (a *App) ListDirectorySnapshot(path string, showHidden bool) ([]vfs.Entry, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	resolved := platform.ExpandPath(path)
+	loc := vfs.Location{
+		Provider: "local",
+		Path:     resolved,
+	}
+	batchCh, errCh := a.fs.ReadDir(ctx, loc, 500)
+	var all []vfs.Entry
+	for batch := range batchCh {
+		for _, e := range batch {
+			if !showHidden && e.Attrs.Hidden {
+				continue
+			}
+			all = append(all, e)
+		}
+	}
+	if err := <-errCh; err != nil {
+		return all, err
+	}
+	return all, nil
+}
+
+func (a *App) GetThumbnail(path string, maxDim int) (string, error) {
+	if a.thumbs == nil {
+		a.thumbs = thumbs.New("", 64*1024*1024)
+	}
+	return a.thumbs.Thumbnail(path, maxDim)
+}
+
+func (a *App) GetPreview(path string, maxTextBytes int) (thumbs.PreviewData, error) {
+	if a.thumbs == nil {
+		a.thumbs = thumbs.New("", 64*1024*1024)
+	}
+	return a.thumbs.ReadPreview(path, maxTextBytes)
 }
 
 func (a *App) ExpandPath(path string) string {

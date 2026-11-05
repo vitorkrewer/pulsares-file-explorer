@@ -18,12 +18,19 @@ import {
   Star,
   ArrowRightLeft,
   TerminalSquare,
+  LayoutList,
+  LayoutGrid,
+  Table2,
+  Columns3,
+  Eye,
+  Minimize2,
 } from 'lucide-react';
 import { useOperationsStore } from './store';
 import { useBrowserStore, getTabLabel } from '../browser/store';
 import { useDualPaneStore } from '../panes/store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { useTerminalStore } from '../terminal/store';
+import { usePreviewStore, GroupByOption, GridThumbSize } from '../preview/store';
 
 export const OperationsToolbar: React.FC = () => {
   const { t } = useTranslation('common');
@@ -52,6 +59,18 @@ export const OperationsToolbar: React.FC = () => {
   } = useDualPaneStore();
   const { favorites, toggleFavorite } = useFolderTreeStore();
   const { visible: terminalVisible, togglePanel: toggleTerminal } = useTerminalStore();
+  const {
+    viewMode,
+    gridSize,
+    groupBy,
+    density,
+    previewPanelOpen,
+    setViewMode,
+    setGridSize,
+    setGroupBy,
+    toggleDensity,
+    togglePreviewPanel,
+  } = usePreviewStore();
 
   const hasSelection = selectedPaths.size > 0;
   const hasSingleSelection = selectedPaths.size === 1;
@@ -182,6 +201,87 @@ export const OperationsToolbar: React.FC = () => {
       </div>
 
       <div style={styles.group}>
+        {/* Modos de Visualização (0.6.0): Detalhes, Lista Compacta, Grade de Miniaturas, Colunas (Miller) */}
+        <button
+          type="button"
+          style={viewMode === 'details' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => setViewMode('details')}
+          title={t('views.details')}
+        >
+          <Table2 size={13} />
+        </button>
+        <button
+          type="button"
+          style={viewMode === 'list' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => setViewMode('list')}
+          title={t('views.list')}
+        >
+          <LayoutList size={13} />
+        </button>
+        <button
+          type="button"
+          style={viewMode === 'grid' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => setViewMode('grid')}
+          title={t('views.grid')}
+        >
+          <LayoutGrid size={13} />
+        </button>
+        <button
+          type="button"
+          style={viewMode === 'columns' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => setViewMode('columns')}
+          title={t('views.columns')}
+        >
+          <Columns3 size={13} />
+        </button>
+
+        {viewMode === 'grid' && (
+          <select
+            value={gridSize}
+            onChange={(e) => setGridSize(e.target.value as GridThumbSize)}
+            aria-label={t('views.gridSize')}
+            title={t('views.gridSize')}
+            style={styles.select}
+          >
+            <option value="small">{t('views.sizeSmall')}</option>
+            <option value="medium">{t('views.sizeMedium')}</option>
+            <option value="large">{t('views.sizeLarge')}</option>
+          </select>
+        )}
+
+        <select
+          value={groupBy}
+          onChange={(e) => setGroupBy(e.target.value as GroupByOption)}
+          aria-label={t('views.groupBy')}
+          title={t('views.groupBy')}
+          style={styles.select}
+        >
+          <option value="none">{t('views.groupNone')}</option>
+          <option value="type">{t('views.groupType')}</option>
+          <option value="date">{t('views.groupDate')}</option>
+          <option value="size">{t('views.groupSize')}</option>
+        </select>
+
+        <button
+          type="button"
+          style={density === 'compact' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={toggleDensity}
+          title={t('views.toggleDensity')}
+        >
+          <Minimize2 size={13} />
+        </button>
+
+        <button
+          type="button"
+          style={previewPanelOpen ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={togglePreviewPanel}
+          title={t('preview.togglePanel')}
+        >
+          <Eye size={14} />
+        </button>
+
+        <span style={styles.divider} />
+
         {/* Alternador do Terminal Integrado (Ctrl+`) */}
         <button
           type="button"
@@ -257,6 +357,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: 'var(--bg-surface)',
     borderBottom: '1px solid var(--border-subtle)',
     userSelect: 'none',
+    overflowX: 'auto',
   },
   group: {
     display: 'flex',
@@ -268,7 +369,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 5,
     height: 26,
-    padding: '0 8px',
+    padding: '0 7px',
     borderRadius: 4,
     fontSize: 12,
     color: 'var(--text-primary)',
@@ -279,12 +380,21 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 5,
     height: 26,
-    padding: '0 8px',
+    padding: '0 7px',
     borderRadius: 4,
     fontSize: 12,
     color: 'var(--text-muted)',
     opacity: 0.4,
     cursor: 'not-allowed',
+  },
+  select: {
+    height: 24,
+    fontSize: 11,
+    padding: '0 6px',
+    borderRadius: 4,
+    border: '1px solid var(--border-subtle)',
+    backgroundColor: 'var(--bg-base)',
+    color: 'var(--text-secondary)',
   },
   divider: {
     width: 1,
