@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabBar } from '../features/tabs/TabBar';
 import { AddressBar } from '../features/address-bar/AddressBar';
+import { OperationsToolbar } from '../features/operations/OperationsToolbar';
+import { OperationsPanel } from '../features/operations/OperationsPanel';
 import { Sidebar } from '../features/sidebar/Sidebar';
 import { DetailsView } from '../features/browser/DetailsView';
 import { StatusBar } from '../features/browser/StatusBar';
 import { useBrowserStore } from '../features/browser/store';
 import { useFolderTreeStore } from '../features/sidebar/folder-tree/store';
+import { useOperationsStore } from '../features/operations/store';
 import { getInitialState } from '../lib/wails';
 import { resolveLanguage } from '../i18n/config';
 
@@ -26,12 +29,27 @@ export const App: React.FC = () => {
     goForward,
     goUp,
     refresh,
+    selectAll,
+    clearSelection,
   } = useBrowserStore();
   const { hydrateSidebar, toggleSidebar } = useFolderTreeStore();
+  const {
+    initOpsListeners,
+    copySelection,
+    cutSelection,
+    pasteIntoCurrent,
+    trashSelection,
+    requestPermanentDelete,
+    requestRenameSelection,
+    openPrompt,
+    undo,
+    redo,
+  } = useOperationsStore();
   const [theme, setTheme] = useState<string>('dark');
 
   useEffect(() => {
-    const cleanup = initListener();
+    const cleanupBrowser = initListener();
+    const cleanupOps = initOpsListeners();
 
     getInitialState().then((state) => {
       // 1. Resolver e aplicar idioma
@@ -53,10 +71,13 @@ export const App: React.FC = () => {
       hydrateSidebar(savedSidebar, false, lang);
     });
 
-    return () => cleanup();
-  }, [hydrateSession, hydrateSidebar, initListener, i18n]);
+    return () => {
+      cleanupBrowser();
+      cleanupOps();
+    };
+  }, [hydrateSession, hydrateSidebar, initListener, initOpsListeners, i18n]);
 
-  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 + 0.2.0)
+  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 + 0.2.0 + 0.3.0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const targetEl = e.target as HTMLElement | null;
@@ -75,7 +96,36 @@ export const App: React.FC = () => {
         return;
       }
 
-      // Navegação Alt+Setas e F5
+      if (isInputFocused) return;
+
+      // Teclas diretas sem modificador Ctrl/Cmd
+      if (!mod && !e.altKey) {
+        if (e.key === 'F5') {
+          e.preventDefault();
+          refresh();
+          return;
+        }
+        if (e.key === 'F2') {
+          e.preventDefault();
+          requestRenameSelection();
+          return;
+        }
+        if (e.key === 'Delete') {
+          e.preventDefault();
+          if (e.shiftKey) {
+            requestPermanentDelete();
+          } else {
+            trashSelection();
+          }
+          return;
+        }
+        if (e.key === 'Escape') {
+          clearSelection();
+          return;
+        }
+      }
+
+      // Navegação Alt+Setas
       if (e.altKey && !mod) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
@@ -94,12 +144,6 @@ export const App: React.FC = () => {
         }
       }
 
-      if (!isInputFocused && e.key === 'F5') {
-        e.preventDefault();
-        refresh();
-        return;
-      }
-
       if (!mod) return;
 
       if (key === 'b') {
@@ -108,6 +152,27 @@ export const App: React.FC = () => {
       } else if (key === 'r') {
         e.preventDefault();
         refresh();
+      } else if (key === 'a') {
+        e.preventDefault();
+        selectAll();
+      } else if (key === 'c') {
+        e.preventDefault();
+        copySelection();
+      } else if (key === 'x') {
+        e.preventDefault();
+        cutSelection();
+      } else if (key === 'v') {
+        e.preventDefault();
+        pasteIntoCurrent();
+      } else if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      } else if (key === 'n' && e.shiftKey) {
+        e.preventDefault();
+        openPrompt('newFolder');
       } else if (key === 't' && !e.shiftKey) {
         e.preventDefault();
         newTab();
@@ -159,6 +224,17 @@ export const App: React.FC = () => {
     goForward,
     goUp,
     refresh,
+    selectAll,
+    clearSelection,
+    copySelection,
+    cutSelection,
+    pasteIntoCurrent,
+    trashSelection,
+    requestPermanentDelete,
+    requestRenameSelection,
+    openPrompt,
+    undo,
+    redo,
   ]);
 
   const handleThemeChange = (newTheme: string) => {
@@ -170,10 +246,12 @@ export const App: React.FC = () => {
     <div style={styles.appRoot}>
       <TabBar />
       <AddressBar currentTheme={theme} onThemeChange={handleThemeChange} />
+      <OperationsToolbar />
       <div style={styles.mainContent}>
         <Sidebar />
         <DetailsView />
       </div>
+      <OperationsPanel />
       <StatusBar />
     </div>
   );

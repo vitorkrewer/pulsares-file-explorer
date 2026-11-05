@@ -31,10 +31,15 @@ const sample = ['arquivo10.txt', 'arquivo2.txt', 'Arquivo1.txt'];
 sample.sort((a, b) => collator.compare(a, b));
 assert.deepEqual(sample, ['Arquivo1.txt', 'arquivo2.txt', 'arquivo10.txt']);
 
-// 3. Garantir que códigos de erro e namespaces de abas/árvore (0.2.0) existem nos 3 catálogos
+// 3. Garantir que códigos de erro e namespaces (0.1.0, 0.2.0, 0.3.0) existem nos 3 catálogos
 const requiredErrorKeys = ['notFound', 'permissionDenied', 'generic'];
 const requiredTabKeys = ['newTab', 'closeTab', 'duplicateTab', 'pinTab', 'unpinTab', 'closeOthers', 'closeRight', 'reopenClosed'];
 const requiredTreeKeys = ['title', 'followActiveTab', 'refresh', 'loading', 'empty', 'symlink'];
+const requiredOpsKeys = [
+  'title', 'newFolder', 'newFile', 'rename', 'copy', 'cut', 'paste',
+  'trash', 'deletePermanent', 'undo', 'redo', 'queue', 'conflictTitle',
+  'policyOverwrite', 'policySkip', 'policyRename', 'policyKeepNewer'
+];
 
 for (const lang of ['pt-BR', 'en', 'es']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
@@ -57,6 +62,12 @@ for (const lang of ['pt-BR', 'en', 'es']) {
       `Chave tree.${treeKey} ausente em ${lang}`
     );
   }
+  for (const opsKey of requiredOpsKeys) {
+    assert.ok(
+      typeof data.ops?.[opsKey] === 'string' && data.ops[opsKey].length > 0,
+      `Chave ops.${opsKey} ausente em ${lang}`
+    );
+  }
 }
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 + 0.2.0) passaram com sucesso.');
+console.log('[frontend:test] Todos os testes unitários (0.1.0 + 0.2.0 + 0.3.0) passaram com sucesso.');

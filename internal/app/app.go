@@ -5,6 +5,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"pulsares-file-explorer/internal/listing"
+	"pulsares-file-explorer/internal/ops"
 	"pulsares-file-explorer/internal/platform"
 	"pulsares-file-explorer/internal/storage"
 	"pulsares-file-explorer/internal/tree"
@@ -17,6 +18,7 @@ type App struct {
 	fs      vfs.FileSystem
 	listing *listing.Manager
 	tree    *tree.Service
+	ops     *ops.Manager
 	storage *storage.DB
 }
 
@@ -44,9 +46,12 @@ func (a *App) Startup(ctx context.Context) {
 		a.storage = db
 	}
 
-	a.listing = listing.NewManager(a.fs, func(eventName string, data interface{}) {
+	emitter := func(eventName string, data interface{}) {
 		runtime.EventsEmit(a.ctx, eventName, data)
-	})
+	}
+
+	a.listing = listing.NewManager(a.fs, emitter)
+	a.ops = ops.NewManager(a.storage, emitter)
 }
 
 func (a *App) Shutdown(ctx context.Context) {
@@ -124,6 +129,87 @@ func (a *App) TreeChildren(path string, showHidden bool) ([]tree.Node, error) {
 		Path:     path,
 	}
 	return a.tree.Children(ctx, loc, showHidden)
+}
+
+func (a *App) CreateFolder(parentDir, name string) (string, error) {
+	if a.ops == nil {
+		a.ops = ops.NewManager(a.storage, nil)
+	}
+	return a.ops.CreateFolder(parentDir, name)
+}
+
+func (a *App) CreateFile(parentDir, name string) (string, error) {
+	if a.ops == nil {
+		a.ops = ops.NewManager(a.storage, nil)
+	}
+	return a.ops.CreateFile(parentDir, name)
+}
+
+func (a *App) RenameItem(oldPath, newName string) (string, error) {
+	if a.ops == nil {
+		a.ops = ops.NewManager(a.storage, nil)
+	}
+	return a.ops.Rename(oldPath, newName)
+}
+
+func (a *App) EnqueueOperation(kind string, sources []string, destination string, policy string, verifyHash bool) string {
+	if a.ops == nil {
+		a.ops = ops.NewManager(a.storage, nil)
+	}
+	return a.ops.Enqueue(ops.JobKind(kind), sources, destination, ops.ConflictPolicy(policy), verifyHash)
+}
+
+func (a *App) PauseJob(jobID string) {
+	if a.ops != nil {
+		a.ops.PauseJob(jobID)
+	}
+}
+
+func (a *App) ResumeJob(jobID string) {
+	if a.ops != nil {
+		a.ops.ResumeJob(jobID)
+	}
+}
+
+func (a *App) CancelJob(jobID string) {
+	if a.ops != nil {
+		a.ops.CancelJob(jobID)
+	}
+}
+
+func (a *App) ResolveJobConflict(jobID string, policy string, applyToAll bool) {
+	if a.ops != nil {
+		a.ops.ResolveConflict(jobID, ops.ConflictPolicy(policy), applyToAll)
+	}
+}
+
+func (a *App) ListJobs() []ops.JobSnapshot {
+	if a.ops == nil {
+		return nil
+	}
+	return a.ops.ListJobs()
+}
+
+func (a *App) UndoOperation() (*storage.JournalEntry, error) {
+	if a.ops == nil {
+		return nil, nil
+	}
+	return a.ops.Undo()
+}
+
+func (a *App) RedoOperation() (*storage.JournalEntry, error) {
+	if a.ops == nil {
+		return nil, nil
+	}
+	return a.ops.Redo()
+}
+
+func (a *App) ListJournal() []storage.JournalEntry {
+	if a.storage == nil {
+		return nil
+	}
+	entries, _ := a.storage.ListJournal(20)
+	return entries
 }
 
 func (a *App) SaveSession(data string) error {

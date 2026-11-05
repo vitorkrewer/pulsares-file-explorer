@@ -13,6 +13,15 @@ type DB struct {
 	*sql.DB
 }
 
+type JournalEntry struct {
+	ID        int64  `json:"id"`
+	OpType    string `json:"opType"`
+	SrcPath   string `json:"srcPath"`
+	DstPath   string `json:"dstPath"`
+	Undone    bool   `json:"undone"`
+	CreatedAt string `json:"createdAt"`
+}
+
 func Open() (*DB, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -61,6 +70,15 @@ func (db *DB) migrate() error {
 		data TEXT NOT NULL,
 		closed_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS op_journal (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		op_type TEXT NOT NULL,
+		src_path TEXT NOT NULL,
+		dst_path TEXT NOT NULL,
+		undone INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -98,4 +116,84 @@ func (db *DB) LoadSession() (string, error) {
 		return "", nil
 	}
 	return data, err
+}
+
+func (db *DB) RecordJournal(opType, srcPath, dstPath string) (int64, error) {
+	// Ao registrar uma nova ação, limpar entradas marcadas como undone (nova ramificação de histórico)
+	_, _ = db.Exec("DELETE FROM op_journal WHERE undone = 1")
+	res, err := db.Exec(
+		"INSERT INTO op_journal (op_type, src_path, dst_path, undone) VALUES (?, ?, ?, 0)",
+		opType, srcPath, dstPath,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (db *DB) LastUndoableJournal() (*JournalEntry, error) {
+	var e JournalEntry
+	var undone int
+	err := db.QueryRow(
+		"SELECT id, op_type, src_path, dst_path, undone, created_at FROM op_journal WHERE undone = 0 ORDER BY id DESC LIMIT 1",
+	).Scan(&e.ID, &e.OpType, &e.SrcPath, &e.DstPath, &undone, &e.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	e.Undone = undone != 0
+	return &e, nil
+}
+
+func (db *DB) LastRedoableJournal() (*JournalEntry, error) {
+	var e JournalEntry
+	var undone int
+	err := db.QueryRow(
+		"SELECT id, op_type, src_path, dst_path, undone, created_at FROM op_journal WHERE undone = 1 ORDER BY id ASC LIMIT 1",
+	).Scan(&e.ID, &e.OpType, &e.SrcPath, &e.DstPath, &undone, &e.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	e.Undone = undone != 0
+	return &e, nil
+}
+
+func (db *DB) MarkJournalUndone(id int64, undone bool) error {
+	flag := 0
+	if undone {
+		flag = 1
+	}
+	_, err := db.Exec("UPDATE op_journal SET undone = ? WHERE id = ?", flag, id)
+	return err
+}
+
+func (db *DB) ListJournal(limit int) ([]JournalEntry, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := db.Query(
+		"SELECT id, op_type, src_path, dst_path, undone, created_at FROM op_journal ORDER BY id DESC LIMIT ?",
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []JournalEntry
+	for rows.Next() {
+		var e JournalEntry
+		var undone int
+		if err := rows.Scan(&e.ID, &e.OpType, &e.SrcPath, &e.DstPath, &undone, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		e.Undone = undone != 0
+		list = append(list, e)
+	}
+	return list, rows.Err()
 }

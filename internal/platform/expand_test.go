@@ -51,3 +51,4 @@ func TestAutocompleteDirs(t *testing.T) {
 		}
 	}
 }
+

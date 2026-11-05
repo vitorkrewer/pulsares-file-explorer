@@ -5,8 +5,8 @@ Cada etapa é uma versão *minor* registrada no [`CHANGELOG.md`](../CHANGELOG.md
 | Versão | Etapa | Situação |
 | --- | --- | --- |
 | 0.1.0 | Fundação, navegação básica e internacionalização (pt-BR, en, es) | Concluída |
-| 0.2.0 | Abas, sessão e painel lateral com árvore de pastas | Em andamento |
-| 0.3.0 | Operações de arquivo e fila de jobs | Planejada |
+| 0.2.0 | Abas, sessão e painel lateral com árvore de pastas | Concluída |
+| 0.3.0 | Operações de arquivo e fila de jobs | Em andamento |
 | 0.4.0 | Painel duplo, barra lateral e arrastar e soltar interno | Planejada |
 | 0.5.0 | Terminal integrado (painel inferior) | Planejada |
 | 0.6.0 | Modos de visualização, miniaturas e prévia | Planejada |

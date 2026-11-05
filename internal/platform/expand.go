@@ -106,3 +106,4 @@ func AutocompleteDirs(partial string, showHidden bool, maxResults int) []string 
 
 	return suggestions
 }
+

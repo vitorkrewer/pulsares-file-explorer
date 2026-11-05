@@ -60,6 +60,57 @@ export interface ListingDoneEvent {
   error?: string;
 }
 
+export type JobKind = 'copy' | 'move' | 'trash' | 'delete';
+export type JobStatus =
+  | 'queued'
+  | 'planning'
+  | 'running'
+  | 'paused'
+  | 'conflict'
+  | 'verifying'
+  | 'completed'
+  | 'failed'
+  | 'canceled';
+export type ConflictPolicy = 'ask' | 'overwrite' | 'skip' | 'rename' | 'keepNewer';
+
+export interface ConflictInfo {
+  srcPath: string;
+  dstPath: string;
+  srcSize: number;
+  dstSize: number;
+  srcModTime: string;
+  dstModTime: string;
+}
+
+export interface JobSnapshot {
+  id: string;
+  kind: JobKind;
+  sources: string[];
+  destination: string;
+  status: JobStatus;
+  policy: ConflictPolicy;
+  verifyHash: boolean;
+  totalBytes: number;
+  doneBytes: number;
+  totalItems: number;
+  doneItems: number;
+  currentItem: string;
+  speedBps: number;
+  etaSeconds: number;
+  error?: string;
+  conflict?: ConflictInfo;
+  createdAt: string;
+}
+
+export interface JournalEntry {
+  id: number;
+  opType: string;
+  srcPath: string;
+  dstPath: string;
+  undone: boolean;
+  createdAt: string;
+}
+
 // Declaração de objetos injetados pelo Wails runtime
 declare global {
   interface Window {
@@ -73,6 +124,24 @@ declare global {
           CancelListing: (tabId: string) => Promise<void>;
           TreeRoots: () => Promise<TreeNode[]>;
           TreeChildren: (path: string, showHidden: boolean) => Promise<TreeNode[]>;
+          CreateFolder: (parentDir: string, name: string) => Promise<string>;
+          CreateFile: (parentDir: string, name: string) => Promise<string>;
+          RenameItem: (oldPath: string, newName: string) => Promise<string>;
+          EnqueueOperation: (
+            kind: string,
+            sources: string[],
+            destination: string,
+            policy: string,
+            verifyHash: boolean
+          ) => Promise<string>;
+          PauseJob: (jobId: string) => Promise<void>;
+          ResumeJob: (jobId: string) => Promise<void>;
+          CancelJob: (jobId: string) => Promise<void>;
+          ResolveJobConflict: (jobId: string, policy: string, applyToAll: boolean) => Promise<void>;
+          ListJobs: () => Promise<JobSnapshot[]>;
+          UndoOperation: () => Promise<JournalEntry | null>;
+          RedoOperation: () => Promise<JournalEntry | null>;
+          ListJournal: () => Promise<JournalEntry[]>;
           SaveSession: (data: string) => Promise<void>;
           LoadSession: () => Promise<string>;
           OpenPath: (path: string) => Promise<void>;
@@ -153,6 +222,98 @@ export async function treeRoots(): Promise<TreeNode[]> {
 export async function treeChildren(path: string, showHidden: boolean): Promise<TreeNode[]> {
   if (isWailsAvailable()) {
     return window.go!.app.App.TreeChildren(path, showHidden);
+  }
+  return [];
+}
+
+export async function createFolder(parentDir: string, name: string): Promise<string> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.CreateFolder(parentDir, name);
+  }
+  return `${parentDir}/${name}`;
+}
+
+export async function createFile(parentDir: string, name: string): Promise<string> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.CreateFile(parentDir, name);
+  }
+  return `${parentDir}/${name}`;
+}
+
+export async function renameItem(oldPath: string, newName: string): Promise<string> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.RenameItem(oldPath, newName);
+  }
+  return newName;
+}
+
+export async function enqueueOperation(
+  kind: JobKind,
+  sources: string[],
+  destination: string,
+  policy: ConflictPolicy = 'ask',
+  verifyHash = false
+): Promise<string> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.EnqueueOperation(kind, sources, destination, policy, verifyHash);
+  }
+  return 'mock-job-id';
+}
+
+export async function pauseJob(jobId: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.PauseJob(jobId);
+  }
+}
+
+export async function resumeJob(jobId: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.ResumeJob(jobId);
+  }
+}
+
+export async function cancelJob(jobId: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.CancelJob(jobId);
+  }
+}
+
+export async function resolveJobConflict(
+  jobId: string,
+  policy: ConflictPolicy,
+  applyToAll: boolean
+): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.ResolveJobConflict(jobId, policy, applyToAll);
+  }
+}
+
+export async function listJobs(): Promise<JobSnapshot[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListJobs();
+    return res || [];
+  }
+  return [];
+}
+
+export async function undoOperation(): Promise<JournalEntry | null> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.UndoOperation();
+  }
+  return null;
+}
+
+export async function redoOperation(): Promise<JournalEntry | null> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.RedoOperation();
+  }
+  return null;
+}
+
+export async function listJournal(): Promise<JournalEntry[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListJournal();
+    return res || [];
   }
   return [];
 }
