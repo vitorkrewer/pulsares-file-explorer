@@ -24,6 +24,7 @@ import {
   Columns3,
   Eye,
   Minimize2,
+  SlidersHorizontal,
   Search,
   Filter,
   X,
@@ -77,6 +78,7 @@ export const OperationsToolbar: React.FC = () => {
   } = usePreviewStore();
   const { drawerOpen: searchOpen, toggleDrawer: toggleSearch } = useSearchStore();
   const filterInputRef = useRef<HTMLInputElement>(null);
+  const [viewBarOpen, setViewBarOpen] = React.useState(false);
 
   useEffect(() => {
     const onFocusFilter = () => {
@@ -102,9 +104,9 @@ export const OperationsToolbar: React.FC = () => {
           style={styles.btn}
           onClick={() => openPrompt('newFolder')}
           title={t('ops.newFolder')}
+          aria-label={t('ops.newFolder')}
         >
           <FolderPlus size={14} />
-          <span>{t('nav.newFolder')}</span>
         </button>
 
         <button
@@ -112,9 +114,9 @@ export const OperationsToolbar: React.FC = () => {
           style={styles.btn}
           onClick={() => openPrompt('newFile')}
           title={t('ops.newFile')}
+          aria-label={t('ops.newFile')}
         >
           <FilePlus size={14} />
-          <span>{t('ops.newFile')}</span>
         </button>
 
         <button
@@ -257,75 +259,90 @@ export const OperationsToolbar: React.FC = () => {
 
         <span style={styles.divider} />
 
-        {/* Modos de Visualização (0.6.0): Detalhes, Lista Compacta, Grade de Miniaturas, Colunas (Miller) */}
+        {/* Alternador da Barra de Visualização (desativada por padrão na inicialização) */}
         <button
           type="button"
-          style={viewMode === 'details' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
-          onClick={() => setViewMode('details')}
-          title={t('views.details')}
+          style={viewBarOpen ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => setViewBarOpen((v) => !v)}
+          title={t('views.toggleViewBar')}
+          aria-label={t('views.toggleViewBar')}
         >
-          <Table2 size={13} />
-        </button>
-        <button
-          type="button"
-          style={viewMode === 'list' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
-          onClick={() => setViewMode('list')}
-          title={t('views.list')}
-        >
-          <LayoutList size={13} />
-        </button>
-        <button
-          type="button"
-          style={viewMode === 'grid' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
-          onClick={() => setViewMode('grid')}
-          title={t('views.grid')}
-        >
-          <LayoutGrid size={13} />
-        </button>
-        <button
-          type="button"
-          style={viewMode === 'columns' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
-          onClick={() => setViewMode('columns')}
-          title={t('views.columns')}
-        >
-          <Columns3 size={13} />
+          <SlidersHorizontal size={13} />
         </button>
 
-        {viewMode === 'grid' && (
-          <select
-            value={gridSize}
-            onChange={(e) => setGridSize(e.target.value as GridThumbSize)}
-            aria-label={t('views.gridSize')}
-            title={t('views.gridSize')}
-            style={styles.select}
-          >
-            <option value="small">{t('views.sizeSmall')}</option>
-            <option value="medium">{t('views.sizeMedium')}</option>
-            <option value="large">{t('views.sizeLarge')}</option>
-          </select>
+        {viewBarOpen && (
+          <>
+            {/* Modos de Visualização (0.6.0): Detalhes, Lista Compacta, Grade de Miniaturas, Colunas (Miller) */}
+            <button
+              type="button"
+              style={viewMode === 'details' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+              onClick={() => setViewMode('details')}
+              title={t('views.details')}
+            >
+              <Table2 size={13} />
+            </button>
+            <button
+              type="button"
+              style={viewMode === 'list' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+              onClick={() => setViewMode('list')}
+              title={t('views.list')}
+            >
+              <LayoutList size={13} />
+            </button>
+            <button
+              type="button"
+              style={viewMode === 'grid' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+              onClick={() => setViewMode('grid')}
+              title={t('views.grid')}
+            >
+              <LayoutGrid size={13} />
+            </button>
+            <button
+              type="button"
+              style={viewMode === 'columns' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+              onClick={() => setViewMode('columns')}
+              title={t('views.columns')}
+            >
+              <Columns3 size={13} />
+            </button>
+
+            {viewMode === 'grid' && (
+              <select
+                value={gridSize}
+                onChange={(e) => setGridSize(e.target.value as GridThumbSize)}
+                aria-label={t('views.gridSize')}
+                title={t('views.gridSize')}
+                style={styles.select}
+              >
+                <option value="small">{t('views.sizeSmall')}</option>
+                <option value="medium">{t('views.sizeMedium')}</option>
+                <option value="large">{t('views.sizeLarge')}</option>
+              </select>
+            )}
+
+            <select
+              value={groupBy}
+              onChange={(e) => setGroupBy(e.target.value as GroupByOption)}
+              aria-label={t('views.groupBy')}
+              title={t('views.groupBy')}
+              style={styles.select}
+            >
+              <option value="none">{t('views.groupNone')}</option>
+              <option value="type">{t('views.groupType')}</option>
+              <option value="date">{t('views.groupDate')}</option>
+              <option value="size">{t('views.groupSize')}</option>
+            </select>
+
+            <button
+              type="button"
+              style={density === 'compact' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+              onClick={toggleDensity}
+              title={t('views.toggleDensity')}
+            >
+              <Minimize2 size={13} />
+            </button>
+          </>
         )}
-
-        <select
-          value={groupBy}
-          onChange={(e) => setGroupBy(e.target.value as GroupByOption)}
-          aria-label={t('views.groupBy')}
-          title={t('views.groupBy')}
-          style={styles.select}
-        >
-          <option value="none">{t('views.groupNone')}</option>
-          <option value="type">{t('views.groupType')}</option>
-          <option value="date">{t('views.groupDate')}</option>
-          <option value="size">{t('views.groupSize')}</option>
-        </select>
-
-        <button
-          type="button"
-          style={density === 'compact' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
-          onClick={toggleDensity}
-          title={t('views.toggleDensity')}
-        >
-          <Minimize2 size={13} />
-        </button>
 
         <button
           type="button"
@@ -344,9 +361,9 @@ export const OperationsToolbar: React.FC = () => {
           style={terminalVisible ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
           onClick={() => void toggleTerminal(currentPath || '/')}
           title={t('terminal.togglePanel')}
+          aria-label={t('terminal.togglePanel')}
         >
           <TerminalSquare size={14} />
-          <span>{t('terminal.title')}</span>
         </button>
 
         <span style={styles.divider} />
@@ -393,9 +410,9 @@ export const OperationsToolbar: React.FC = () => {
           style={panelOpen ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
           onClick={() => setPanelOpen(!panelOpen)}
           title={t('ops.queue')}
+          aria-label={t('ops.queue')}
         >
           <ListTodo size={14} />
-          <span>{t('ops.queue')}</span>
           {activeJobsCount > 0 && <span style={styles.badge}>{activeJobsCount}</span>}
         </button>
       </div>
@@ -409,29 +426,33 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     height: 34,
-    padding: '0 12px',
+    padding: '0 8px',
+    gap: 6,
     backgroundColor: 'var(--bg-surface)',
     borderBottom: '1px solid var(--border-subtle)',
     userSelect: 'none',
     overflowX: 'auto',
+    scrollbarWidth: 'none',
   },
   group: {
     display: 'flex',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
+    flexShrink: 0,
   },
   filterBox: {
     display: 'flex',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     height: 24,
     padding: '0 6px',
     borderRadius: 4,
     border: '1px solid var(--border-subtle)',
     backgroundColor: 'var(--bg-base)',
+    flexShrink: 0,
   },
   filterInput: {
-    width: 120,
+    width: 110,
     border: 'none',
     outline: 'none',
     backgroundColor: 'transparent',
@@ -447,25 +468,29 @@ const styles: Record<string, React.CSSProperties> = {
   btn: {
     display: 'flex',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     height: 26,
-    padding: '0 7px',
+    padding: '0 6px',
     borderRadius: 4,
     fontSize: 12,
     color: 'var(--text-primary)',
     cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
   disabledBtn: {
     display: 'flex',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     height: 26,
-    padding: '0 7px',
+    padding: '0 6px',
     borderRadius: 4,
     fontSize: 12,
     color: 'var(--text-muted)',
     opacity: 0.4,
     cursor: 'not-allowed',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
   select: {
     height: 24,

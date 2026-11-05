@@ -64,7 +64,8 @@
     "groupType": "Group by type",
     "groupDate": "Group by date",
     "groupSize": "Group by size",
-    "toggleDensity": "Toggle density (compact / comfortable)"
+    "toggleDensity": "Toggle density (compact / comfortable)",
+    "toggleViewBar": "Toggle view bar"
   },
   "preview": {
     "title": "Preview",
@@ -144,6 +145,9 @@
     "cancel": "Cancel",
     "confirm": "Confirm",
     "namePlaceholder": "Enter name...",
+    "fileExtensionLabel": "File extension",
+    "fileExtCustom": "Custom",
+    "finalFileName": "Final file: {{name}}",
     "verifyHash": "Verify integrity (SHA-256)",
     "conflictTitle": "File conflict at destination",
     "conflictSource": "Source",

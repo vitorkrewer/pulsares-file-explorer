@@ -13,7 +13,6 @@ interface PersistedViewPrefs {
   gridSize: GridThumbSize;
   groupBy: GroupByOption;
   density: UIDensity;
-  previewPanelOpen: boolean;
 }
 
 function loadViewPrefs(): Partial<PersistedViewPrefs> {
@@ -71,7 +70,6 @@ export const usePreviewStore = create<PreviewStoreState>((set, get) => {
       gridSize: s.gridSize,
       groupBy: s.groupBy,
       density: s.density,
-      previewPanelOpen: s.previewPanelOpen,
     });
   };
 
@@ -80,7 +78,7 @@ export const usePreviewStore = create<PreviewStoreState>((set, get) => {
     gridSize: saved.gridSize ?? 'medium',
     groupBy: saved.groupBy ?? 'none',
     density: saved.density ?? 'comfortable',
-    previewPanelOpen: saved.previewPanelOpen ?? false,
+    previewPanelOpen: false,
     quickLookOpen: false,
     previewData: null,
     previewLoading: false,

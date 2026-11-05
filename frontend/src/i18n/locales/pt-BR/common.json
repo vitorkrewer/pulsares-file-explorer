@@ -64,7 +64,8 @@
     "groupType": "Agrupar por tipo",
     "groupDate": "Agrupar por data",
     "groupSize": "Agrupar por tamanho",
-    "toggleDensity": "Alternar densidade (compacta / confortável)"
+    "toggleDensity": "Alternar densidade (compacta / confortável)",
+    "toggleViewBar": "Barra de visualização"
   },
   "preview": {
     "title": "Prévia",
@@ -144,6 +145,9 @@
     "cancel": "Cancelar",
     "confirm": "Confirmar",
     "namePlaceholder": "Digite o nome...",
+    "fileExtensionLabel": "Extensão do arquivo",
+    "fileExtCustom": "Personalizado",
+    "finalFileName": "Arquivo final: {{name}}",
     "verifyHash": "Verificar integridade (SHA-256)",
     "conflictTitle": "Conflito de arquivo no destino",
     "conflictSource": "Origem",
