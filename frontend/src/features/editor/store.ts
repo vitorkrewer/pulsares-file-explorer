@@ -481,3 +481,4 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setFindBarOpen: (findBarOpen) => set({ findBarOpen }),
   setStatusMessage: (statusMessage) => set({ statusMessage }),
 }));
+
