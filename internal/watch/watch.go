@@ -209,3 +209,4 @@ func computeSignature(dirPath string) (dirSignature, error) {
 	}
 	return sig, nil
 }
+

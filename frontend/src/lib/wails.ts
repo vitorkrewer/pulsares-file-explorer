@@ -241,6 +241,61 @@ export interface WatchChangeEvent {
   timestamp: number;
 }
 
+export interface BatchRenameOptions {
+  find: string;
+  replace: string;
+  useRegex: boolean;
+  prefix: string;
+  suffix: string;
+  caseMode: 'none' | 'lower' | 'upper' | 'title';
+  startNumber: number;
+  stepNumber: number;
+  numberDigits: number;
+}
+
+export interface BatchRenamePreviewItem {
+  originalPath: string;
+  originalName: string;
+  newName: string;
+  newPath: string;
+  changed: boolean;
+  hasConflict: boolean;
+}
+
+export interface FolderDiffItem {
+  name: string;
+  status: 'onlyLeft' | 'onlyRight' | 'different' | 'identical';
+  isDir: boolean;
+  leftPath?: string;
+  rightPath?: string;
+  leftSize: number;
+  rightSize: number;
+  leftModTime: number;
+  rightModTime: number;
+}
+
+export interface FileHashes {
+  path: string;
+  size: number;
+  md5: string;
+  sha1: string;
+  sha256: string;
+}
+
+export interface ItemTag {
+  path: string;
+  tagName: string;
+  color: string;
+  updatedAt: string;
+}
+
+export interface SavedSearch {
+  id: number;
+  name: string;
+  queryJson: string;
+  createdAt: string;
+}
+
 // Declaração de objetos injetados pelo Wails runtime
 declare global {
   interface Window {
@@ -302,6 +357,19 @@ declare global {
           OpenExternalTerminal: (dirPath: string) => Promise<void>;
           RevealInSystemExplorer: (path: string) => Promise<void>;
           EjectDrive: (drivePath: string) => Promise<void>;
+          PreviewBatchRename: (
+            paths: string[],
+            opts: BatchRenameOptions
+          ) => Promise<BatchRenamePreviewItem[]>;
+          ExecuteBatchRename: (paths: string[], opts: BatchRenameOptions) => Promise<number>;
+          CompareDirectories: (leftDir: string, rightDir: string) => Promise<FolderDiffItem[]>;
+          ComputeHashes: (filePath: string) => Promise<FileHashes>;
+          SetItemTag: (path: string, tagName: string, color: string) => Promise<void>;
+          RemoveItemTag: (path: string) => Promise<void>;
+          ListItemTags: () => Promise<ItemTag[]>;
+          SaveSearch: (name: string, queryJson: string) => Promise<number>;
+          ListSavedSearches: () => Promise<SavedSearch[]>;
+          DeleteSavedSearch: (id: number) => Promise<void>;
           GetDrives: () => Promise<DriveInfo[]>;
           GetSetting: (key: string) => Promise<string>;
           SetSetting: (key: string, val: string) => Promise<void>;
@@ -712,6 +780,86 @@ export async function revealInSystemExplorer(path: string): Promise<void> {
 export async function ejectDrive(drivePath: string): Promise<void> {
   if (isWailsAvailable()) {
     return window.go!.app.App.EjectDrive(drivePath);
+  }
+}
+
+export async function previewBatchRename(
+  paths: string[],
+  opts: BatchRenameOptions
+): Promise<BatchRenamePreviewItem[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.PreviewBatchRename(paths, opts);
+    return res || [];
+  }
+  return [];
+}
+
+export async function executeBatchRename(
+  paths: string[],
+  opts: BatchRenameOptions
+): Promise<number> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.ExecuteBatchRename(paths, opts);
+  }
+  return 0;
+}
+
+export async function compareDirectories(
+  leftDir: string,
+  rightDir: string
+): Promise<FolderDiffItem[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.CompareDirectories(leftDir, rightDir);
+    return res || [];
+  }
+  return [];
+}
+
+export async function computeHashes(filePath: string): Promise<FileHashes> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.ComputeHashes(filePath);
+  }
+  return { path: filePath, size: 0, md5: '', sha1: '', sha256: '' };
+}
+
+export async function setItemTag(path: string, tagName: string, color: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.SetItemTag(path, tagName, color);
+  }
+}
+
+export async function removeItemTag(path: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.RemoveItemTag(path);
+  }
+}
+
+export async function listItemTags(): Promise<ItemTag[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListItemTags();
+    return res || [];
+  }
+  return [];
+}
+
+export async function saveSearch(name: string, queryJson: string): Promise<number> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.SaveSearch(name, queryJson);
+  }
+  return 0;
+}
+
+export async function listSavedSearches(): Promise<SavedSearch[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListSavedSearches();
+    return res || [];
+  }
+  return [];
+}
+
+export async function deleteSavedSearch(id: number): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.DeleteSavedSearch(id);
   }
 }
 

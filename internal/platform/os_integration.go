@@ -217,3 +217,4 @@ func EjectDrive(drivePath string) error {
 		return cmd.Run()
 	}
 }
+

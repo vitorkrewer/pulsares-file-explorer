@@ -200,6 +200,36 @@
     "revealInSystem": "Mostrar no explorador nativo",
     "ejectDrive": "Ejetar unidade removível"
   },
+  "productivity": {
+    "paletteTitle": "Paleta de Comandos (Ctrl+Shift+P)",
+    "palettePlaceholder": "Digite um comando para executar...",
+    "batchRenameTitle": "Renomeação em Lote com Prévia",
+    "findPlaceholder": "Buscar no nome...",
+    "replacePlaceholder": "Substituir por...",
+    "prefixPlaceholder": "Prefixo (ex.: 2026_ ou {n}_)",
+    "suffixPlaceholder": "Sufixo (ex.: _final ou _{n})",
+    "caseNone": "Manter maiúsculas/minúsculas",
+    "caseLower": "tudo em minúsculas",
+    "caseUpper": "TUDO EM MAIÚSCULAS",
+    "caseTitle": "Formato de Título",
+    "counterDigits": "Dígitos do contador numérico",
+    "compareTitle": "Comparar Pastas",
+    "compareRun": "Comparar",
+    "diffStatus": {
+      "onlyLeft": "Somente na origem",
+      "onlyRight": "Somente no destino",
+      "different": "Diferente",
+      "identical": "Idêntico"
+    },
+    "hashTitle": "Calculadora e Verificador de Hashes",
+    "verifyHashPlaceholder": "Cole um hash (MD5, SHA-1 ou SHA-256) para verificar...",
+    "hashMatched": "Integridade confirmada ({{algo}} idêntico)",
+    "hashMismatch": "O hash informado NÃO corresponde ao arquivo",
+    "shortcutsTitle": "Atalhos de Teclado Configuráveis",
+    "shortcutConflict": "Conflito!",
+    "tagAssign": "Aplicar etiqueta",
+    "tagClear": "Remover etiqueta"
+  },
   "settings": {
     "title": "Configurações",
     "language": "Idioma",

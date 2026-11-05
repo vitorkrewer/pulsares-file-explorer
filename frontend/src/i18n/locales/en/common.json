@@ -200,6 +200,36 @@
     "revealInSystem": "Reveal in system explorer",
     "ejectDrive": "Eject removable drive"
   },
+  "productivity": {
+    "paletteTitle": "Command Palette (Ctrl+Shift+P)",
+    "palettePlaceholder": "Type a command to run...",
+    "batchRenameTitle": "Batch Rename with Preview",
+    "findPlaceholder": "Find in name...",
+    "replacePlaceholder": "Replace with...",
+    "prefixPlaceholder": "Prefix (e.g. 2026_ or {n}_)",
+    "suffixPlaceholder": "Suffix (e.g. _final or _{n})",
+    "caseNone": "Keep original case",
+    "caseLower": "lowercase",
+    "caseUpper": "UPPERCASE",
+    "caseTitle": "Title Case",
+    "counterDigits": "Counter digits",
+    "compareTitle": "Compare Folders",
+    "compareRun": "Compare",
+    "diffStatus": {
+      "onlyLeft": "Only in source",
+      "onlyRight": "Only in destination",
+      "different": "Different",
+      "identical": "Identical"
+    },
+    "hashTitle": "Hash Calculator & Verifier",
+    "verifyHashPlaceholder": "Paste a hash (MD5, SHA-1 or SHA-256) to verify...",
+    "hashMatched": "Integrity confirmed ({{algo}} match)",
+    "hashMismatch": "The provided hash does NOT match the file",
+    "shortcutsTitle": "Configurable Keyboard Shortcuts",
+    "shortcutConflict": "Conflict!",
+    "tagAssign": "Assign tag",
+    "tagClear": "Clear tag"
+  },
   "settings": {
     "title": "Settings",
     "language": "Language",

@@ -50,3 +50,4 @@ func TestGetItemPropertiesFileAndFolder(t *testing.T) {
 		t.Fatalf("expected recursive folder size %d, got %d", len(content), dirProps.Size)
 	}
 }
+

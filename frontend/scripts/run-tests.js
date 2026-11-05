@@ -68,6 +68,10 @@ const requiredOsKeys = [
   'permissions', 'readOnly', 'openWith', 'openExternalTerminal',
   'revealInSystem', 'ejectDrive'
 ];
+const requiredProductivityKeys = [
+  'paletteTitle', 'palettePlaceholder', 'batchRenameTitle',
+  'compareTitle', 'hashTitle', 'shortcutsTitle', 'shortcutConflict'
+];
 
 for (const lang of ['pt-BR', 'en', 'es']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
@@ -105,6 +109,9 @@ for (const lang of ['pt-BR', 'en', 'es']) {
   for (const osKey of requiredOsKeys) {
     assert.ok(typeof data.os?.[osKey] === 'string' && data.os[osKey].length > 0);
   }
+  for (const prodKey of requiredProductivityKeys) {
+    assert.ok(typeof data.productivity?.[prodKey] === 'string' && data.productivity[prodKey].length > 0);
+  }
 }
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.8.0) passaram com sucesso.');
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.9.0) passaram com sucesso.');

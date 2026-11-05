@@ -61,3 +61,4 @@ func TestWatcherDetectsFileCreationAndDebounces(t *testing.T) {
 		t.Fatalf("expected 0 watched paths after Unwatch")
 	}
 }
+

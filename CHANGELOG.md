@@ -2,6 +2,14 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [0.9.0] - 2026-11-05
+
+### Adicionado
+
+- Serviço `internal/productivity` com **Renomeação em Lote com Prévia** (`PreviewBatchRename` e `ExecuteBatchRename` com busca/substituição por texto ou Regex, prefixo, sufixo, transformação de caixa, contador sequencial `{n}` e detecção preventiva de conflitos integrada ao Undo/Redo), **Comparação de Pastas** (`CompareDirectories` classificando itens somente na origem, somente no destino, diferentes e idênticos) e **Calculadora/Verificador de Hashes** (`ComputeHashes` em passagem única para `MD5`, `SHA-1` e `SHA-256`).
+- Tabelas `item_tags` e `saved_searches` no SQLite (`internal/storage`) para persistência local de etiquetas/cores e buscas salvas.
+- **Paleta de Comandos (`Ctrl+Shift+P`)** com filtro instantâneo sobre todas as ações do explorador, modal de **Renomeação em Lote** (acionado automaticamente ao pressionar `F2` com múltiplos itens selecionados), modal de **Comparação de Pastas**, modal de **Calculadora/Verificador de Hashes** e modal de **Atalhos de Teclado Configuráveis** com detecção em tempo real de conflitos.
+
 ## [0.8.0] - 2026-11-05
 
 ### Adicionado

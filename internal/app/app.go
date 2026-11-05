@@ -7,6 +7,7 @@ import (
 	"pulsares-file-explorer/internal/listing"
 	"pulsares-file-explorer/internal/ops"
 	"pulsares-file-explorer/internal/platform"
+	"pulsares-file-explorer/internal/productivity"
 	"pulsares-file-explorer/internal/search"
 	"pulsares-file-explorer/internal/storage"
 	"pulsares-file-explorer/internal/terminal"
@@ -442,6 +443,66 @@ func (a *App) RevealInSystemExplorer(path string) error {
 
 func (a *App) EjectDrive(drivePath string) error {
 	return platform.EjectDrive(drivePath)
+}
+
+func (a *App) PreviewBatchRename(paths []string, opts productivity.BatchRenameOptions) ([]productivity.BatchRenamePreviewItem, error) {
+	return productivity.PreviewBatchRename(paths, opts)
+}
+
+func (a *App) ExecuteBatchRename(paths []string, opts productivity.BatchRenameOptions) (int, error) {
+	return productivity.ExecuteBatchRename(a.storage, paths, opts)
+}
+
+func (a *App) CompareDirectories(leftDir, rightDir string) ([]productivity.FolderDiffItem, error) {
+	return productivity.CompareDirectories(leftDir, rightDir)
+}
+
+func (a *App) ComputeHashes(filePath string) (productivity.FileHashes, error) {
+	return productivity.ComputeHashes(filePath)
+}
+
+func (a *App) SetItemTag(path, tagName, color string) error {
+	if a.storage == nil {
+		return nil
+	}
+	return a.storage.SetItemTag(path, tagName, color)
+}
+
+func (a *App) RemoveItemTag(path string) error {
+	if a.storage == nil {
+		return nil
+	}
+	return a.storage.RemoveItemTag(path)
+}
+
+func (a *App) ListItemTags() []storage.ItemTag {
+	if a.storage == nil {
+		return nil
+	}
+	tags, _ := a.storage.ListItemTags()
+	return tags
+}
+
+func (a *App) SaveSearch(name, queryJSON string) (int64, error) {
+	if a.storage == nil {
+		return 0, nil
+	}
+	return a.storage.SaveSearch(name, queryJSON)
+}
+
+func (a *App) ListSavedSearches() []storage.SavedSearch {
+	if a.storage == nil {
+		return nil
+	}
+	items, _ := a.storage.ListSavedSearches()
+	return items
+}
+
+func (a *App) DeleteSavedSearch(id int64) error {
+	if a.storage == nil {
+		return nil
+	}
+	return a.storage.DeleteSavedSearch(id)
 }
 
 func (a *App) GetDrives() []platform.DriveInfo {

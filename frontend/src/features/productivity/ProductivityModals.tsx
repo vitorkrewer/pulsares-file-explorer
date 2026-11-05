@@ -1,0 +1,803 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  Command,
+  Edit3,
+  FolderGit2,
+  Hash,
+  Keyboard,
+  X,
+  CheckCircle2,
+  AlertTriangle,
+} from 'lucide-react';
+import { useProductivityStore } from './store';
+import { useBrowserStore } from '../browser/store';
+import { useOperationsStore } from '../operations/store';
+import { useDualPaneStore } from '../panes/store';
+import { useTerminalStore } from '../terminal/store';
+import { useSearchStore } from '../search/store';
+import { formatBytes } from '../../i18n/format';
+
+export const ProductivityModals: React.FC = () => {
+  const { t, i18n } = useTranslation('common');
+  const {
+    paletteOpen,
+    closePalette,
+    batchRenameOpen,
+    batchOptions,
+    batchPreview,
+    batchError,
+    openBatchRename,
+    closeBatchRename,
+    updateBatchOptions,
+    applyBatchRename,
+    compareOpen,
+    compareLeftDir,
+    compareRightDir,
+    compareResults,
+    compareLoading,
+    openCompare,
+    closeCompare,
+    setCompareDirs,
+    runCompare,
+    hashOpen,
+    hashLoading,
+    hashData,
+    expectedHash,
+    openHashModal,
+    closeHashModal,
+    setExpectedHash,
+    shortcutsOpen,
+    shortcuts,
+    openShortcutsModal,
+    closeShortcutsModal,
+    updateShortcut,
+    resetShortcuts,
+    assignTagToSelection,
+    clearTagFromSelection,
+  } = useProductivityStore();
+
+  const { currentPath, refresh } = useBrowserStore();
+  const { openPrompt, openProperties, undo, redo } = useOperationsStore();
+  const { layoutMode, setLayoutMode } = useDualPaneStore();
+  const { togglePanel: toggleTerminal } = useTerminalStore();
+  const { toggleDrawer: toggleSearch } = useSearchStore();
+
+  const [paletteQuery, setPaletteQuery] = useState('');
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const paletteInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (paletteOpen) {
+      setPaletteQuery('');
+      setSelectedIdx(0);
+      setTimeout(() => paletteInputRef.current?.focus(), 20);
+    }
+  }, [paletteOpen]);
+
+  const commands = useMemo(
+    () => [
+      {
+        id: 'batch-rename',
+        label: t('productivity.batchRenameTitle'),
+        shortcut: 'F2',
+        run: () => void openBatchRename(),
+      },
+      {
+        id: 'compare-folders',
+        label: t('productivity.compareTitle'),
+        shortcut: '',
+        run: () => void openCompare(),
+      },
+      {
+        id: 'compute-hashes',
+        label: t('productivity.hashTitle'),
+        shortcut: '',
+        run: () => void openHashModal(),
+      },
+      {
+        id: 'shortcuts-config',
+        label: t('productivity.shortcutsTitle'),
+        shortcut: '',
+        run: () => openShortcutsModal(),
+      },
+      {
+        id: 'new-folder',
+        label: t('ops.newFolder'),
+        shortcut: 'Ctrl+Shift+N',
+        run: () => openPrompt('newFolder'),
+      },
+      {
+        id: 'new-file',
+        label: t('ops.newFile'),
+        shortcut: '',
+        run: () => openPrompt('newFile'),
+      },
+      {
+        id: 'search-advanced',
+        label: t('search.toggleAdvanced'),
+        shortcut: 'Ctrl+Shift+S',
+        run: () => toggleSearch(),
+      },
+      {
+        id: 'item-properties',
+        label: t('os.propertiesShortcut'),
+        shortcut: 'Alt+Enter',
+        run: () => void openProperties(),
+      },
+      {
+        id: 'toggle-terminal',
+        label: t('terminal.togglePanel'),
+        shortcut: 'Ctrl+`',
+        run: () => void toggleTerminal(currentPath || '/'),
+      },
+      {
+        id: 'toggle-dual-pane',
+        label: t('panes.splitHorizontal'),
+        shortcut: '',
+        run: () => setLayoutMode(layoutMode === 'single' ? 'split-h' : 'single'),
+      },
+      {
+        id: 'tag-blue',
+        label: `${t('productivity.tagAssign')}: Azul`,
+        shortcut: '',
+        run: () => void assignTagToSelection('Importante', '#3b82f6'),
+      },
+      {
+        id: 'tag-green',
+        label: `${t('productivity.tagAssign')}: Verde`,
+        shortcut: '',
+        run: () => void assignTagToSelection('Concluído', '#10b981'),
+      },
+      {
+        id: 'tag-amber',
+        label: `${t('productivity.tagAssign')}: Âmbar`,
+        shortcut: '',
+        run: () => void assignTagToSelection('Pendente', '#f59e0b'),
+      },
+      {
+        id: 'tag-clear',
+        label: t('productivity.tagClear'),
+        shortcut: '',
+        run: () => void clearTagFromSelection(),
+      },
+      {
+        id: 'undo',
+        label: t('ops.undo'),
+        shortcut: 'Ctrl+Z',
+        run: () => void undo(),
+      },
+      {
+        id: 'redo',
+        label: t('ops.redo'),
+        shortcut: 'Ctrl+Y',
+        run: () => void redo(),
+      },
+      {
+        id: 'refresh',
+        label: t('nav.refresh'),
+        shortcut: 'F5',
+        run: () => refresh(),
+      },
+    ],
+    [
+      t,
+      openBatchRename,
+      openCompare,
+      openHashModal,
+      openShortcutsModal,
+      openPrompt,
+      toggleSearch,
+      openProperties,
+      toggleTerminal,
+      currentPath,
+      setLayoutMode,
+      layoutMode,
+      assignTagToSelection,
+      clearTagFromSelection,
+      undo,
+      redo,
+      refresh,
+    ]
+  );
+
+  const filteredCommands = useMemo(() => {
+    const q = paletteQuery.trim().toLowerCase();
+    if (!q) return commands;
+    return commands.filter((c) => c.label.toLowerCase().includes(q));
+  }, [commands, paletteQuery]);
+
+  // Detecção de conflitos de atalhos
+  const shortcutCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of shortcuts) {
+      const key = s.currentKey.trim().toLowerCase();
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [shortcuts]);
+
+  const hasBatchConflicts = batchPreview.some((p) => p.hasConflict);
+
+  const hashMatchKind = useMemo(() => {
+    if (!hashData || !expectedHash.trim()) return null;
+    const norm = expectedHash.trim().toLowerCase();
+    if (norm === hashData.sha256.toLowerCase()) return 'SHA-256';
+    if (norm === hashData.sha1.toLowerCase()) return 'SHA-1';
+    if (norm === hashData.md5.toLowerCase()) return 'MD5';
+    return 'MISMATCH';
+  }, [hashData, expectedHash]);
+
+  return (
+    <>
+      {/* 1. Paleta de Comandos (Ctrl+Shift+P) */}
+      {paletteOpen && (
+        <div style={styles.backdrop} onClick={closePalette}>
+          <div style={styles.paletteModal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.paletteHeader}>
+              <Command size={15} style={{ color: 'var(--accent)' }} />
+              <input
+                ref={paletteInputRef}
+                type="text"
+                value={paletteQuery}
+                onChange={(e) => {
+                  setPaletteQuery(e.target.value);
+                  setSelectedIdx(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedIdx((i) =>
+                      filteredCommands.length > 0 ? (i + 1) % filteredCommands.length : 0
+                    );
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedIdx((i) =>
+                      filteredCommands.length > 0
+                        ? (i - 1 + filteredCommands.length) % filteredCommands.length
+                        : 0
+                    );
+                  } else if (e.key === 'Enter' && filteredCommands[selectedIdx]) {
+                    e.preventDefault();
+                    const cmd = filteredCommands[selectedIdx];
+                    closePalette();
+                    cmd.run();
+                  } else if (e.key === 'Escape') {
+                    closePalette();
+                  }
+                }}
+                placeholder={t('productivity.palettePlaceholder')}
+                style={styles.paletteInput}
+              />
+              <button type="button" style={styles.iconBtn} onClick={closePalette}>
+                <X size={14} />
+              </button>
+            </div>
+            <div style={styles.paletteList}>
+              {filteredCommands.map((cmd, idx) => (
+                <div
+                  key={cmd.id}
+                  style={
+                    idx === selectedIdx
+                      ? { ...styles.paletteItem, ...styles.paletteItemActive }
+                      : styles.paletteItem
+                  }
+                  onMouseEnter={() => setSelectedIdx(idx)}
+                  onClick={() => {
+                    closePalette();
+                    cmd.run();
+                  }}
+                >
+                  <span>{cmd.label}</span>
+                  {cmd.shortcut && <kbd style={styles.kbd}>{cmd.shortcut}</kbd>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Modal de Renomeação em Lote com Prévia */}
+      {batchRenameOpen && (
+        <div style={styles.backdrop} onClick={closeBatchRename}>
+          <div style={{ ...styles.modal, width: 640 }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <span style={styles.titleRow}>
+                <Edit3 size={15} style={{ color: 'var(--accent)' }} />
+                {t('productivity.batchRenameTitle')}
+              </span>
+              <button type="button" style={styles.iconBtn} onClick={closeBatchRename}>
+                <X size={14} />
+              </button>
+            </div>
+
+            <div style={styles.gridForm}>
+              <input
+                type="text"
+                placeholder={t('productivity.findPlaceholder')}
+                value={batchOptions.find}
+                onChange={(e) => void updateBatchOptions({ find: e.target.value })}
+                style={styles.input}
+              />
+              <input
+                type="text"
+                placeholder={t('productivity.replacePlaceholder')}
+                value={batchOptions.replace}
+                onChange={(e) => void updateBatchOptions({ replace: e.target.value })}
+                style={styles.input}
+              />
+              <input
+                type="text"
+                placeholder={t('productivity.prefixPlaceholder')}
+                value={batchOptions.prefix}
+                onChange={(e) => void updateBatchOptions({ prefix: e.target.value })}
+                style={styles.input}
+              />
+              <input
+                type="text"
+                placeholder={t('productivity.suffixPlaceholder')}
+                value={batchOptions.suffix}
+                onChange={(e) => void updateBatchOptions({ suffix: e.target.value })}
+                style={styles.input}
+              />
+              <select
+                value={batchOptions.caseMode}
+                onChange={(e) =>
+                  void updateBatchOptions({
+                    caseMode: e.target.value as 'none' | 'lower' | 'upper' | 'title',
+                  })
+                }
+                style={styles.input}
+              >
+                <option value="none">{t('productivity.caseNone')}</option>
+                <option value="lower">{t('productivity.caseLower')}</option>
+                <option value="upper">{t('productivity.caseUpper')}</option>
+                <option value="title">{t('productivity.caseTitle')}</option>
+              </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label style={styles.checkLabel}>
+                  <input
+                    type="checkbox"
+                    checked={batchOptions.useRegex}
+                    onChange={(e) => void updateBatchOptions({ useRegex: e.target.checked })}
+                  />
+                  <span>Regex</span>
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={6}
+                  value={batchOptions.numberDigits}
+                  onChange={(e) =>
+                    void updateBatchOptions({ numberDigits: Number(e.target.value) || 0 })
+                  }
+                  title={t('productivity.counterDigits')}
+                  style={{ ...styles.input, width: 70 }}
+                />
+              </div>
+            </div>
+
+            {batchError && <div style={styles.errorBanner}>{batchError}</div>}
+
+            <div style={styles.tableBox}>
+              {batchPreview.map((item) => (
+                <div key={item.originalPath} style={styles.previewRow}>
+                  <span style={styles.origName}>{item.originalName}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>→</span>
+                  <span
+                    style={{
+                      ...styles.newName,
+                      color: item.hasConflict
+                        ? '#ef4444'
+                        : item.changed
+                          ? 'var(--accent)'
+                          : 'var(--text-primary)',
+                    }}
+                  >
+                    {item.newName}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div style={styles.footer}>
+              <button type="button" style={styles.secondaryBtn} onClick={closeBatchRename}>
+                {t('ops.cancel')}
+              </button>
+              <button
+                type="button"
+                style={styles.primaryBtn}
+                disabled={hasBatchConflicts}
+                onClick={() => void applyBatchRename()}
+              >
+                {t('ops.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Modal de Comparação de Pastas */}
+      {compareOpen && (
+        <div style={styles.backdrop} onClick={closeCompare}>
+          <div style={{ ...styles.modal, width: 680 }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <span style={styles.titleRow}>
+                <FolderGit2 size={15} style={{ color: 'var(--accent)' }} />
+                {t('productivity.compareTitle')}
+              </span>
+              <button type="button" style={styles.iconBtn} onClick={closeCompare}>
+                <X size={14} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="text"
+                value={compareLeftDir}
+                onChange={(e) => setCompareDirs(e.target.value, compareRightDir)}
+                placeholder={t('ops.conflictSource')}
+                style={{ ...styles.input, flex: 1 }}
+              />
+              <input
+                type="text"
+                value={compareRightDir}
+                onChange={(e) => setCompareDirs(compareLeftDir, e.target.value)}
+                placeholder={t('ops.conflictDest')}
+                style={{ ...styles.input, flex: 1 }}
+              />
+              <button type="button" style={styles.primaryBtn} onClick={() => void runCompare()}>
+                {t('productivity.compareRun')}
+              </button>
+            </div>
+
+            <div style={styles.tableBox}>
+              {compareLoading ? (
+                <div style={styles.emptyMsg}>{t('tree.loading')}</div>
+              ) : compareResults.length === 0 ? (
+                <div style={styles.emptyMsg}>{t('search.noResults')}</div>
+              ) : (
+                compareResults.map((item) => (
+                  <div key={item.name} style={styles.previewRow}>
+                    <span style={{ fontWeight: 500, flex: 1 }}>{item.name}</span>
+                    <span style={styles.diffBadge}>{t(`productivity.diffStatus.${item.status}`)}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 130, textAlign: 'right' }}>
+                      {item.leftSize > 0 ? formatBytes(item.leftSize, i18n.language) : '—'} /{' '}
+                      {item.rightSize > 0 ? formatBytes(item.rightSize, i18n.language) : '—'}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Modal de Calculadora e Verificador de Hashes (MD5, SHA-1, SHA-256) */}
+      {hashOpen && (
+        <div style={styles.backdrop} onClick={closeHashModal}>
+          <div style={{ ...styles.modal, width: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <span style={styles.titleRow}>
+                <Hash size={15} style={{ color: 'var(--accent)' }} />
+                {t('productivity.hashTitle')}
+              </span>
+              <button type="button" style={styles.iconBtn} onClick={closeHashModal}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {hashLoading || !hashData ? (
+              <div style={styles.emptyMsg}>{t('tree.loading')}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
+                <div>
+                  <strong>{t('columns.name')}:</strong> {hashData.path}
+                </div>
+                <div>
+                  <strong>MD5:</strong>{' '}
+                  <code style={styles.codeBlock}>{hashData.md5}</code>
+                </div>
+                <div>
+                  <strong>SHA-1:</strong>{' '}
+                  <code style={styles.codeBlock}>{hashData.sha1}</code>
+                </div>
+                <div>
+                  <strong>SHA-256:</strong>{' '}
+                  <code style={styles.codeBlock}>{hashData.sha256}</code>
+                </div>
+
+                <input
+                  type="text"
+                  value={expectedHash}
+                  onChange={(e) => setExpectedHash(e.target.value)}
+                  placeholder={t('productivity.verifyHashPlaceholder')}
+                  style={styles.input}
+                />
+
+                {hashMatchKind && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: hashMatchKind === 'MISMATCH' ? '#ef4444' : '#10b981',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {hashMatchKind === 'MISMATCH' ? (
+                      <>
+                        <AlertTriangle size={14} />
+                        <span>{t('productivity.hashMismatch')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={14} />
+                        <span>{t('productivity.hashMatched', { algo: hashMatchKind })}</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Modal de Atalhos Configuráveis com Detecção de Conflitos */}
+      {shortcutsOpen && (
+        <div style={styles.backdrop} onClick={closeShortcutsModal}>
+          <div style={{ ...styles.modal, width: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <span style={styles.titleRow}>
+                <Keyboard size={15} style={{ color: 'var(--accent)' }} />
+                {t('productivity.shortcutsTitle')}
+              </span>
+              <button type="button" style={styles.iconBtn} onClick={closeShortcutsModal}>
+                <X size={14} />
+              </button>
+            </div>
+
+            <div style={styles.tableBox}>
+              {shortcuts.map((sc) => {
+                const isConflict =
+                  (shortcutCounts[sc.currentKey.trim().toLowerCase()] || 0) > 1;
+                return (
+                  <div key={sc.id} style={styles.previewRow}>
+                    <span style={{ flex: 1 }}>{t(sc.labelKey)}</span>
+                    <input
+                      type="text"
+                      value={sc.currentKey}
+                      onChange={(e) => updateShortcut(sc.id, e.target.value)}
+                      style={{
+                        ...styles.input,
+                        width: 140,
+                        borderColor: isConflict ? '#ef4444' : 'var(--border-subtle)',
+                      }}
+                    />
+                    {isConflict && (
+                      <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 600 }}>
+                        {t('productivity.shortcutConflict')}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={styles.footer}>
+              <button type="button" style={styles.secondaryBtn} onClick={resetShortcuts}>
+                {t('search.clearFilters')}
+              </button>
+              <button type="button" style={styles.primaryBtn} onClick={closeShortcutsModal}>
+                {t('ops.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  backdrop: {
+    position: 'fixed',
+    inset: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2100,
+  },
+  paletteModal: {
+    width: 520,
+    backgroundColor: 'var(--bg-surface)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 8,
+    overflow: 'hidden',
+    boxShadow: '0 12px 36px rgba(0, 0, 0, 0.5)',
+  },
+  paletteHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 12px',
+    borderBottom: '1px solid var(--border-subtle)',
+  },
+  paletteInput: {
+    flex: 1,
+    border: 'none',
+    outline: 'none',
+    backgroundColor: 'transparent',
+    color: 'var(--text-primary)',
+    fontSize: 13,
+  },
+  paletteList: {
+    maxHeight: 320,
+    overflowY: 'auto',
+    padding: 6,
+  },
+  paletteItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '8px 10px',
+    borderRadius: 6,
+    fontSize: 12,
+    color: 'var(--text-primary)',
+    cursor: 'pointer',
+  },
+  paletteItemActive: {
+    backgroundColor: 'rgba(59, 130, 246, 0.16)',
+    color: 'var(--accent)',
+  },
+  kbd: {
+    padding: '2px 6px',
+    borderRadius: 4,
+    fontSize: 10,
+    backgroundColor: 'var(--bg-base)',
+    border: '1px solid var(--border-subtle)',
+    color: 'var(--text-muted)',
+  },
+  modal: {
+    backgroundColor: 'var(--bg-surface)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 8,
+    padding: 16,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    boxShadow: '0 12px 36px rgba(0, 0, 0, 0.5)',
+  },
+  modalHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    fontSize: 14,
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+  },
+  titleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  gridForm: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 8,
+  },
+  input: {
+    height: 30,
+    padding: '0 8px',
+    borderRadius: 5,
+    border: '1px solid var(--border-subtle)',
+    backgroundColor: 'var(--bg-base)',
+    color: 'var(--text-primary)',
+    fontSize: 12,
+  },
+  checkLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    fontSize: 12,
+    color: 'var(--text-secondary)',
+  },
+  tableBox: {
+    maxHeight: 240,
+    overflowY: 'auto',
+    border: '1px solid var(--border-subtle)',
+    borderRadius: 6,
+    padding: 8,
+    backgroundColor: 'var(--bg-base)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  previewRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    fontSize: 12,
+    padding: '4px 6px',
+    borderBottom: '1px solid var(--border-subtle)',
+  },
+  origName: {
+    flex: 1,
+    color: 'var(--text-secondary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  newName: {
+    flex: 1,
+    fontWeight: 500,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  diffBadge: {
+    fontSize: 10,
+    padding: '2px 6px',
+    borderRadius: 4,
+    backgroundColor: 'var(--bg-surface)',
+    border: '1px solid var(--border-subtle)',
+  },
+  codeBlock: {
+    display: 'block',
+    padding: '4px 6px',
+    borderRadius: 4,
+    backgroundColor: 'var(--bg-base)',
+    border: '1px solid var(--border-subtle)',
+    fontFamily: 'monospace',
+    fontSize: 11,
+    wordBreak: 'break-all',
+    marginTop: 2,
+  },
+  errorBanner: {
+    padding: '6px 10px',
+    borderRadius: 5,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    color: '#ef4444',
+    fontSize: 12,
+  },
+  emptyMsg: {
+    padding: 20,
+    textAlign: 'center',
+    color: 'var(--text-muted)',
+    fontSize: 12,
+  },
+  footer: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  primaryBtn: {
+    padding: '6px 12px',
+    borderRadius: 5,
+    backgroundColor: 'var(--accent)',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
+  },
+  secondaryBtn: {
+    padding: '6px 12px',
+    borderRadius: 5,
+    backgroundColor: 'var(--bg-base)',
+    border: '1px solid var(--border-subtle)',
+    color: 'var(--text-primary)',
+    fontSize: 12,
+    cursor: 'pointer',
+  },
+  iconBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+  },
+};

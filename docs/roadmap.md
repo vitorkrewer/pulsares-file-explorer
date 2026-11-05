@@ -11,8 +11,8 @@ Cada etapa é uma versão *minor* registrada no [`CHANGELOG.md`](../CHANGELOG.md
 | 0.5.0 | Terminal integrado (painel inferior) | Concluída |
 | 0.6.0 | Modos de visualização, miniaturas e prévia | Concluída |
 | 0.7.0 | Busca e filtros | Concluída |
-| 0.8.0 | Integração com o sistema operacional | Em andamento |
-| 0.9.0 | Produtividade (paleta, atalhos, renomeação em lote, etiquetas) | Planejada |
+| 0.8.0 | Integração com o sistema operacional | Concluída |
+| 0.9.0 | Produtividade (paleta, atalhos, renomeação em lote, etiquetas) | Em andamento |
 | 0.10.0 | Arquivos compactados e locais remotos | Planejada |
 | 1.0.0 | Estabilização e distribuição | Planejada |
 

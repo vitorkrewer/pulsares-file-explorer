@@ -28,6 +28,7 @@ import {
   Search,
   Filter,
   Info,
+  Command,
   X,
 } from 'lucide-react';
 import { useOperationsStore } from './store';
@@ -37,6 +38,7 @@ import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { useTerminalStore } from '../terminal/store';
 import { usePreviewStore, GroupByOption, GridThumbSize } from '../preview/store';
 import { useSearchStore } from '../search/store';
+import { useProductivityStore } from '../productivity/store';
 
 export const OperationsToolbar: React.FC = () => {
   const { t } = useTranslation('common');
@@ -79,6 +81,7 @@ export const OperationsToolbar: React.FC = () => {
     togglePreviewPanel,
   } = usePreviewStore();
   const { drawerOpen: searchOpen, toggleDrawer: toggleSearch } = useSearchStore();
+  const { paletteOpen, togglePalette } = useProductivityStore();
   const filterInputRef = useRef<HTMLInputElement>(null);
   const [viewBarOpen, setViewBarOpen] = React.useState(false);
 
@@ -267,6 +270,16 @@ export const OperationsToolbar: React.FC = () => {
           title={t('search.toggleAdvanced')}
         >
           <Search size={13} />
+        </button>
+
+        <button
+          type="button"
+          style={paletteOpen ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={togglePalette}
+          title={t('productivity.paletteTitle')}
+          aria-label={t('productivity.paletteTitle')}
+        >
+          <Command size={13} />
         </button>
 
         <span style={styles.divider} />

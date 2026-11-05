@@ -9,6 +9,7 @@ import { DetailsView } from '../features/browser/DetailsView';
 import { AlternativeViews } from '../features/preview/AlternativeViews';
 import { PreviewPanel } from '../features/preview/PreviewPanel';
 import { SearchDrawer } from '../features/search/SearchDrawer';
+import { ProductivityModals } from '../features/productivity/ProductivityModals';
 import { SecondaryPane } from '../features/panes/SecondaryPane';
 import { TerminalPanel } from '../features/terminal/TerminalPanel';
 import { StatusBar } from '../features/browser/StatusBar';
@@ -19,6 +20,7 @@ import { useDualPaneStore } from '../features/panes/store';
 import { useTerminalStore } from '../features/terminal/store';
 import { usePreviewStore } from '../features/preview/store';
 import { useSearchStore } from '../features/search/store';
+import { useProductivityStore } from '../features/productivity/store';
 import { getInitialState, enqueueOperation } from '../lib/wails';
 import { resolveLanguage } from '../i18n/config';
 
@@ -80,6 +82,7 @@ export const App: React.FC = () => {
     density,
   } = usePreviewStore();
   const { toggleDrawer: toggleSearchDrawer } = useSearchStore();
+  const { togglePalette, openBatchRename, loadTags } = useProductivityStore();
   const [theme, setTheme] = useState<string>('dark');
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +94,7 @@ export const App: React.FC = () => {
     const cleanupBrowser = initListener();
     const cleanupOps = initOpsListeners();
     const cleanupSecondary = initSecondaryListeners();
+    void loadTags();
 
     getInitialState().then((state) => {
       // 1. Resolver e aplicar idioma
@@ -169,6 +173,12 @@ export const App: React.FC = () => {
         return;
       }
 
+      if (mod && e.shiftKey && key === 'p') {
+        e.preventDefault();
+        togglePalette();
+        return;
+      }
+
       // Focar filtro instantâneo na pasta: Ctrl+F
       if (mod && !e.shiftKey && key === 'f' && !isInputFocused) {
         e.preventDefault();
@@ -208,7 +218,11 @@ export const App: React.FC = () => {
         }
         if (e.key === 'F2') {
           e.preventDefault();
-          requestRenameSelection();
+          if (selectedPaths.size > 1) {
+            void openBatchRename(Array.from(selectedPaths));
+          } else {
+            requestRenameSelection();
+          }
           return;
         }
         if (e.key === 'Delete') {
@@ -470,6 +484,7 @@ export const App: React.FC = () => {
         </div>
       </div>
       <SearchDrawer />
+      <ProductivityModals />
       <OperationsPanel />
       <StatusBar />
     </div>

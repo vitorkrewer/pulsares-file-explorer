@@ -200,6 +200,36 @@
     "revealInSystem": "Mostrar en el explorador del sistema",
     "ejectDrive": "Expulsar unidad extraíble"
   },
+  "productivity": {
+    "paletteTitle": "Paleta de Comandos (Ctrl+Shift+P)",
+    "palettePlaceholder": "Escriba un comando para ejecutar...",
+    "batchRenameTitle": "Renombrado por Lotes con Vista Previa",
+    "findPlaceholder": "Buscar en el nombre...",
+    "replacePlaceholder": "Reemplazar por...",
+    "prefixPlaceholder": "Prefijo (ej.: 2026_ o {n}_)",
+    "suffixPlaceholder": "Sufijo (ej.: _final o _{n})",
+    "caseNone": "Mantener mayúsculas/minúsculas",
+    "caseLower": "todo en minúsculas",
+    "caseUpper": "TODO EN MAYÚSCULAS",
+    "caseTitle": "Formato de Título",
+    "counterDigits": "Dígitos del contador numérico",
+    "compareTitle": "Comparar Carpetas",
+    "compareRun": "Comparar",
+    "diffStatus": {
+      "onlyLeft": "Solo en origen",
+      "onlyRight": "Solo en destino",
+      "different": "Diferente",
+      "identical": "Idéntico"
+    },
+    "hashTitle": "Calculadora y Verificador de Hashes",
+    "verifyHashPlaceholder": "Pegue un hash (MD5, SHA-1 o SHA-256) para verificar...",
+    "hashMatched": "Integridad confirmada ({{algo}} idéntico)",
+    "hashMismatch": "El hash proporcionado NO coincide con el archivo",
+    "shortcutsTitle": "Atajos de Teclado Configurables",
+    "shortcutConflict": "¡Conflicto!",
+    "tagAssign": "Asignar etiqueta",
+    "tagClear": "Quitar etiqueta"
+  },
   "settings": {
     "title": "Configuración",
     "language": "Idioma",

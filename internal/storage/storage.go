@@ -51,6 +51,20 @@ type IndexedEntry struct {
 	ModTime string `json:"modTime"`
 }
 
+type ItemTag struct {
+	Path      string `json:"path"`
+	TagName   string `json:"tagName"`
+	Color     string `json:"color"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type SavedSearch struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	QueryJSON string `json:"queryJson"`
+	CreatedAt string `json:"createdAt"`
+}
+
 func Open() (*DB, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -145,6 +159,20 @@ func (db *DB) migrate() error {
 
 	CREATE INDEX IF NOT EXISTS idx_entries_name_lower ON index_entries(name_lower);
 	CREATE INDEX IF NOT EXISTS idx_entries_root ON index_entries(root_path);
+
+	CREATE TABLE IF NOT EXISTS item_tags (
+		path TEXT PRIMARY KEY,
+		tag_name TEXT NOT NULL,
+		color TEXT NOT NULL,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS saved_searches (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		query_json TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -446,4 +474,72 @@ func (db *DB) QueryIndexedEntries(rootPrefix string, nameQuery string, limit int
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+func (db *DB) SetItemTag(path, tagName, color string) error {
+	clean := filepath.Clean(path)
+	_, err := db.Exec(`
+		INSERT INTO item_tags (path, tag_name, color, updated_at)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(path) DO UPDATE SET
+			tag_name = excluded.tag_name,
+			color = excluded.color,
+			updated_at = CURRENT_TIMESTAMP
+	`, clean, tagName, color)
+	return err
+}
+
+func (db *DB) RemoveItemTag(path string) error {
+	clean := filepath.Clean(path)
+	_, err := db.Exec("DELETE FROM item_tags WHERE path = ?", clean)
+	return err
+}
+
+func (db *DB) ListItemTags() ([]ItemTag, error) {
+	rows, err := db.Query("SELECT path, tag_name, color, updated_at FROM item_tags ORDER BY updated_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ItemTag
+	for rows.Next() {
+		var t ItemTag
+		if err := rows.Scan(&t.Path, &t.TagName, &t.Color, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) SaveSearch(name, queryJSON string) (int64, error) {
+	res, err := db.Exec("INSERT INTO saved_searches (name, query_json) VALUES (?, ?)", strings.TrimSpace(name), queryJSON)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (db *DB) ListSavedSearches() ([]SavedSearch, error) {
+	rows, err := db.Query("SELECT id, name, query_json, created_at FROM saved_searches ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []SavedSearch
+	for rows.Next() {
+		var s SavedSearch
+		if err := rows.Scan(&s.ID, &s.Name, &s.QueryJSON, &s.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) DeleteSavedSearch(id int64) error {
+	_, err := db.Exec("DELETE FROM saved_searches WHERE id = ?", id)
+	return err
 }
