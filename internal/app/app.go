@@ -1,10 +1,15 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"pulsares-file-explorer/internal/listing"
@@ -44,6 +49,8 @@ type InitialState struct {
 	Language       string                 `json:"language"`
 	Theme          string                 `json:"theme"`
 	SessionData    string                 `json:"sessionData,omitempty"`
+	StudioMode     bool                   `json:"studioMode,omitempty"`
+	StudioTarget   string                 `json:"studioTarget,omitempty"`
 }
 
 func NewApp() *App {
@@ -115,6 +122,18 @@ func (a *App) GetInitialState() InitialState {
 		recent, _ = a.storage.ListRecent(12)
 	}
 
+	studioMode := false
+	studioTarget := ""
+	for i := 1; i < len(os.Args); i++ {
+		if os.Args[i] == "--studio" {
+			studioMode = true
+			if i+1 < len(os.Args) {
+				studioTarget = os.Args[i+1]
+			}
+			break
+		}
+	}
+
 	return InitialState{
 		SystemLanguage: sysLang,
 		HomeDir:        home,
@@ -124,6 +143,8 @@ func (a *App) GetInitialState() InitialState {
 		Language:       lang,
 		Theme:          theme,
 		SessionData:    sessionData,
+		StudioMode:     studioMode,
+		StudioTarget:   studioTarget,
 	}
 }
 
@@ -445,6 +466,72 @@ func (a *App) WriteTextFile(path string, content string) error {
 		mode = info.Mode().Perm()
 	}
 	return os.WriteFile(clean, []byte(content), mode)
+}
+
+type StudioRunResult struct {
+	Stdout     string `json:"stdout"`
+	Stderr     string `json:"stderr"`
+	ExitCode   int    `json:"exitCode"`
+	DurationMs int64  `json:"durationMs"`
+}
+
+func (a *App) RunStudioCommand(cwd string, command string) (StudioRunResult, error) {
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return StudioRunResult{}, errors.New("empty command")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var cmd *exec.Cmd
+	if goruntime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", trimmed)
+	} else {
+		cmd = exec.CommandContext(ctx, "sh", "-c", trimmed)
+	}
+	if strings.TrimSpace(cwd) != "" {
+		if info, err := os.Stat(cwd); err == nil && info.IsDir() {
+			cmd.Dir = cwd
+		}
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start).Milliseconds()
+
+	exitCode := 0
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		} else {
+			exitCode = 1
+		}
+	}
+
+	return StudioRunResult{
+		Stdout:     stdout.String(),
+		Stderr:     stderr.String(),
+		ExitCode:   exitCode,
+		DurationMs: duration,
+	}, nil
+}
+
+func (a *App) OpenStudioWindow(targetPath string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	args := []string{"--studio"}
+	if strings.TrimSpace(targetPath) != "" {
+		args = append(args, targetPath)
+	}
+	cmd := exec.Command(exe, args...)
+	return cmd.Start()
 }
 
 func (a *App) SaveSession(data string) error {

@@ -249,8 +249,8 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
           {!isDir && (
             <MenuItem
               icon={<FileCode2 size={14} />}
-              label="Editar no Studio Editor"
-              badge={isEditable ? 'Monaco' : undefined}
+              label="Editar no Pulsares Studio"
+              badge={isEditable ? 'Studio' : undefined}
               onClick={() =>
                 runAndClose(() => {
                   void openFileInEditor(entry.location.path);
@@ -434,9 +434,13 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
-            📂 {getTabLabel(currentPath)}
+            <FolderOpen size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <span>{getTabLabel(currentPath)}</span>
           </div>
 
           <MenuItem
@@ -454,7 +458,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
 
           <MenuItem
             icon={<FileCode2 size={14} />}
-            label="Abrir Studio Editor (Monaco)"
+            label="Abrir Pulsares Studio Editor"
             badge="Dev"
             onClick={() => runAndClose(() => openNewUntitledTab(currentPath, 'markdown'))}
           />

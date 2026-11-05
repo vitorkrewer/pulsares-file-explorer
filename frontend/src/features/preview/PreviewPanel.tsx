@@ -64,7 +64,7 @@ const PreviewBody: React.FC<{
             <button
               type="button"
               onClick={() => void useEditorStore.getState().openFileInEditor(data.path)}
-              title="Editar no Studio Editor (Monaco)"
+              title="Editar no Pulsares Studio"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',

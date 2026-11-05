@@ -21,7 +21,7 @@ import { useTerminalStore } from '../features/terminal/store';
 import { usePreviewStore } from '../features/preview/store';
 import { useSearchStore } from '../features/search/store';
 import { useProductivityStore } from '../features/productivity/store';
-import { useEditorStore } from '../features/editor/store';
+import { useEditorStore, isStandaloneStudioWindow } from '../features/editor/store';
 import { CodeEditorModal } from '../features/editor/CodeEditorModal';
 import {
   FileContextMenu,
@@ -90,6 +90,7 @@ export const App: React.FC = () => {
   const { toggleDrawer: toggleSearchDrawer } = useSearchStore();
   const { togglePalette, openBatchRename, loadTags } = useProductivityStore();
   const [theme, setTheme] = useState<string>('dark');
+  const [isStudioMode, setIsStudioMode] = useState<boolean>(() => isStandaloneStudioWindow());
   const [contextMenuTarget, setContextMenuTarget] = useState<ContextMenuTarget | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -128,6 +129,12 @@ export const App: React.FC = () => {
 
       // 3. Reidratar sessão (abas + painel lateral + favoritos + unidades + recentes)
       const initialPath = state.homeDir || (state.drives.length > 0 ? state.drives[0].path : '/');
+      if (state.studioMode || isStandaloneStudioWindow()) {
+        setIsStudioMode(true);
+        document.title = 'Pulsares Studio Editor';
+        void useEditorStore.getState().hydrateStudioFromStorage(state.studioTarget, initialPath);
+        return;
+      }
       const savedSidebar = hydrateSession(state.sessionData, initialPath);
       hydrateSidebar(
         savedSidebar,
@@ -507,6 +514,14 @@ export const App: React.FC = () => {
       entry: matched,
     });
   };
+
+  if (isStudioMode) {
+    return (
+      <div style={styles.appRoot}>
+        <CodeEditorModal standalone />
+      </div>
+    );
+  }
 
   return (
     <div style={styles.appRoot}>

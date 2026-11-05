@@ -155,6 +155,8 @@ export interface InitialState {
   language: string;
   theme: string;
   sessionData?: string;
+  studioMode?: boolean;
+  studioTarget?: string;
 }
 
 export interface ListingBatchEvent {
@@ -325,6 +327,13 @@ export interface TextFilePayload {
   size: number;
 }
 
+export interface StudioRunResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  durationMs: number;
+}
+
 // Declaração de objetos injetados pelo Wails runtime
 declare global {
   interface Window {
@@ -380,6 +389,8 @@ declare global {
           TerminalAutocomplete: (sessionId: string, cwdFallback: string, line: string) => Promise<string[]>;
           ReadTextFile: (path: string) => Promise<TextFilePayload>;
           WriteTextFile: (path: string, content: string) => Promise<void>;
+          RunStudioCommand: (cwd: string, command: string) => Promise<StudioRunResult>;
+          OpenStudioWindow: (targetPath: string) => Promise<void>;
           SaveSession: (data: string) => Promise<void>;
           LoadSession: () => Promise<string>;
           OpenPath: (path: string) => Promise<void>;
@@ -916,6 +927,32 @@ export async function writeTextFile(path: string, content: string): Promise<void
   if (isWailsAvailable() && typeof appObj?.WriteTextFile === 'function') {
     return window.go!.app.App.WriteTextFile(path, content);
   }
+}
+
+export async function runStudioCommand(cwd: string, command: string): Promise<StudioRunResult> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.RunStudioCommand === 'function') {
+    return window.go!.app.App.RunStudioCommand(cwd, command);
+  }
+  return {
+    stdout: '',
+    stderr: 'Execução disponível apenas após recompilar o backend Go.',
+    exitCode: 1,
+    durationMs: 0,
+  };
+}
+
+export async function openStudioWindowNative(targetPath: string): Promise<boolean> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.OpenStudioWindow === 'function') {
+    try {
+      await window.go!.app.App.OpenStudioWindow(targetPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 export async function getDrives(): Promise<DriveInfo[]> {

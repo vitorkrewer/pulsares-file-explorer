@@ -221,8 +221,8 @@ export const OperationsToolbar: React.FC = () => {
               useEditorStore.getState().openNewUntitledTab(currentPath, 'markdown');
             }
           }}
-          title="Pulsares Studio Editor (Monaco)"
-          aria-label="Pulsares Studio Editor (Monaco)"
+          title="Pulsares Studio Editor (Ctrl+E)"
+          aria-label="Pulsares Studio Editor (Ctrl+E)"
         >
           <FileCode2 size={14} />
         </button>

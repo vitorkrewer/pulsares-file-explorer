@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -16,9 +17,16 @@ var version = "1.0.0"
 
 func main() {
 	explorerApp := app.NewApp()
+	title := "Pulsares Explorer"
+	for _, arg := range os.Args[1:] {
+		if arg == "--studio" {
+			title = "Pulsares Studio Editor"
+			break
+		}
+	}
 
 	err := wails.Run(&options.App{
-		Title:     "Pulsares Explorer",
+		Title:     title,
 		Width:     1280,
 		Height:    800,
 		MinWidth:  900,
