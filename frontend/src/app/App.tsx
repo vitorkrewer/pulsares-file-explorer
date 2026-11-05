@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabBar } from '../features/tabs/TabBar';
 import { AddressBar } from '../features/address-bar/AddressBar';
@@ -6,11 +6,13 @@ import { OperationsToolbar } from '../features/operations/OperationsToolbar';
 import { OperationsPanel } from '../features/operations/OperationsPanel';
 import { Sidebar } from '../features/sidebar/Sidebar';
 import { DetailsView } from '../features/browser/DetailsView';
+import { SecondaryPane } from '../features/panes/SecondaryPane';
 import { StatusBar } from '../features/browser/StatusBar';
 import { useBrowserStore } from '../features/browser/store';
 import { useFolderTreeStore } from '../features/sidebar/folder-tree/store';
 import { useOperationsStore } from '../features/operations/store';
-import { getInitialState } from '../lib/wails';
+import { useDualPaneStore } from '../features/panes/store';
+import { getInitialState, enqueueOperation } from '../lib/wails';
 import { resolveLanguage } from '../i18n/config';
 
 export const App: React.FC = () => {
@@ -25,6 +27,8 @@ export const App: React.FC = () => {
     switchTab,
     activeTabId,
     tabs,
+    currentPath,
+    selectedPaths,
     goBack,
     goForward,
     goUp,
@@ -32,7 +36,7 @@ export const App: React.FC = () => {
     selectAll,
     clearSelection,
   } = useBrowserStore();
-  const { hydrateSidebar, toggleSidebar } = useFolderTreeStore();
+  const { hydrateSidebar, toggleSidebar, refreshSidebarMeta } = useFolderTreeStore();
   const {
     initOpsListeners,
     copySelection,
@@ -45,11 +49,22 @@ export const App: React.FC = () => {
     undo,
     redo,
   } = useOperationsStore();
+  const {
+    layoutMode,
+    splitRatio,
+    setSplitRatio,
+    setFocusedPane,
+    initSecondaryListeners,
+    copyToOppositePane,
+    moveToOppositePane,
+  } = useDualPaneStore();
   const [theme, setTheme] = useState<string>('dark');
+  const workspaceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const cleanupBrowser = initListener();
     const cleanupOps = initOpsListeners();
+    const cleanupSecondary = initSecondaryListeners();
 
     getInitialState().then((state) => {
       // 1. Resolver e aplicar idioma
@@ -65,19 +80,34 @@ export const App: React.FC = () => {
       setTheme(initialTheme);
       document.documentElement.setAttribute('data-theme', initialTheme);
 
-      // 3. Reidratar sessão (abas + painel lateral) ou abrir diretório inicial
+      // 3. Reidratar sessão (abas + painel lateral + favoritos + unidades + recentes)
       const initialPath = state.homeDir || (state.drives.length > 0 ? state.drives[0].path : '/');
       const savedSidebar = hydrateSession(state.sessionData, initialPath);
-      hydrateSidebar(savedSidebar, false, lang);
+      hydrateSidebar(
+        savedSidebar,
+        false,
+        lang,
+        state.drives,
+        state.favorites || [],
+        state.recent || []
+      );
     });
 
     return () => {
       cleanupBrowser();
       cleanupOps();
+      cleanupSecondary();
     };
-  }, [hydrateSession, hydrateSidebar, initListener, initOpsListeners, i18n]);
+  }, [hydrateSession, hydrateSidebar, initListener, initOpsListeners, initSecondaryListeners, i18n]);
 
-  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 + 0.2.0 + 0.3.0)
+  // Atualizar lista de recentes sempre que a pasta ativa mudar
+  useEffect(() => {
+    if (currentPath) {
+      refreshSidebarMeta();
+    }
+  }, [currentPath, refreshSidebarMeta]);
+
+  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 a 0.4.0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const targetEl = e.target as HTMLElement | null;
@@ -102,7 +132,16 @@ export const App: React.FC = () => {
       if (!mod && !e.altKey) {
         if (e.key === 'F5') {
           e.preventDefault();
-          refresh();
+          if (layoutMode !== 'single' && selectedPaths.size > 0) {
+            copyToOppositePane();
+          } else {
+            refresh();
+          }
+          return;
+        }
+        if (e.key === 'F6' && layoutMode !== 'single') {
+          e.preventDefault();
+          moveToOppositePane();
           return;
         }
         if (e.key === 'F2') {
@@ -212,6 +251,10 @@ export const App: React.FC = () => {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [
+    layoutMode,
+    selectedPaths,
+    copyToOppositePane,
+    moveToOppositePane,
     toggleSidebar,
     newTab,
     reopenClosedTab,
@@ -242,6 +285,54 @@ export const App: React.FC = () => {
     document.documentElement.setAttribute('data-theme', newTheme);
   };
 
+  const handleSplitDragStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const container = workspaceRef.current;
+    if (!container) return;
+
+    const onMove = (moveEvt: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      if (layoutMode === 'split-h') {
+        const ratio = (moveEvt.clientX - rect.left) / rect.width;
+        setSplitRatio(ratio);
+      } else if (layoutMode === 'split-v') {
+        const ratio = (moveEvt.clientY - rect.top) / rect.height;
+        setSplitRatio(ratio);
+      }
+    };
+
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const handlePrimaryDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData('application/x-pulsares-paths');
+    if (!raw || !currentPath) return;
+    try {
+      const paths = JSON.parse(raw) as string[];
+      if (Array.isArray(paths) && paths.length > 0) {
+        const kind = e.shiftKey ? 'move' : 'copy';
+        useOperationsStore.getState().setPanelOpen(true);
+        await enqueueOperation(
+          kind,
+          paths,
+          currentPath,
+          'ask',
+          useOperationsStore.getState().verifyHash
+        );
+        refresh();
+      }
+    } catch {
+      // Ignorar payload inválido
+    }
+  };
+
   return (
     <div style={styles.appRoot}>
       <TabBar />
@@ -249,7 +340,48 @@ export const App: React.FC = () => {
       <OperationsToolbar />
       <div style={styles.mainContent}>
         <Sidebar />
-        <DetailsView />
+        <div
+          ref={workspaceRef}
+          style={{
+            ...styles.panesContainer,
+            flexDirection: layoutMode === 'split-v' ? 'column' : 'row',
+          }}
+        >
+          <div
+            onClick={() => setFocusedPane('primary')}
+            draggable={selectedPaths.size > 0}
+            onDragStart={(e) => {
+              if (selectedPaths.size > 0) {
+                e.dataTransfer.setData(
+                  'application/x-pulsares-paths',
+                  JSON.stringify(Array.from(selectedPaths))
+                );
+              }
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handlePrimaryDrop}
+            style={{
+              ...styles.primaryPaneWrapper,
+              flex: layoutMode === 'single' ? 1 : `0 0 ${Math.round(splitRatio * 100)}%`,
+            }}
+          >
+            <DetailsView />
+          </div>
+
+          {layoutMode !== 'single' && (
+            <>
+              <div
+                role="separator"
+                style={
+                  layoutMode === 'split-h' ? styles.verticalSplitter : styles.horizontalSplitter
+                }
+                onMouseDown={handleSplitDragStart}
+                onDoubleClick={() => setSplitRatio(0.5)}
+              />
+              <SecondaryPane />
+            </>
+          )}
+        </div>
       </div>
       <OperationsPanel />
       <StatusBar />
@@ -269,5 +401,31 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     overflow: 'hidden',
     display: 'flex',
+  },
+  panesContainer: {
+    flex: 1,
+    display: 'flex',
+    overflow: 'hidden',
+    height: '100%',
+  },
+  primaryPaneWrapper: {
+    display: 'flex',
+    overflow: 'hidden',
+    minWidth: 180,
+    minHeight: 120,
+  },
+  verticalSplitter: {
+    width: 5,
+    height: '100%',
+    cursor: 'col-resize',
+    backgroundColor: 'var(--border-subtle)',
+    flexShrink: 0,
+  },
+  horizontalSplitter: {
+    height: 5,
+    width: '100%',
+    cursor: 'row-resize',
+    backgroundColor: 'var(--border-subtle)',
+    flexShrink: 0,
   },
 };

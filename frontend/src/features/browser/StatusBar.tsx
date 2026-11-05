@@ -1,14 +1,21 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBrowserStore } from './store';
+import { useFolderTreeStore } from '../sidebar/folder-tree/store';
+import { formatBytes } from '../../i18n/format';
 
 export const StatusBar: React.FC = () => {
-  const { t } = useTranslation('common');
-  const { entries, selectedPaths, showHidden } = useBrowserStore();
+  const { t, i18n } = useTranslation('common');
+  const { entries, selectedPaths, showHidden, currentPath } = useBrowserStore();
+  const { drives } = useFolderTreeStore();
 
   const visibleEntries = showHidden ? entries : entries.filter((e) => !e.attrs.hidden);
   const totalCount = visibleEntries.length;
   const selectedCount = selectedPaths.size;
+
+  const activeDrive = drives.find((d) =>
+    currentPath.toLowerCase().startsWith(d.path.toLowerCase())
+  );
 
   return (
     <div style={styles.statusBar}>
@@ -29,6 +36,16 @@ export const StatusBar: React.FC = () => {
           </>
         )}
       </div>
+
+      {activeDrive && activeDrive.freeBytes !== undefined && activeDrive.freeBytes > 0 && (
+        <div style={styles.section}>
+          <span>
+            {t('status.freeSpace', {
+              free: formatBytes(activeDrive.freeBytes, i18n.language),
+            })}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
@@ -55,4 +72,3 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--border-strong)',
   },
 };
-

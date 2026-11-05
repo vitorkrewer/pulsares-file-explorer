@@ -12,13 +12,20 @@ import {
   Redo2,
   ListTodo,
   ShieldCheck,
+  Columns,
+  Rows,
+  Square,
+  Star,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { useOperationsStore } from './store';
-import { useBrowserStore } from '../browser/store';
+import { useBrowserStore, getTabLabel } from '../browser/store';
+import { useDualPaneStore } from '../panes/store';
+import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 
 export const OperationsToolbar: React.FC = () => {
   const { t } = useTranslation('common');
-  const { selectedPaths } = useBrowserStore();
+  const { selectedPaths, currentPath } = useBrowserStore();
   const {
     clipboard,
     jobs,
@@ -35,9 +42,17 @@ export const OperationsToolbar: React.FC = () => {
     undo,
     redo,
   } = useOperationsStore();
+  const {
+    layoutMode,
+    setLayoutMode,
+    copyToOppositePane,
+    moveToOppositePane,
+  } = useDualPaneStore();
+  const { favorites, toggleFavorite } = useFolderTreeStore();
 
   const hasSelection = selectedPaths.size > 0;
   const hasSingleSelection = selectedPaths.size === 1;
+  const isCurrentFavorite = favorites.some((f) => f.path === currentPath);
   const activeJobsCount = jobs.filter(
     (j) => j.status === 'running' || j.status === 'planning' || j.status === 'conflict'
   ).length;
@@ -63,6 +78,15 @@ export const OperationsToolbar: React.FC = () => {
         >
           <FilePlus size={14} />
           <span>{t('ops.newFile')}</span>
+        </button>
+
+        <button
+          type="button"
+          style={isCurrentFavorite ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => toggleFavorite(currentPath, getTabLabel(currentPath))}
+          title={isCurrentFavorite ? t('sidebar.removeFavorite') : t('sidebar.addFavorite')}
+        >
+          <Star size={14} />
         </button>
 
         <span style={styles.divider} />
@@ -126,9 +150,63 @@ export const OperationsToolbar: React.FC = () => {
         <button type="button" style={styles.btn} onClick={redo} title={t('ops.redo')}>
           <Redo2 size={14} />
         </button>
+
+        {layoutMode !== 'single' && (
+          <>
+            <span style={styles.divider} />
+            <button
+              type="button"
+              style={hasSelection ? styles.btn : styles.disabledBtn}
+              disabled={!hasSelection}
+              onClick={copyToOppositePane}
+              title={t('panes.copyToOther')}
+            >
+              <ArrowRightLeft size={13} />
+              <span>F5</span>
+            </button>
+            <button
+              type="button"
+              style={hasSelection ? styles.btn : styles.disabledBtn}
+              disabled={!hasSelection}
+              onClick={moveToOppositePane}
+              title={t('panes.moveToOther')}
+            >
+              <ArrowRightLeft size={13} />
+              <span>F6</span>
+            </button>
+          </>
+        )}
       </div>
 
       <div style={styles.group}>
+        {/* Alternadores de Layout (Painel Único / Duplo Horizontal / Duplo Vertical) */}
+        <button
+          type="button"
+          style={layoutMode === 'single' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => setLayoutMode('single')}
+          title={t('panes.single')}
+        >
+          <Square size={13} />
+        </button>
+        <button
+          type="button"
+          style={layoutMode === 'split-h' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => setLayoutMode('split-h')}
+          title={t('panes.splitHorizontal')}
+        >
+          <Columns size={13} />
+        </button>
+        <button
+          type="button"
+          style={layoutMode === 'split-v' ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={() => setLayoutMode('split-v')}
+          title={t('panes.splitVertical')}
+        >
+          <Rows size={13} />
+        </button>
+
+        <span style={styles.divider} />
+
         <button
           type="button"
           style={verifyHash ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}

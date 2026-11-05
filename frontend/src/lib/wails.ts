@@ -40,10 +40,24 @@ export interface DriveInfo {
   isRemovable?: boolean;
 }
 
+export interface FavoriteItem {
+  path: string;
+  label: string;
+  position: number;
+}
+
+export interface RecentItem {
+  path: string;
+  visitCount: number;
+  lastVisited: string;
+}
+
 export interface InitialState {
   systemLanguage: string;
   homeDir: string;
   drives: DriveInfo[];
+  favorites?: FavoriteItem[];
+  recent?: RecentItem[];
   language: string;
   theme: string;
   sessionData?: string;
@@ -142,6 +156,10 @@ declare global {
           UndoOperation: () => Promise<JournalEntry | null>;
           RedoOperation: () => Promise<JournalEntry | null>;
           ListJournal: () => Promise<JournalEntry[]>;
+          ListFavorites: () => Promise<FavoriteItem[]>;
+          AddFavorite: (path: string, label: string) => Promise<void>;
+          RemoveFavorite: (path: string) => Promise<void>;
+          ListRecent: () => Promise<RecentItem[]>;
           SaveSession: (data: string) => Promise<void>;
           LoadSession: () => Promise<string>;
           OpenPath: (path: string) => Promise<void>;
@@ -169,7 +187,9 @@ export async function getInitialState(): Promise<InitialState> {
   return {
     systemLanguage: navigator.language || 'en',
     homeDir: '/',
-    drives: [{ path: '/', label: '/' }],
+    drives: [{ path: '/', label: '/', freeBytes: 64 * 1024 * 1024 * 1024, totalBytes: 256 * 1024 * 1024 * 1024 }],
+    favorites: [],
+    recent: [],
     language: 'auto',
     theme: 'system',
     sessionData: '',
@@ -313,6 +333,42 @@ export async function redoOperation(): Promise<JournalEntry | null> {
 export async function listJournal(): Promise<JournalEntry[]> {
   if (isWailsAvailable()) {
     const res = await window.go!.app.App.ListJournal();
+    return res || [];
+  }
+  return [];
+}
+
+export async function listFavorites(): Promise<FavoriteItem[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListFavorites();
+    return res || [];
+  }
+  return [];
+}
+
+export async function addFavorite(path: string, label = ''): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.AddFavorite(path, label);
+  }
+}
+
+export async function removeFavorite(path: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.RemoveFavorite(path);
+  }
+}
+
+export async function listRecent(): Promise<RecentItem[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListRecent();
+    return res || [];
+  }
+  return [];
+}
+
+export async function getDrives(): Promise<DriveInfo[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.GetDrives();
     return res || [];
   }
   return [];

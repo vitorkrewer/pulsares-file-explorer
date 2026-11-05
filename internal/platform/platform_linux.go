@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -25,8 +26,19 @@ func OpenPath(path string) error {
 }
 
 func GetDrives() []DriveInfo {
+	var freeBytes, totalBytes uint64
+	var st syscall.Statfs_t
+	if err := syscall.Statfs("/", &st); err == nil {
+		freeBytes = st.Bavail * uint64(st.Bsize)
+		totalBytes = st.Blocks * uint64(st.Bsize)
+	}
 	return []DriveInfo{
-		{Path: "/", Label: "/"},
+		{
+			Path:       "/",
+			Label:      "/",
+			FreeBytes:  freeBytes,
+			TotalBytes: totalBytes,
+		},
 	}
 }
 

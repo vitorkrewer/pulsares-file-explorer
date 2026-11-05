@@ -30,6 +30,26 @@
     "empty": "Sin subcarpetas",
     "symlink": "Acceso directo / Enlace simbólico"
   },
+  "sidebar": {
+    "favorites": "Favoritos",
+    "addFavorite": "Fijar en favoritos",
+    "removeFavorite": "Quitar de favoritos",
+    "noFavorites": "No hay favoritos guardados",
+    "drives": "Unidades y Volúmenes",
+    "freeOf": "{{free}} libres de {{total}}",
+    "recent": "Recientes",
+    "noRecent": "No hay ubicaciones recientes"
+  },
+  "panes": {
+    "single": "Panel único",
+    "splitHorizontal": "Panel doble lado a lado",
+    "splitVertical": "Panel doble apilado",
+    "copyToOther": "Copiar al otro panel (F5)",
+    "moveToOther": "Mover al otro panel (F6)",
+    "secondaryTitle": "Panel secundario",
+    "dropHere": "Suelte aquí para copiar (o Mayús para mover)",
+    "activatePane": "Hacer panel principal"
+  },
   "ops": {
     "title": "Operaciones de archivo",
     "newFolder": "Nueva carpeta (Ctrl+Shift+N)",
@@ -82,7 +102,8 @@
     "items_plural": "{{count}} elementos",
     "selected": "{{count}} seleccionado",
     "selected_plural": "{{count}} seleccionados",
-    "loading": "Cargando carpeta...",
+    "freeSpace": "{{free}} libres",
+    "loading": "Carregando carpeta...",
     "empty": "Esta carpeta está vacía"
   },
   "types": {

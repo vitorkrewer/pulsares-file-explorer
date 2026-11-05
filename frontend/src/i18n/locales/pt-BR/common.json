@@ -30,6 +30,26 @@
     "empty": "Sem subpastas",
     "symlink": "Atalho / Link simbólico"
   },
+  "sidebar": {
+    "favorites": "Favoritos",
+    "addFavorite": "Fixar nos favoritos",
+    "removeFavorite": "Remover dos favoritos",
+    "noFavorites": "Nenhum favorito salvo",
+    "drives": "Unidades e Volumes",
+    "freeOf": "{{free}} livres de {{total}}",
+    "recent": "Recentes",
+    "noRecent": "Nenhum local recente"
+  },
+  "panes": {
+    "single": "Painel único",
+    "splitHorizontal": "Painel duplo lado a lado",
+    "splitVertical": "Painel duplo empilhado",
+    "copyToOther": "Copiar para o outro painel (F5)",
+    "moveToOther": "Mover para o outro painel (F6)",
+    "secondaryTitle": "Painel secundário",
+    "dropHere": "Solte aqui para copiar (ou Shift para mover)",
+    "activatePane": "Tornar painel principal"
+  },
   "ops": {
     "title": "Operações de arquivo",
     "newFolder": "Nova pasta (Ctrl+Shift+N)",
@@ -82,6 +102,7 @@
     "items_plural": "{{count}} itens",
     "selected": "{{count}} selecionado",
     "selected_plural": "{{count}} selecionados",
+    "freeSpace": "{{free}} livres",
     "loading": "Carregando pasta...",
     "empty": "Esta pasta está vazia"
   },

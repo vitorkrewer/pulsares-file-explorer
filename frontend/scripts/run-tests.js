@@ -31,7 +31,7 @@ const sample = ['arquivo10.txt', 'arquivo2.txt', 'Arquivo1.txt'];
 sample.sort((a, b) => collator.compare(a, b));
 assert.deepEqual(sample, ['Arquivo1.txt', 'arquivo2.txt', 'arquivo10.txt']);
 
-// 3. Garantir que códigos de erro e namespaces (0.1.0, 0.2.0, 0.3.0) existem nos 3 catálogos
+// 3. Garantir que códigos de erro e namespaces (0.1.0 a 0.4.0) existem nos 3 catálogos
 const requiredErrorKeys = ['notFound', 'permissionDenied', 'generic'];
 const requiredTabKeys = ['newTab', 'closeTab', 'duplicateTab', 'pinTab', 'unpinTab', 'closeOthers', 'closeRight', 'reopenClosed'];
 const requiredTreeKeys = ['title', 'followActiveTab', 'refresh', 'loading', 'empty', 'symlink'];
@@ -40,34 +40,30 @@ const requiredOpsKeys = [
   'trash', 'deletePermanent', 'undo', 'redo', 'queue', 'conflictTitle',
   'policyOverwrite', 'policySkip', 'policyRename', 'policyKeepNewer'
 ];
+const requiredSidebarKeys = ['favorites', 'addFavorite', 'removeFavorite', 'drives', 'freeOf', 'recent'];
+const requiredPaneKeys = ['single', 'splitHorizontal', 'splitVertical', 'copyToOther', 'moveToOther'];
 
 for (const lang of ['pt-BR', 'en', 'es']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
   const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   for (const errKey of requiredErrorKeys) {
-    assert.ok(
-      typeof data.errors?.[errKey] === 'string' && data.errors[errKey].length > 0,
-      `Chave errors.${errKey} ausente em ${lang}`
-    );
+    assert.ok(typeof data.errors?.[errKey] === 'string' && data.errors[errKey].length > 0);
   }
   for (const tabKey of requiredTabKeys) {
-    assert.ok(
-      typeof data.tabs?.[tabKey] === 'string' && data.tabs[tabKey].length > 0,
-      `Chave tabs.${tabKey} ausente em ${lang}`
-    );
+    assert.ok(typeof data.tabs?.[tabKey] === 'string' && data.tabs[tabKey].length > 0);
   }
   for (const treeKey of requiredTreeKeys) {
-    assert.ok(
-      typeof data.tree?.[treeKey] === 'string' && data.tree[treeKey].length > 0,
-      `Chave tree.${treeKey} ausente em ${lang}`
-    );
+    assert.ok(typeof data.tree?.[treeKey] === 'string' && data.tree[treeKey].length > 0);
   }
   for (const opsKey of requiredOpsKeys) {
-    assert.ok(
-      typeof data.ops?.[opsKey] === 'string' && data.ops[opsKey].length > 0,
-      `Chave ops.${opsKey} ausente em ${lang}`
-    );
+    assert.ok(typeof data.ops?.[opsKey] === 'string' && data.ops[opsKey].length > 0);
+  }
+  for (const sbKey of requiredSidebarKeys) {
+    assert.ok(typeof data.sidebar?.[sbKey] === 'string' && data.sidebar[sbKey].length > 0);
+  }
+  for (const paneKey of requiredPaneKeys) {
+    assert.ok(typeof data.panes?.[paneKey] === 'string' && data.panes[paneKey].length > 0);
   }
 }
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 + 0.2.0 + 0.3.0) passaram com sucesso.');
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.4.0) passaram com sucesso.');

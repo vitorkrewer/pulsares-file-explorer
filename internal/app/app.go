@@ -23,12 +23,14 @@ type App struct {
 }
 
 type InitialState struct {
-	SystemLanguage string               `json:"systemLanguage"`
-	HomeDir        string               `json:"homeDir"`
-	Drives         []platform.DriveInfo `json:"drives"`
-	Language       string               `json:"language"`
-	Theme          string               `json:"theme"`
-	SessionData    string               `json:"sessionData,omitempty"`
+	SystemLanguage string                 `json:"systemLanguage"`
+	HomeDir        string                 `json:"homeDir"`
+	Drives         []platform.DriveInfo   `json:"drives"`
+	Favorites      []storage.FavoriteItem `json:"favorites"`
+	Recent         []storage.RecentItem   `json:"recent"`
+	Language       string                 `json:"language"`
+	Theme          string                 `json:"theme"`
+	SessionData    string                 `json:"sessionData,omitempty"`
 }
 
 func NewApp() *App {
@@ -68,6 +70,9 @@ func (a *App) GetInitialState() InitialState {
 	lang := "auto"
 	theme := "system"
 	sessionData := ""
+	var favorites []storage.FavoriteItem
+	var recent []storage.RecentItem
+
 	if a.storage != nil {
 		if l, _ := a.storage.GetSetting("language"); l != "" {
 			lang = l
@@ -78,12 +83,16 @@ func (a *App) GetInitialState() InitialState {
 		if s, _ := a.storage.LoadSession(); s != "" {
 			sessionData = s
 		}
+		favorites, _ = a.storage.ListFavorites()
+		recent, _ = a.storage.ListRecent(12)
 	}
 
 	return InitialState{
 		SystemLanguage: sysLang,
 		HomeDir:        home,
 		Drives:         drives,
+		Favorites:      favorites,
+		Recent:         recent,
 		Language:       lang,
 		Theme:          theme,
 		SessionData:    sessionData,
@@ -92,6 +101,9 @@ func (a *App) GetInitialState() InitialState {
 
 func (a *App) ListDirectory(tabID string, requestID string, path string) {
 	resolved := platform.ExpandPath(path)
+	if a.storage != nil {
+		_ = a.storage.RecordVisit(resolved)
+	}
 	loc := vfs.Location{
 		Provider: "local",
 		Path:     resolved,
@@ -210,6 +222,36 @@ func (a *App) ListJournal() []storage.JournalEntry {
 	}
 	entries, _ := a.storage.ListJournal(20)
 	return entries
+}
+
+func (a *App) ListFavorites() []storage.FavoriteItem {
+	if a.storage == nil {
+		return nil
+	}
+	favs, _ := a.storage.ListFavorites()
+	return favs
+}
+
+func (a *App) AddFavorite(path, label string) error {
+	if a.storage == nil {
+		return nil
+	}
+	return a.storage.AddFavorite(path, label)
+}
+
+func (a *App) RemoveFavorite(path string) error {
+	if a.storage == nil {
+		return nil
+	}
+	return a.storage.RemoveFavorite(path)
+}
+
+func (a *App) ListRecent() []storage.RecentItem {
+	if a.storage == nil {
+		return nil
+	}
+	rec, _ := a.storage.ListRecent(12)
+	return rec
 }
 
 func (a *App) SaveSession(data string) error {

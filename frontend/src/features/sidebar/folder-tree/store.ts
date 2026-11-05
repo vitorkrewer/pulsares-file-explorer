@@ -1,5 +1,17 @@
 import { create } from 'zustand';
-import { TreeNode, treeRoots, treeChildren } from '../../../lib/wails';
+import {
+  TreeNode,
+  DriveInfo,
+  FavoriteItem,
+  RecentItem,
+  treeRoots,
+  treeChildren,
+  listFavorites,
+  addFavorite,
+  removeFavorite,
+  listRecent,
+  getDrives,
+} from '../../../lib/wails';
 import { getCollator } from '../../../i18n/format';
 import { registerSidebarStateGetter, triggerSessionSave } from '../../browser/store';
 
@@ -23,6 +35,9 @@ interface FolderTreeState {
   width: number;
   followActiveTab: boolean;
   roots: TreeNode[];
+  drives: DriveInfo[];
+  favorites: FavoriteItem[];
+  recent: RecentItem[];
   nodesByPath: Record<string, NodeCacheEntry>;
   focusedPath: string | null;
 
@@ -31,6 +46,8 @@ interface FolderTreeState {
   toggleFollowActiveTab: () => void;
   setFocusedPath: (path: string | null) => void;
   loadRoots: () => Promise<void>;
+  refreshSidebarMeta: () => Promise<void>;
+  toggleFavorite: (path: string, label?: string) => Promise<void>;
   toggleExpand: (node: TreeNode, showHidden: boolean, locale: string) => Promise<void>;
   expandLevel: (node: TreeNode, showHidden: boolean, locale: string) => Promise<void>;
   revealPath: (targetPath: string, showHidden: boolean, locale: string) => Promise<void>;
@@ -42,17 +59,23 @@ interface FolderTreeState {
       expandedPaths: string[];
     },
     showHidden?: boolean,
-    locale?: string
+    locale?: string,
+    initialDrives?: DriveInfo[],
+    initialFavorites?: FavoriteItem[],
+    initialRecent?: RecentItem[]
   ) => Promise<void>;
 }
 
-const DEFAULT_SIDEBAR_WIDTH = 240;
+const DEFAULT_SIDEBAR_WIDTH = 250;
 
 export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
   visible: true,
   width: DEFAULT_SIDEBAR_WIDTH,
   followActiveTab: true,
   roots: [],
+  drives: [],
+  favorites: [],
+  recent: [],
   nodesByPath: {},
   focusedPath: null,
 
@@ -62,7 +85,7 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
   },
 
   setSidebarWidth: (width: number) => {
-    const clamped = Math.max(160, Math.min(520, width));
+    const clamped = Math.max(170, Math.min(520, width));
     set({ width: clamped });
     triggerSessionSave();
   },
@@ -79,6 +102,28 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
   loadRoots: async () => {
     const roots = await treeRoots();
     set({ roots });
+    await get().refreshSidebarMeta();
+  },
+
+  refreshSidebarMeta: async () => {
+    const [drives, favorites, recent] = await Promise.all([
+      getDrives(),
+      listFavorites(),
+      listRecent(),
+    ]);
+    set({ drives, favorites, recent });
+  },
+
+  toggleFavorite: async (path: string, label = '') => {
+    if (!path) return;
+    const isFav = get().favorites.some((f) => f.path === path);
+    if (isFav) {
+      await removeFavorite(path);
+    } else {
+      await addFavorite(path, label);
+    }
+    const favorites = await listFavorites();
+    set({ favorites });
   },
 
   toggleExpand: async (node: TreeNode, showHidden: boolean, locale: string) => {
@@ -96,8 +141,6 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
       return;
     }
 
-    // Symlinks não são expandidos recursivamente de forma automática se já houver ciclo,
-    // mas clique explícito do usuário no nó carrega 1 nível se ainda não carregado.
     set((state) => ({
       nodesByPath: {
         ...state.nodesByPath,
@@ -117,7 +160,6 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
       set((state) => {
         const entry = state.nodesByPath[pathKey];
         if (!entry?.expanded) {
-          // Descarta se o nó foi recolhido antes da resposta
           return state;
         }
         return {
@@ -171,7 +213,6 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
 
     set({ focusedPath: targetPath });
 
-    // Encontrar raiz correspondente mais específica
     const normalizedTarget = targetPath.replace(/\\/g, '/').toLowerCase();
     let bestRoot: TreeNode | undefined;
     for (const r of roots) {
@@ -189,12 +230,9 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
       return;
     }
 
-    // Construir lista de ancestrais entre rootPath e targetPath
     const isWin = /^[a-zA-Z]:/.test(targetPath);
     const sep = isWin ? '\\' : '/';
-    const rel = targetPath
-      .slice(rootPath.length)
-      .replace(/^[\\/]+/, '');
+    const rel = targetPath.slice(rootPath.length).replace(/^[\\/]+/, '');
     const parts = rel.split(/[\\/]+/).filter(Boolean);
 
     let currPath = rootPath.replace(/[\\/]+$/, '');
@@ -237,7 +275,19 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
     }
   },
 
-  hydrateSidebar: async (saved, showHidden = false, locale = 'pt-BR') => {
+  hydrateSidebar: async (
+    saved,
+    showHidden = false,
+    locale = 'pt-BR',
+    initialDrives = [],
+    initialFavorites = [],
+    initialRecent = []
+  ) => {
+    set({
+      drives: initialDrives,
+      favorites: initialFavorites,
+      recent: initialRecent,
+    });
     await get().loadRoots();
     if (!saved) return;
 
@@ -271,7 +321,6 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
   },
 }));
 
-// Registrar getter da árvore para ser persistido junto à sessão
 registerSidebarStateGetter(() => {
   const s = useFolderTreeStore.getState();
   const expandedPaths = Object.entries(s.nodesByPath)
@@ -304,7 +353,6 @@ export function buildFlatTree(
       parentPath,
     });
 
-    // Não expandir symlinks recursivamente além do nível aberto manualmente
     if (expanded && entry?.children) {
       for (const child of entry.children) {
         walk(child, depth + 1, node.location.path);
@@ -317,4 +365,3 @@ export function buildFlatTree(
   }
   return result;
 }
-

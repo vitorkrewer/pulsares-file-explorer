@@ -2,6 +2,16 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [0.4.0] - 2026-11-05
+
+### Adicionado
+
+- Layout de painel único, dividido horizontalmente (lado a lado) e dividido verticalmente (empilhado), com divisor redimensionável (duplo clique restaura 50%) e foco independente por painel (`SecondaryPane`).
+- Ações estilo Commander para copiar (`F5`) e mover (`F6`) a seleção ativa diretamente para a pasta aberta no painel oposto.
+- Arrastar e soltar interno (Drag & Drop) entre painéis e sobre nós da árvore de pastas (`FolderTree`), com expansão automática do nó ao pairar (~600 ms) e enfileiramento de cópia/movimentação (`Shift`).
+- Novas seções no painel lateral (`Sidebar`): **Favoritos** persistidos no SQLite (`favorites`), **Unidades e Volumes** com barra de uso e espaço livre real (`GetDiskFreeSpaceExW` no Windows e `Statfs` no Linux/macOS) e **Locais Recentes** (`history`).
+- Menu de contexto nos nós da árvore de pastas (abrir em nova aba, adicionar/remover dos favoritos, criar nova pasta e renomear) e exibição do espaço livre da unidade atual na `StatusBar`.
+
 ## [0.3.0] - 2026-11-05
 
 ### Adicionado

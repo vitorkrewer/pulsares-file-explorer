@@ -15,10 +15,13 @@ var (
 	kernel32                 = syscall.NewLazyDLL("kernel32.dll")
 	shell32                  = syscall.NewLazyDLL("shell32.dll")
 	procGetUserDefaultLocale = kernel32.NewProc("GetUserDefaultLocaleName")
+	procGetDiskFreeSpaceExW  = kernel32.NewProc("GetDiskFreeSpaceExW")
+	procGetDriveTypeW        = kernel32.NewProc("GetDriveTypeW")
 	procSHFileOperationW     = shell32.NewProc("SHFileOperationW")
 )
 
 const (
+	driveRemovable    = 2
 	foDelete          = 0x0003
 	fofSilent         = 0x0004
 	fofNoConfirmation = 0x0010
@@ -64,9 +67,27 @@ func GetDrives() []DriveInfo {
 	for i := 0; i < 26; i++ {
 		if bitmask&(1<<i) != 0 {
 			driveLetter := string(rune('A'+i)) + ":\\"
+			u16, err := syscall.UTF16PtrFromString(driveLetter)
+			var freeBytes, totalBytes uint64
+			isRemovable := false
+
+			if err == nil {
+				_, _, _ = procGetDiskFreeSpaceExW.Call(
+					uintptr(unsafe.Pointer(u16)),
+					uintptr(unsafe.Pointer(&freeBytes)),
+					uintptr(unsafe.Pointer(&totalBytes)),
+					0,
+				)
+				dt, _, _ := procGetDriveTypeW.Call(uintptr(unsafe.Pointer(u16)))
+				isRemovable = dt == driveRemovable
+			}
+
 			drives = append(drives, DriveInfo{
-				Path:  driveLetter,
-				Label: driveLetter,
+				Path:        driveLetter,
+				Label:       driveLetter,
+				FreeBytes:   freeBytes,
+				TotalBytes:  totalBytes,
+				IsRemovable: isRemovable,
 			})
 		}
 	}

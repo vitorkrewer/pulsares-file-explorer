@@ -12,7 +12,7 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-var version = "0.3.0"
+var version = "0.4.0"
 
 func main() {
 	explorerApp := app.NewApp()

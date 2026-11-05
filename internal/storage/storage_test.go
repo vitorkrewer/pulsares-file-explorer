@@ -83,3 +83,49 @@ func TestStorage_SessionPersistence(t *testing.T) {
 		t.Errorf("expected %s, got %s", payload, loaded)
 	}
 }
+
+func TestStorage_FavoritesAndRecentHistory(t *testing.T) {
+	db := openTestDB(t)
+
+	p1 := filepath.Join(t.TempDir(), "Projetos")
+	p2 := filepath.Join(t.TempDir(), "Documentos")
+
+	if err := db.AddFavorite(p1, "Meus Projetos"); err != nil {
+		t.Fatalf("AddFavorite p1: %v", err)
+	}
+	if err := db.AddFavorite(p2, "Docs"); err != nil {
+		t.Fatalf("AddFavorite p2: %v", err)
+	}
+
+	favs, err := db.ListFavorites()
+	if err != nil {
+		t.Fatalf("ListFavorites: %v", err)
+	}
+	if len(favs) != 2 {
+		t.Fatalf("expected 2 favorites, got %d", len(favs))
+	}
+	if favs[0].Label != "Meus Projetos" {
+		t.Errorf("expected 'Meus Projetos', got %q", favs[0].Label)
+	}
+
+	if err := db.RemoveFavorite(p1); err != nil {
+		t.Fatalf("RemoveFavorite: %v", err)
+	}
+	favs, _ = db.ListFavorites()
+	if len(favs) != 1 {
+		t.Fatalf("expected 1 favorite after removal, got %d", len(favs))
+	}
+
+	// Histórico recente
+	_ = db.RecordVisit(p1)
+	_ = db.RecordVisit(p1)
+	_ = db.RecordVisit(p2)
+
+	recents, err := db.ListRecent(10)
+	if err != nil {
+		t.Fatalf("ListRecent: %v", err)
+	}
+	if len(recents) != 2 {
+		t.Fatalf("expected 2 recent items, got %d", len(recents))
+	}
+}

@@ -22,6 +22,18 @@ type JournalEntry struct {
 	CreatedAt string `json:"createdAt"`
 }
 
+type FavoriteItem struct {
+	Path     string `json:"path"`
+	Label    string `json:"label"`
+	Position int    `json:"position"`
+}
+
+type RecentItem struct {
+	Path        string `json:"path"`
+	VisitCount  int    `json:"visitCount"`
+	LastVisited string `json:"lastVisited"`
+}
+
 func Open() (*DB, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -79,6 +91,19 @@ func (db *DB) migrate() error {
 		undone INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS favorites (
+		path TEXT PRIMARY KEY,
+		label TEXT NOT NULL,
+		position INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS history (
+		path TEXT PRIMARY KEY,
+		visit_count INTEGER NOT NULL DEFAULT 1,
+		last_visited DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -119,7 +144,6 @@ func (db *DB) LoadSession() (string, error) {
 }
 
 func (db *DB) RecordJournal(opType, srcPath, dstPath string) (int64, error) {
-	// Ao registrar uma nova ação, limpar entradas marcadas como undone (nova ramificação de histórico)
 	_, _ = db.Exec("DELETE FROM op_journal WHERE undone = 1")
 	res, err := db.Exec(
 		"INSERT INTO op_journal (op_type, src_path, dst_path, undone) VALUES (?, ?, ?, 0)",
@@ -196,4 +220,84 @@ func (db *DB) ListJournal(limit int) ([]JournalEntry, error) {
 		list = append(list, e)
 	}
 	return list, rows.Err()
+}
+
+func (db *DB) ListFavorites() ([]FavoriteItem, error) {
+	rows, err := db.Query("SELECT path, label, position FROM favorites ORDER BY position ASC, created_at ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []FavoriteItem
+	for rows.Next() {
+		var f FavoriteItem
+		if err := rows.Scan(&f.Path, &f.Label, &f.Position); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) AddFavorite(path, label string) error {
+	clean := filepath.Clean(path)
+	if label == "" {
+		label = filepath.Base(clean)
+	}
+	var maxPos sql.NullInt64
+	_ = db.QueryRow("SELECT MAX(position) FROM favorites").Scan(&maxPos)
+	nextPos := int(maxPos.Int64) + 1
+
+	_, err := db.Exec(
+		"INSERT INTO favorites (path, label, position) VALUES (?, ?, ?) ON CONFLICT(path) DO UPDATE SET label = excluded.label",
+		clean, label, nextPos,
+	)
+	return err
+}
+
+func (db *DB) RemoveFavorite(path string) error {
+	clean := filepath.Clean(path)
+	_, err := db.Exec("DELETE FROM favorites WHERE path = ? OR path = ?", clean, path)
+	return err
+}
+
+func (db *DB) RecordVisit(path string) error {
+	if path == "" {
+		return nil
+	}
+	clean := filepath.Clean(path)
+	_, err := db.Exec(
+		`INSERT INTO history (path, visit_count, last_visited)
+		 VALUES (?, 1, CURRENT_TIMESTAMP)
+		 ON CONFLICT(path) DO UPDATE SET
+		   visit_count = history.visit_count + 1,
+		   last_visited = CURRENT_TIMESTAMP`,
+		clean,
+	)
+	return err
+}
+
+func (db *DB) ListRecent(limit int) ([]RecentItem, error) {
+	if limit <= 0 {
+		limit = 12
+	}
+	rows, err := db.Query(
+		"SELECT path, visit_count, last_visited FROM history ORDER BY last_visited DESC, visit_count DESC LIMIT ?",
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []RecentItem
+	for rows.Next() {
+		var r RecentItem
+		if err := rows.Scan(&r.Path, &r.VisitCount, &r.LastVisited); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

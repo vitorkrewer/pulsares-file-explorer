@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -9,14 +9,20 @@ import {
   HardDrive,
   Link2,
   Loader2,
+  Star,
+  Plus,
+  Edit3,
 } from 'lucide-react';
 import { useFolderTreeStore, buildFlatTree, FlatTreeNode } from './store';
 import { useBrowserStore } from '../../browser/store';
+import { useOperationsStore } from '../../operations/store';
+import { enqueueOperation } from '../../../lib/wails';
 
 export const FolderTree: React.FC = () => {
   const { t, i18n } = useTranslation('common');
   const {
     roots,
+    favorites,
     nodesByPath,
     focusedPath,
     setFocusedPath,
@@ -24,10 +30,20 @@ export const FolderTree: React.FC = () => {
     expandLevel,
     revealPath,
     loadRoots,
+    toggleFavorite,
   } = useFolderTreeStore();
   const { currentPath, showHidden, navigateTo, newTab } = useBrowserStore();
+  const { openPrompt } = useOperationsStore();
 
   const parentRef = useRef<HTMLDivElement>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dragHoverPath, setDragHoverPath] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    path: string;
+    name: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   useEffect(() => {
     if (roots.length === 0) {
@@ -132,6 +148,50 @@ export const FolderTree: React.FC = () => {
     }
   };
 
+  const handleDragOverNode = (e: React.DragEvent, item: FlatTreeNode) => {
+    e.preventDefault();
+    const path = item.node.location.path;
+    if (dragHoverPath !== path) {
+      setDragHoverPath(path);
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current);
+      }
+      // Expansão automática ao pairar (~600 ms) conforme catálogo 0.4.0
+      if (!item.expanded && item.node.hasChildren !== 'no' && !item.node.isLink) {
+        hoverTimerRef.current = setTimeout(() => {
+          toggleExpand(item.node, showHidden, i18n.language);
+        }, 600);
+      }
+    }
+  };
+
+  const handleDropOnNode = async (e: React.DragEvent, targetPath: string) => {
+    e.preventDefault();
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+    setDragHoverPath(null);
+
+    const raw = e.dataTransfer.getData('application/x-pulsares-paths');
+    if (!raw) return;
+    try {
+      const paths = JSON.parse(raw) as string[];
+      if (Array.isArray(paths) && paths.length > 0) {
+        const kind = e.shiftKey ? 'move' : 'copy';
+        useOperationsStore.getState().setPanelOpen(true);
+        await enqueueOperation(
+          kind,
+          paths,
+          targetPath,
+          'ask',
+          useOperationsStore.getState().verifyHash
+        );
+      }
+    } catch {
+      // Ignorar payload inválido
+    }
+  };
+
   const renderNodeIcon = (item: FlatTreeNode) => {
     if (item.depth === 1 && /^[a-zA-Z]:\\?$/.test(item.node.location.path)) {
       return <HardDrive size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />;
@@ -152,6 +212,7 @@ export const FolderTree: React.FC = () => {
       aria-label={t('tree.title')}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      onClick={() => setContextMenu(null)}
       style={styles.treeContainer}
     >
       <div
@@ -166,6 +227,7 @@ export const FolderTree: React.FC = () => {
           const path = item.node.location.path;
           const isCurrent = path === currentPath;
           const isFocused = path === focusedPath;
+          const isDragOver = path === dragHoverPath;
           const showChevron = item.node.hasChildren !== 'no';
 
           return (
@@ -186,10 +248,27 @@ export const FolderTree: React.FC = () => {
                   newTab(path);
                 }
               }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu({
+                  path,
+                  name: item.node.name,
+                  x: e.clientX,
+                  y: e.clientY,
+                });
+              }}
+              onDragOver={(e) => handleDragOverNode(e, item)}
+              onDragLeave={() => {
+                if (dragHoverPath === path) {
+                  setDragHoverPath(null);
+                }
+              }}
+              onDrop={(e) => handleDropOnNode(e, path)}
               style={{
                 ...styles.treeRow,
                 ...(isCurrent ? styles.activeRow : {}),
                 ...(isFocused && !isCurrent ? styles.focusedRow : {}),
+                ...(isDragOver ? styles.dragOverRow : {}),
                 paddingLeft: `${(item.depth - 1) * 14 + 6}px`,
                 transform: `translateY(${virtualRow.start}px)`,
                 height: `${virtualRow.size}px`,
@@ -220,6 +299,67 @@ export const FolderTree: React.FC = () => {
           );
         })}
       </div>
+
+      {contextMenu && (
+        <div
+          style={{
+            ...styles.contextMenu,
+            left: contextMenu.x,
+            top: contextMenu.y,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            style={styles.menuItem}
+            onClick={() => {
+              newTab(contextMenu.path);
+              setContextMenu(null);
+            }}
+          >
+            <Plus size={13} />
+            <span>{t('tabs.newTab')}</span>
+          </button>
+          <button
+            type="button"
+            style={styles.menuItem}
+            onClick={() => {
+              toggleFavorite(contextMenu.path, contextMenu.name);
+              setContextMenu(null);
+            }}
+          >
+            <Star size={13} />
+            <span>
+              {favorites.some((f) => f.path === contextMenu.path)
+                ? t('sidebar.removeFavorite')
+                : t('sidebar.addFavorite')}
+            </span>
+          </button>
+          <button
+            type="button"
+            style={styles.menuItem}
+            onClick={() => {
+              navigateTo(contextMenu.path);
+              openPrompt('newFolder');
+              setContextMenu(null);
+            }}
+          >
+            <Folder size={13} />
+            <span>{t('nav.newFolder')}</span>
+          </button>
+          <button
+            type="button"
+            style={styles.menuItem}
+            onClick={() => {
+              openPrompt('rename', contextMenu.path, contextMenu.name);
+              setContextMenu(null);
+            }}
+          >
+            <Edit3 size={13} />
+            <span>{t('ops.rename')}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -255,6 +395,10 @@ const styles: Record<string, React.CSSProperties> = {
     outline: '1px solid var(--accent)',
     outlineOffset: -1,
   },
+  dragOverRow: {
+    backgroundColor: 'rgba(59, 130, 246, 0.28)',
+    outline: '1px dashed var(--accent)',
+  },
   chevronBox: {
     width: 16,
     height: 16,
@@ -270,5 +414,29 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: 'nowrap',
     flex: 1,
   },
+  contextMenu: {
+    position: 'fixed',
+    zIndex: 2000,
+    backgroundColor: 'var(--bg-surface)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 6,
+    padding: 4,
+    minWidth: 180,
+    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.35)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+  },
+  menuItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 10px',
+    borderRadius: 4,
+    fontSize: 12,
+    color: 'var(--text-primary)',
+    textAlign: 'left',
+    width: '100%',
+    cursor: 'pointer',
+  },
 };
-

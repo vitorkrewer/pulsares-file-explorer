@@ -1063,3 +1063,4 @@ func (m *Manager) emitJobUpdate(rj *runningJob) {
 	rj.mu.Unlock()
 	m.emit("ops:update", snap)
 }
+

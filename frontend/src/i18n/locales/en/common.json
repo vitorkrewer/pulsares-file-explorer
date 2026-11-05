@@ -30,6 +30,26 @@
     "empty": "No subfolders",
     "symlink": "Shortcut / Symbolic link"
   },
+  "sidebar": {
+    "favorites": "Favorites",
+    "addFavorite": "Pin to favorites",
+    "removeFavorite": "Remove from favorites",
+    "noFavorites": "No saved favorites",
+    "drives": "Drives & Volumes",
+    "freeOf": "{{free}} free of {{total}}",
+    "recent": "Recent",
+    "noRecent": "No recent locations"
+  },
+  "panes": {
+    "single": "Single pane",
+    "splitHorizontal": "Side-by-side dual pane",
+    "splitVertical": "Stacked dual pane",
+    "copyToOther": "Copy to other pane (F5)",
+    "moveToOther": "Move to other pane (F6)",
+    "secondaryTitle": "Secondary pane",
+    "dropHere": "Drop here to copy (or Shift to move)",
+    "activatePane": "Make primary pane"
+  },
   "ops": {
     "title": "File operations",
     "newFolder": "New folder (Ctrl+Shift+N)",
@@ -82,6 +102,7 @@
     "items_plural": "{{count}} items",
     "selected": "{{count}} selected",
     "selected_plural": "{{count}} selected",
+    "freeSpace": "{{free}} free",
     "loading": "Loading folder...",
     "empty": "This folder is empty"
   },
