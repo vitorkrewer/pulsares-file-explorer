@@ -361,6 +361,19 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
       const decoded = stripAnsiCodes(decodeBase64UTF8(chunkB64));
       void terminalAck(backendId, rawLen);
 
+      let promptCwd = cwdOsc7 || '';
+      if (!promptCwd) {
+        const psMatches = Array.from(decoded.matchAll(/PS\s+([A-Za-z]:\\[^\r\n>]+?)>/g));
+        if (psMatches.length > 0) {
+          promptCwd = psMatches[psMatches.length - 1][1].trim();
+        } else {
+          const cmdMatches = Array.from(decoded.matchAll(/(?:^|\n)([A-Za-z]:\\[^\r\n>]+?)>/g));
+          if (cmdMatches.length > 0) {
+            promptCwd = cmdMatches[cmdMatches.length - 1][1].trim();
+          }
+        }
+      }
+
       const maxLines = get().scrollbackLines;
       set((prev) => ({
         sessions: prev.sessions.map((s) => {
@@ -372,7 +385,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
           return {
             ...s,
             output: trimmed,
-            cwd: cwdOsc7 || s.cwd,
+            cwd: promptCwd || s.cwd,
           };
         }),
       }));

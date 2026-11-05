@@ -492,8 +492,16 @@ func (s *Service) Autocomplete(id string, cwdFallback string, line string) ([]st
 
 	var candidates []string
 
+	trimmedPrefix := strings.TrimSpace(prefix)
+	firstWord := ""
+	if trimmedPrefix != "" {
+		firstWord = strings.ToLower(strings.Fields(trimmedPrefix)[0])
+	}
+	dirsOnly := firstWord == "cd" || firstWord == "chdir" || firstWord == "sl" ||
+		firstWord == "set-location" || firstWord == "pushd" || firstWord == "rmdir"
+
 	// Se estiver no primeiro token e sem separador de diretório, sugere também comandos frequentes do shell
-	if strings.TrimSpace(prefix) == "" && dirPart == "" && filePrefix != "" {
+	if trimmedPrefix == "" && dirPart == "" && filePrefix != "" {
 		commonCmds := []string{
 			"cd", "ls", "dir", "cls", "clear", "pwd", "echo", "cat", "type",
 			"mkdir", "rmdir", "rm", "del", "cp", "copy", "mv", "move",
@@ -502,7 +510,7 @@ func (s *Service) Autocomplete(id string, cwdFallback string, line string) ([]st
 		}
 		lowerPref := strings.ToLower(filePrefix)
 		for _, cmdName := range commonCmds {
-			if strings.HasPrefix(cmdName, lowerPref) && cmdName != lowerPref {
+			if strings.HasPrefix(cmdName, lowerPref) {
 				candidates = append(candidates, prefix+cmdName+" ")
 			}
 		}
@@ -512,6 +520,9 @@ func (s *Service) Autocomplete(id string, cwdFallback string, line string) ([]st
 	if err == nil {
 		lowerFilePref := strings.ToLower(filePrefix)
 		for _, entry := range entries {
+			if dirsOnly && !entry.IsDir() {
+				continue
+			}
 			name := entry.Name()
 			if !strings.HasPrefix(strings.ToLower(name), lowerFilePref) {
 				continue

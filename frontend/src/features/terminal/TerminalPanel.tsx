@@ -34,6 +34,12 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
 
   const outputRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cycleRef = useRef<{ matches: string[]; idx: number; lastApplied: string }>({
+    matches: [],
+    idx: -1,
+    lastApplied: '',
+  });
   const [cmdHistory, setCmdHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState<number>(-1);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -67,32 +73,55 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
     };
   }, [session.id, fontSize, resizeSession]);
 
+  const applyCompletionValue = (val: string, idx: number, matches: string[]) => {
+    cycleRef.current = { matches, idx, lastApplied: val };
+    setCompletionMatches(matches);
+    setCompletionIdx(idx);
+    setInputDraft(session.id, val);
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(val.length, val.length);
+      }
+    });
+  };
+
+  const resetCompletions = () => {
+    cycleRef.current = { matches: [], idx: -1, lastApplied: '' };
+    setCompletionMatches([]);
+    setCompletionIdx(-1);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Tab') {
       e.preventDefault();
+      e.stopPropagation();
+
+      const cyc = cycleRef.current;
       if (
-        completionMatches.length > 0 &&
-        completionIdx >= 0 &&
-        session.inputDraft === completionMatches[completionIdx]
+        cyc.matches.length > 0 &&
+        cyc.idx >= 0 &&
+        session.inputDraft === cyc.lastApplied
       ) {
         const nextIdx = e.shiftKey
-          ? (completionIdx - 1 + completionMatches.length) % completionMatches.length
-          : (completionIdx + 1) % completionMatches.length;
-        setCompletionIdx(nextIdx);
-        setInputDraft(session.id, completionMatches[nextIdx]);
+          ? (cyc.idx - 1 + cyc.matches.length) % cyc.matches.length
+          : (cyc.idx + 1) % cyc.matches.length;
+        applyCompletionValue(cyc.matches[nextIdx], nextIdx, cyc.matches);
         return;
       }
 
+      const browserCwd = useBrowserStore.getState().currentPath;
+      const effectiveCwd =
+        session.cwd && session.cwd !== '/' ? session.cwd : browserCwd || session.cwd;
+
       void (async () => {
         const matches = await terminalAutocomplete(
-          session.id,
-          session.cwd,
+          session.backendId,
+          effectiveCwd,
           session.inputDraft
         );
         if (matches && matches.length > 0) {
-          setCompletionMatches(matches);
-          setCompletionIdx(0);
-          setInputDraft(session.id, matches[0]);
+          applyCompletionValue(matches[0], 0, matches);
         }
       })();
       return;
@@ -100,8 +129,7 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
 
     if (e.key === 'Escape' && completionMatches.length > 0) {
       e.preventDefault();
-      setCompletionMatches([]);
-      setCompletionIdx(-1);
+      resetCompletions();
       return;
     }
 
@@ -112,8 +140,7 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
         setCmdHistory((prev) => [...prev.slice(-49), cmd]);
       }
       setHistoryIdx(-1);
-      setCompletionMatches([]);
-      setCompletionIdx(-1);
+      resetCompletions();
       setInputDraft(session.id, '');
       void sendInput(session.id, `${cmd}\r\n`);
       return;
@@ -309,8 +336,7 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
                 key={`${cand}-${idx}`}
                 type="button"
                 onClick={() => {
-                  setCompletionIdx(idx);
-                  setInputDraft(session.id, cand);
+                  applyCompletionValue(cand, idx, completionMatches);
                 }}
                 style={{
                   padding: '1px 6px',
@@ -345,12 +371,12 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
       >
         <span style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>{'>'}</span>
         <input
+          ref={inputRef}
           type="text"
           value={session.inputDraft}
           disabled={session.exited}
           onChange={(e) => {
-            setCompletionMatches([]);
-            setCompletionIdx(-1);
+            resetCompletions();
             setInputDraft(session.id, e.target.value);
           }}
           onKeyDown={handleKeyDown}

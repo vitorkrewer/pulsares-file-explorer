@@ -743,21 +743,163 @@ export async function terminalQuotePaths(sessionId: string, paths: string[]): Pr
   return paths.map((p) => `'${p.replace(/'/g, "''")}'`).join(' ');
 }
 
+function splitCommandTokenClient(line: string): {
+  prefix: string;
+  token: string;
+  quoteChar: string;
+} {
+  if (!line) return { prefix: '', token: '', quoteChar: '' };
+  let inQuote = '';
+  let tokenStart = 0;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuote) {
+      if (ch === inQuote) inQuote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      inQuote = ch;
+      tokenStart = i;
+      continue;
+    }
+    if (ch === ' ' || ch === '\t') {
+      tokenStart = i + 1;
+    }
+  }
+  const prefix = line.slice(0, tokenStart);
+  let rawToken = line.slice(tokenStart);
+  let quoteChar = '';
+  if (rawToken.startsWith('"') || rawToken.startsWith("'")) {
+    quoteChar = rawToken[0];
+    rawToken = rawToken.slice(1);
+    if (rawToken.endsWith(quoteChar)) {
+      rawToken = rawToken.slice(0, -1);
+    }
+  }
+  return { prefix, token: rawToken, quoteChar };
+}
+
+function joinClientPath(baseDir: string, relDir: string): string {
+  if (!relDir) return baseDir;
+  if (/^[A-Za-z]:[/\\]/.test(relDir) || relDir.startsWith('/')) {
+    return relDir;
+  }
+  const isWin = baseDir.includes('\\') || /^[A-Za-z]:/.test(baseDir);
+  const sep = isWin ? '\\' : '/';
+  const cleanBase = baseDir.replace(/[/\\]+$/, '');
+  const parts = cleanBase.split(/[/\\]/);
+  const relParts = relDir.replace(/[/\\]+$/, '').split(/[/\\]/);
+  for (const p of relParts) {
+    if (!p || p === '.') continue;
+    if (p === '..') {
+      if (parts.length > 1) parts.pop();
+    } else {
+      parts.push(p);
+    }
+  }
+  return parts.join(sep) || (isWin ? `${parts[0]}\\` : '/');
+}
+
 export async function terminalAutocomplete(
   sessionId: string,
   cwdFallback: string,
   line: string
 ): Promise<string[]> {
-  if (isWailsAvailable()) {
-    const res = await window.go!.app.App.TerminalAutocomplete(sessionId, cwdFallback, line);
-    return res || [];
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.TerminalAutocomplete === 'function') {
+    try {
+      const res = await window.go!.app.App.TerminalAutocomplete(sessionId, cwdFallback, line);
+      if (Array.isArray(res) && res.length > 0) {
+        return res;
+      }
+    } catch {
+      // Fallback abaixo via ListDirectorySnapshot
+    }
   }
-  return [];
+
+  const baseCwd = (cwdFallback || '').trim() || '/';
+  const { prefix, token, quoteChar } = splitCommandTokenClient(line);
+  const isWin = baseCwd.includes('\\') || /^[A-Za-z]:/.test(baseCwd);
+  const sep = token.includes('/') && !token.includes('\\') ? '/' : isWin ? '\\' : '/';
+
+  let dirPart = '';
+  let filePrefix = token;
+  const lastSlash = Math.max(token.lastIndexOf('/'), token.lastIndexOf('\\'));
+  if (lastSlash >= 0) {
+    dirPart = token.slice(0, lastSlash + 1);
+    filePrefix = token.slice(lastSlash + 1);
+  }
+
+  const candidates: string[] = [];
+  const commonCmds = [
+    'cd', 'ls', 'dir', 'cls', 'clear', 'pwd', 'echo', 'cat', 'type',
+    'mkdir', 'rmdir', 'rm', 'del', 'cp', 'copy', 'mv', 'move',
+    'git', 'go', 'npm', 'npx', 'pnpm', 'yarn', 'node', 'python',
+    'code', 'docker', 'curl', 'ssh', 'tar', 'zip',
+  ];
+
+  const trimmedPrefix = prefix.trim();
+  const firstWord = (trimmedPrefix.split(/\s+/)[0] || '').toLowerCase();
+  const dirsOnly = ['cd', 'chdir', 'sl', 'set-location', 'pushd', 'rmdir'].includes(firstWord);
+
+  if (!trimmedPrefix && !dirPart && filePrefix) {
+    const lowerPref = filePrefix.toLowerCase();
+    for (const cmd of commonCmds) {
+      if (cmd.startsWith(lowerPref)) {
+        candidates.push(`${prefix}${cmd} `);
+      }
+    }
+  }
+
+  const searchDir = joinClientPath(baseCwd, dirPart);
+  try {
+    const entries = await listDirectorySnapshot(searchDir, true);
+    const lowerFilePref = filePrefix.toLowerCase();
+    for (const entry of entries) {
+      if (dirsOnly && entry.kind !== 'dir') continue;
+      if (!entry.name.toLowerCase().startsWith(lowerFilePref)) continue;
+      const completedPath = `${dirPart}${entry.name}${entry.kind === 'dir' ? sep : ''}`;
+      const needsQuotes = completedPath.includes(' ');
+      let formatted = completedPath;
+      if (quoteChar) {
+        formatted = `${quoteChar}${completedPath}${quoteChar}`;
+      } else if (needsQuotes) {
+        formatted = `"${completedPath}"`;
+      }
+      candidates.push(`${prefix}${formatted}`);
+      if (candidates.length >= 60) break;
+    }
+  } catch {
+    // Ignora diretório inacessível
+  }
+
+  return candidates;
 }
 
 export async function readTextFile(path: string): Promise<TextFilePayload> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.ReadTextFile === 'function') {
+    try {
+      return await window.go!.app.App.ReadTextFile(path);
+    } catch {
+      // Fallback para GetPreview abaixo
+    }
+  }
   if (isWailsAvailable()) {
-    return window.go!.app.App.ReadTextFile(path);
+    try {
+      const prev = await getPreview(path, 512 * 1024);
+      const content = prev.textContent || '';
+      return {
+        path: prev.path || path,
+        name: prev.name || path.split(/[/\\]/).pop() || path,
+        content,
+        lineEnding: content.includes('\r\n') ? 'CRLF' : 'LF',
+        encoding: 'UTF-8',
+        size: prev.size || content.length,
+      };
+    } catch {
+      // Fallback vazio abaixo
+    }
   }
   return {
     path,
@@ -770,7 +912,8 @@ export async function readTextFile(path: string): Promise<TextFilePayload> {
 }
 
 export async function writeTextFile(path: string, content: string): Promise<void> {
-  if (isWailsAvailable()) {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.WriteTextFile === 'function') {
     return window.go!.app.App.WriteTextFile(path, content);
   }
 }
