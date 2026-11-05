@@ -35,3 +35,4 @@ func getAttrs(path string, info os.FileInfo) vfs.Attrs {
 	}
 	return attrs
 }
+

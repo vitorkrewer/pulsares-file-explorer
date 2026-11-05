@@ -1,0 +1,46 @@
+{
+  "appName": "Pulsares Explorer",
+  "nav": {
+    "back": "Voltar",
+    "forward": "Avançar",
+    "up": "Subir nível",
+    "refresh": "Atualizar",
+    "newFolder": "Nova pasta",
+    "toggleHidden": "Arquivos ocultos",
+    "viewDetails": "Modo detalhes",
+    "addressPlaceholder": "Digite um caminho ou selecione..."
+  },
+  "columns": {
+    "name": "Nome",
+    "size": "Tamanho",
+    "type": "Tipo",
+    "modified": "Data de modificação"
+  },
+  "status": {
+    "items": "{{count}} item",
+    "items_plural": "{{count}} itens",
+    "selected": "{{count}} selecionado",
+    "selected_plural": "{{count}} selecionados",
+    "loading": "Carregando pasta...",
+    "empty": "Esta pasta está vazia"
+  },
+  "types": {
+    "folder": "Pasta de arquivos",
+    "file": "Arquivo",
+    "symlink": "Atalho"
+  },
+  "settings": {
+    "title": "Configurações",
+    "language": "Idioma",
+    "theme": "Tema",
+    "themeLight": "Claro",
+    "themeDark": "Escuro",
+    "themeSystem": "Padrão do sistema"
+  },
+  "errors": {
+    "notFound": "O caminho especificado não foi encontrado.",
+    "permissionDenied": "Acesso negado a este diretório ou arquivo.",
+    "generic": "Ocorreu um erro ao acessar o caminho."
+  }
+}
+

@@ -1,0 +1,46 @@
+{
+  "appName": "Pulsares Explorer",
+  "nav": {
+    "back": "Back",
+    "forward": "Forward",
+    "up": "Up one level",
+    "refresh": "Refresh",
+    "newFolder": "New folder",
+    "toggleHidden": "Hidden files",
+    "viewDetails": "Details view",
+    "addressPlaceholder": "Type a path or select..."
+  },
+  "columns": {
+    "name": "Name",
+    "size": "Size",
+    "type": "Type",
+    "modified": "Date modified"
+  },
+  "status": {
+    "items": "{{count}} item",
+    "items_plural": "{{count}} items",
+    "selected": "{{count}} selected",
+    "selected_plural": "{{count}} selected",
+    "loading": "Loading folder...",
+    "empty": "This folder is empty"
+  },
+  "types": {
+    "folder": "File folder",
+    "file": "File",
+    "symlink": "Shortcut"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System default"
+  },
+  "errors": {
+    "notFound": "The specified path was not found.",
+    "permissionDenied": "Access denied to this directory or file.",
+    "generic": "An error occurred while accessing the path."
+  }
+}
+

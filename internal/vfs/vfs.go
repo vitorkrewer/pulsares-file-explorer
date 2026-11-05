@@ -53,3 +53,4 @@ type FileSystem interface {
 	ReadDir(ctx context.Context, loc Location, batch int) (<-chan []Entry, <-chan error)
 	Open(ctx context.Context, loc Location) (io.ReadCloser, error)
 }
+

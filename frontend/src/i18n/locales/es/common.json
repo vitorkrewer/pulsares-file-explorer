@@ -1,0 +1,46 @@
+{
+  "appName": "Pulsares Explorer",
+  "nav": {
+    "back": "Atrás",
+    "forward": "Adelante",
+    "up": "Subir de nivel",
+    "refresh": "Actualizar",
+    "newFolder": "Nueva carpeta",
+    "toggleHidden": "Archivos ocultos",
+    "viewDetails": "Vista de detalles",
+    "addressPlaceholder": "Escriba una ruta o seleccione..."
+  },
+  "columns": {
+    "name": "Nombre",
+    "size": "Tamaño",
+    "type": "Tipo",
+    "modified": "Fecha de modificación"
+  },
+  "status": {
+    "items": "{{count}} elemento",
+    "items_plural": "{{count}} elementos",
+    "selected": "{{count}} seleccionado",
+    "selected_plural": "{{count}} seleccionados",
+    "loading": "Cargando carpeta...",
+    "empty": "Esta carpeta está vacía"
+  },
+  "types": {
+    "folder": "Carpeta de archivos",
+    "file": "Archivo",
+    "symlink": "Acceso directo"
+  },
+  "settings": {
+    "title": "Configuración",
+    "language": "Idioma",
+    "theme": "Tema",
+    "themeLight": "Claro",
+    "themeDark": "Oscuro",
+    "themeSystem": "Predeterminado del sistema"
+  },
+  "errors": {
+    "notFound": "No se encontró la ruta especificada.",
+    "permissionDenied": "Acceso denegado a este directorio o archivo.",
+    "generic": "Ocurrió un error al acceder a la ruta."
+  }
+}
+
