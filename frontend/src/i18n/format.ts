@@ -27,6 +27,8 @@ export function formatDateTime(isoString: string, locale: string): string {
   return f.format(d);
 }
 
+export const formatDate = formatDateTime;
+
 export function formatBytes(bytes: number, locale: string): string {
   if (bytes <= 0) return '0 B';
   const k = 1024;
@@ -42,4 +44,3 @@ export function formatBytes(bytes: number, locale: string): string {
 
   return `${formatted} ${sizes[i]}`;
 }
-

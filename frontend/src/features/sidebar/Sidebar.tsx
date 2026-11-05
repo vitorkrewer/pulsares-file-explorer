@@ -32,8 +32,8 @@ export const Sidebar: React.FC = () => {
   const { navigateTo, newTab, currentPath } = useBrowserStore();
 
   const [favOpen, setFavOpen] = useState(true);
-  const [drivesOpen, setDrivesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(false);
+  const [drivesOpen, setDrivesOpen] = useState(false);
 
   const draggingRef = useRef(false);
 
@@ -62,7 +62,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside style={{ ...styles.sidebar, width }}>
-      {/* Seção: Favoritos */}
+      {/* 1. Seção: Favoritos */}
       <div style={styles.sectionHeader} onClick={() => setFavOpen(!favOpen)}>
         <div style={styles.sectionTitleRow}>
           {favOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -110,7 +110,65 @@ export const Sidebar: React.FC = () => {
         </div>
       )}
 
-      {/* Seção: Unidades / Volumes com espaço livre */}
+      {/* 2. Seção: Árvore de Pastas */}
+      <div style={styles.header}>
+        <span style={styles.title}>{t('tree.title')}</span>
+        <div style={styles.headerActions}>
+          <button
+            type="button"
+            style={{
+              ...styles.iconBtn,
+              color: followActiveTab ? 'var(--accent)' : 'var(--text-secondary)',
+            }}
+            onClick={toggleFollowActiveTab}
+            title={t('tree.followActiveTab')}
+            aria-label={t('tree.followActiveTab')}
+          >
+            <Crosshair size={13} />
+          </button>
+          <button
+            type="button"
+            style={styles.iconBtn}
+            onClick={loadRoots}
+            title={t('tree.refresh')}
+            aria-label={t('tree.refresh')}
+          >
+            <RotateCw size={13} />
+          </button>
+        </div>
+      </div>
+
+      <FolderTree />
+
+      {/* 3. Seção: Locais Recentes */}
+      <div style={styles.sectionHeader} onClick={() => setRecentOpen(!recentOpen)}>
+        <div style={styles.sectionTitleRow}>
+          {recentOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          <Clock size={12} style={{ color: 'var(--text-secondary)' }} />
+          <span style={styles.title}>{t('sidebar.recent')}</span>
+        </div>
+      </div>
+      {recentOpen && (
+        <div style={{ ...styles.sectionBody, maxHeight: 130, overflowY: 'auto' }}>
+          {recent.length === 0 ? (
+            <div style={styles.emptyHint}>{t('sidebar.noRecent')}</div>
+          ) : (
+            recent.map((r) => (
+              <div
+                key={r.path}
+                style={styles.itemRow}
+                onClick={() => navigateTo(r.path)}
+                title={r.path}
+              >
+                <Clock size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                <span style={styles.itemText}>{getTabLabel(r.path)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* 4. Seção: Unidades / Volumes com espaço livre (abaixo de Recentes e colapsada por padrão) */}
       <div style={styles.sectionHeader} onClick={() => setDrivesOpen(!drivesOpen)}>
         <div style={styles.sectionTitleRow}>
           {drivesOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -119,11 +177,12 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
       {drivesOpen && (
-        <div style={styles.sectionBody}>
+        <div style={{ ...styles.sectionBody, maxHeight: 160, overflowY: 'auto' }}>
           {drives.map((d) => {
             const total = d.totalBytes || 0;
             const free = d.freeBytes || 0;
-            const usedPct = total > 0 ? Math.min(100, Math.round(((total - free) / total) * 100)) : 0;
+            const usedPct =
+              total > 0 ? Math.min(100, Math.round(((total - free) / total) * 100)) : 0;
 
             return (
               <div
@@ -157,64 +216,6 @@ export const Sidebar: React.FC = () => {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Seção: Árvore de Pastas */}
-      <div style={styles.header}>
-        <span style={styles.title}>{t('tree.title')}</span>
-        <div style={styles.headerActions}>
-          <button
-            type="button"
-            style={{
-              ...styles.iconBtn,
-              color: followActiveTab ? 'var(--accent)' : 'var(--text-secondary)',
-            }}
-            onClick={toggleFollowActiveTab}
-            title={t('tree.followActiveTab')}
-            aria-label={t('tree.followActiveTab')}
-          >
-            <Crosshair size={13} />
-          </button>
-          <button
-            type="button"
-            style={styles.iconBtn}
-            onClick={loadRoots}
-            title={t('tree.refresh')}
-            aria-label={t('tree.refresh')}
-          >
-            <RotateCw size={13} />
-          </button>
-        </div>
-      </div>
-
-      <FolderTree />
-
-      {/* Seção: Locais Recentes */}
-      <div style={styles.sectionHeader} onClick={() => setRecentOpen(!recentOpen)}>
-        <div style={styles.sectionTitleRow}>
-          {recentOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          <Clock size={12} style={{ color: 'var(--text-secondary)' }} />
-          <span style={styles.title}>{t('sidebar.recent')}</span>
-        </div>
-      </div>
-      {recentOpen && (
-        <div style={{ ...styles.sectionBody, maxHeight: 130, overflowY: 'auto' }}>
-          {recent.length === 0 ? (
-            <div style={styles.emptyHint}>{t('sidebar.noRecent')}</div>
-          ) : (
-            recent.map((r) => (
-              <div
-                key={r.path}
-                style={styles.itemRow}
-                onClick={() => navigateTo(r.path)}
-                title={r.path}
-              >
-                <Clock size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                <span style={styles.itemText}>{getTabLabel(r.path)}</span>
-              </div>
-            ))
-          )}
         </div>
       )}
 

@@ -102,6 +102,50 @@ export interface PreviewData {
   childCount?: number;
 }
 
+export interface SearchOptions {
+  rootPath: string;
+  query: string;
+  useRegex: boolean;
+  extensions: string[];
+  kind: string;
+  minSize: number;
+  maxSize: number;
+  modifiedAfter: string;
+  modifiedBefore: string;
+  contentQuery: string;
+  includeHidden: boolean;
+  useIndex: boolean;
+}
+
+export interface SearchResultItem {
+  path: string;
+  relPath: string;
+  name: string;
+  kind: string;
+  size: number;
+  modTime: string;
+  snippet?: string;
+  lineNumber?: number;
+}
+
+export interface SearchBatchEvent {
+  requestId: string;
+  results: SearchResultItem[];
+}
+
+export interface SearchDoneEvent {
+  requestId: string;
+  total: number;
+  canceled: boolean;
+  error?: string;
+}
+
+export interface IndexedRoot {
+  rootPath: string;
+  itemCount: number;
+  updatedAt: string;
+}
+
 export interface InitialState {
   systemLanguage: string;
   homeDir: string;
@@ -186,6 +230,11 @@ declare global {
           ListDirectorySnapshot: (path: string, showHidden: boolean) => Promise<Entry[]>;
           GetThumbnail: (path: string, maxDim: number) => Promise<string>;
           GetPreview: (path: string, maxTextBytes: number) => Promise<PreviewData>;
+          StartSearch: (requestId: string, opts: SearchOptions) => Promise<void>;
+          CancelSearch: (requestId: string) => Promise<void>;
+          IndexDirectory: (rootPath: string) => Promise<number>;
+          ListIndexRoots: () => Promise<IndexedRoot[]>;
+          RemoveIndexRoot: (rootPath: string) => Promise<void>;
           ExpandPath: (path: string) => Promise<string>;
           AutocompletePath: (partial: string, showHidden: boolean) => Promise<string[]>;
           CancelListing: (tabId: string) => Promise<void>;
@@ -294,6 +343,39 @@ export async function getPreview(path: string, maxTextBytes = 65536): Promise<Pr
     modTime: new Date().toISOString(),
     textContent: '',
   };
+}
+
+export async function startSearch(requestId: string, opts: SearchOptions): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.StartSearch(requestId, opts);
+  }
+}
+
+export async function cancelSearch(requestId: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.CancelSearch(requestId);
+  }
+}
+
+export async function indexDirectory(rootPath: string): Promise<number> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.IndexDirectory(rootPath);
+  }
+  return 0;
+}
+
+export async function listIndexRoots(): Promise<IndexedRoot[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListIndexRoots();
+    return res || [];
+  }
+  return [];
+}
+
+export async function removeIndexRoot(rootPath: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.RemoveIndexRoot(rootPath);
+  }
 }
 
 export async function expandPath(path: string): Promise<string> {

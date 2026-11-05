@@ -2,6 +2,20 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [0.7.0] - 2026-11-05
+
+### Adicionado
+
+- Filtro instantâneo na pasta ativa (`Ctrl+F` na barra de ferramentas), filtrando itens em tempo real em todos os modos de visualização.
+- Serviço `internal/search` de busca recursiva em streaming (`search:batch` e `search:done`) com cancelamento por `requestId` e suporte a **glob** (`*.go`), **expressão regular (Regex)**, filtro por **extensões**, **tipo** (arquivos/pastas), **tamanho mínimo/máximo**, **intervalo de datas** e **busca por conteúdo de texto** com extração da linha encontrada (`snippet`).
+- Índice local opcional no SQLite (`index_roots` e `index_entries`) para indexar pastas escolhidas pelo usuário e responder buscas por nome instantaneamente.
+- Modal de Busca Recursiva Avançada (`SearchDrawer`, `Ctrl+Shift+S`) com gerenciamento de pastas indexadas e ação rápida para abrir ou revelar o item no explorador.
+
+### Modificado
+
+- Reordenada a barra lateral esquerda (`Sidebar`): primeiro **Favoritos**, depois **Pastas** (Árvore), em seguida **Recentes** e por último **Unidades e Volumes** (colapsada por padrão).
+- Exportado `formatDate` em `frontend/src/i18n/format.ts` junto com `formatDateTime`.
+
 ## [0.6.0] - 2026-11-05
 
 ### Adicionado

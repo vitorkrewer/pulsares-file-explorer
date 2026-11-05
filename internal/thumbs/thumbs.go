@@ -459,3 +459,4 @@ func EncodeSamplePNG(w io.Writer, width, height int) error {
 	}
 	return png.Encode(w, img)
 }
+

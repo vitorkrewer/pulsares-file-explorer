@@ -8,6 +8,7 @@ import { Sidebar } from '../features/sidebar/Sidebar';
 import { DetailsView } from '../features/browser/DetailsView';
 import { AlternativeViews } from '../features/preview/AlternativeViews';
 import { PreviewPanel } from '../features/preview/PreviewPanel';
+import { SearchDrawer } from '../features/search/SearchDrawer';
 import { SecondaryPane } from '../features/panes/SecondaryPane';
 import { TerminalPanel } from '../features/terminal/TerminalPanel';
 import { StatusBar } from '../features/browser/StatusBar';
@@ -17,6 +18,7 @@ import { useOperationsStore } from '../features/operations/store';
 import { useDualPaneStore } from '../features/panes/store';
 import { useTerminalStore } from '../features/terminal/store';
 import { usePreviewStore } from '../features/preview/store';
+import { useSearchStore } from '../features/search/store';
 import { getInitialState, enqueueOperation } from '../lib/wails';
 import { resolveLanguage } from '../i18n/config';
 
@@ -76,6 +78,7 @@ export const App: React.FC = () => {
     closeQuickLook,
     density,
   } = usePreviewStore();
+  const { toggleDrawer: toggleSearchDrawer } = useSearchStore();
   const [theme, setTheme] = useState<string>('dark');
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -129,7 +132,7 @@ export const App: React.FC = () => {
     }
   }, [currentPath, refreshSidebarMeta]);
 
-  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 a 0.6.0)
+  // Atalhos globais de teclado e botões laterais do mouse (0.1.0 a 0.7.0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const targetEl = e.target as HTMLElement | null;
@@ -156,6 +159,19 @@ export const App: React.FC = () => {
       if (mod && e.shiftKey && key === 'f' && terminalVisible) {
         e.preventDefault();
         setTerminalSearchOpen(true);
+        return;
+      }
+
+      if (mod && e.shiftKey && key === 's') {
+        e.preventDefault();
+        toggleSearchDrawer();
+        return;
+      }
+
+      // Focar filtro instantâneo na pasta: Ctrl+F
+      if (mod && !e.shiftKey && key === 'f' && !isInputFocused) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('pulsares:focus-instant-filter'));
         return;
       }
 
@@ -305,6 +321,7 @@ export const App: React.FC = () => {
     toggleTerminalPanel,
     createTerminalSession,
     setTerminalSearchOpen,
+    toggleSearchDrawer,
     quickLookOpen,
     toggleQuickLook,
     closeQuickLook,
@@ -446,6 +463,7 @@ export const App: React.FC = () => {
           <TerminalPanel />
         </div>
       </div>
+      <SearchDrawer />
       <OperationsPanel />
       <StatusBar />
     </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FolderPlus,
@@ -24,6 +24,9 @@ import {
   Columns3,
   Eye,
   Minimize2,
+  Search,
+  Filter,
+  X,
 } from 'lucide-react';
 import { useOperationsStore } from './store';
 import { useBrowserStore, getTabLabel } from '../browser/store';
@@ -31,10 +34,11 @@ import { useDualPaneStore } from '../panes/store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { useTerminalStore } from '../terminal/store';
 import { usePreviewStore, GroupByOption, GridThumbSize } from '../preview/store';
+import { useSearchStore } from '../search/store';
 
 export const OperationsToolbar: React.FC = () => {
   const { t } = useTranslation('common');
-  const { selectedPaths, currentPath } = useBrowserStore();
+  const { selectedPaths, currentPath, filterQuery, setFilterQuery } = useBrowserStore();
   const {
     clipboard,
     jobs,
@@ -71,6 +75,17 @@ export const OperationsToolbar: React.FC = () => {
     toggleDensity,
     togglePreviewPanel,
   } = usePreviewStore();
+  const { drawerOpen: searchOpen, toggleDrawer: toggleSearch } = useSearchStore();
+  const filterInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onFocusFilter = () => {
+      filterInputRef.current?.focus();
+      filterInputRef.current?.select();
+    };
+    window.addEventListener('pulsares:focus-instant-filter', onFocusFilter);
+    return () => window.removeEventListener('pulsares:focus-instant-filter', onFocusFilter);
+  }, []);
 
   const hasSelection = selectedPaths.size > 0;
   const hasSingleSelection = selectedPaths.size === 1;
@@ -201,6 +216,47 @@ export const OperationsToolbar: React.FC = () => {
       </div>
 
       <div style={styles.group}>
+        {/* Filtro instantâneo na pasta atual (Ctrl+F) + Busca Recursiva (Ctrl+Shift+S) */}
+        <div style={styles.filterBox}>
+          <Filter size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          <input
+            ref={filterInputRef}
+            type="text"
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setFilterQuery('');
+                filterInputRef.current?.blur();
+              }
+            }}
+            placeholder={t('search.instantFilterPlaceholder')}
+            aria-label={t('search.instantFilterPlaceholder')}
+            style={styles.filterInput}
+          />
+          {filterQuery && (
+            <button
+              type="button"
+              onClick={() => setFilterQuery('')}
+              style={styles.clearFilterBtn}
+              title={t('ops.cancel')}
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          style={searchOpen ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={toggleSearch}
+          title={t('search.toggleAdvanced')}
+        >
+          <Search size={13} />
+        </button>
+
+        <span style={styles.divider} />
+
         {/* Modos de Visualização (0.6.0): Detalhes, Lista Compacta, Grade de Miniaturas, Colunas (Miller) */}
         <button
           type="button"
@@ -363,6 +419,30 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 4,
+  },
+  filterBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    height: 24,
+    padding: '0 6px',
+    borderRadius: 4,
+    border: '1px solid var(--border-subtle)',
+    backgroundColor: 'var(--bg-base)',
+  },
+  filterInput: {
+    width: 120,
+    border: 'none',
+    outline: 'none',
+    backgroundColor: 'transparent',
+    color: 'var(--text-primary)',
+    fontSize: 11,
+  },
+  clearFilterBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
   },
   btn: {
     display: 'flex',

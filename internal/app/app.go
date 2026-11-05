@@ -7,6 +7,7 @@ import (
 	"pulsares-file-explorer/internal/listing"
 	"pulsares-file-explorer/internal/ops"
 	"pulsares-file-explorer/internal/platform"
+	"pulsares-file-explorer/internal/search"
 	"pulsares-file-explorer/internal/storage"
 	"pulsares-file-explorer/internal/terminal"
 	"pulsares-file-explorer/internal/thumbs"
@@ -23,6 +24,7 @@ type App struct {
 	ops      *ops.Manager
 	terminal *terminal.Service
 	thumbs   *thumbs.Service
+	search   *search.Service
 	storage  *storage.DB
 }
 
@@ -60,6 +62,7 @@ func (a *App) Startup(ctx context.Context) {
 
 	a.listing = listing.NewManager(a.fs, emitter)
 	a.ops = ops.NewManager(a.storage, emitter)
+	a.search = search.New(a.storage, emitter)
 	if a.terminal == nil {
 		a.terminal = terminal.New(emitter)
 	} else {
@@ -163,6 +166,45 @@ func (a *App) GetPreview(path string, maxTextBytes int) (thumbs.PreviewData, err
 		a.thumbs = thumbs.New("", 64*1024*1024)
 	}
 	return a.thumbs.ReadPreview(path, maxTextBytes)
+}
+
+func (a *App) StartSearch(requestID string, opts search.Options) {
+	if a.search == nil {
+		a.search = search.New(a.storage, nil)
+	}
+	a.search.Start(requestID, opts)
+}
+
+func (a *App) CancelSearch(requestID string) {
+	if a.search != nil {
+		a.search.Cancel(requestID)
+	}
+}
+
+func (a *App) IndexDirectory(rootPath string) (int, error) {
+	if a.search == nil {
+		a.search = search.New(a.storage, nil)
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.search.IndexDirectory(ctx, rootPath)
+}
+
+func (a *App) ListIndexRoots() []storage.IndexedRoot {
+	if a.storage == nil {
+		return nil
+	}
+	roots, _ := a.storage.ListIndexRoots()
+	return roots
+}
+
+func (a *App) RemoveIndexRoot(rootPath string) error {
+	if a.storage == nil {
+		return nil
+	}
+	return a.storage.RemoveIndexRoot(rootPath)
 }
 
 func (a *App) ExpandPath(path string) string {

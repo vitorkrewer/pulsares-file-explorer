@@ -65,6 +65,12 @@ function getLruCache(key: string): Entry[] | undefined {
   return val;
 }
 
+function applyInstantFilter(raw: Entry[], query: string): Entry[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return raw;
+  return raw.filter((e) => e.name.toLowerCase().includes(q));
+}
+
 let saveSessionTimer: ReturnType<typeof setTimeout> | null = null;
 let sidebarStateGetter: (() => PersistedSession['sidebar']) | null = null;
 
@@ -136,7 +142,9 @@ interface BrowserState {
   currentPath: string;
   history: string[];
   historyIndex: number;
+  rawEntries: Entry[];
   entries: Entry[];
+  filterQuery: string;
   isLoading: boolean;
   error?: string;
   showHidden: boolean;
@@ -145,7 +153,7 @@ interface BrowserState {
   sortDirection: SortDirection;
   currentRequestId: string;
 
-  // Navegação na aba ativa
+  // Navegação e filtro na aba ativa
   navigateTo: (path: string) => void;
   goBack: () => void;
   goForward: () => void;
@@ -153,6 +161,7 @@ interface BrowserState {
   refresh: () => void;
   toggleHidden: () => void;
   setSort: (field: SortField) => void;
+  setFilterQuery: (query: string) => void;
   selectItem: (path: string, multi: boolean) => void;
   clearSelection: () => void;
   selectAll: () => void;
@@ -182,7 +191,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   currentPath: '',
   history: [],
   historyIndex: -1,
+  rawEntries: [],
   entries: [],
+  filterQuery: '',
   isLoading: false,
   error: undefined,
   showHidden: false,
@@ -192,11 +203,11 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   currentRequestId: '',
 
   navigateTo: (newPath: string) => {
-    const { history, historyIndex, currentPath, activeTabId, tabs, entries } = get();
+    const { history, historyIndex, currentPath, activeTabId, tabs, rawEntries } = get();
     if (!newPath || newPath === currentPath) return;
 
-    if (currentPath && entries.length > 0) {
-      putLruCache(`${activeTabId}:${currentPath}`, entries);
+    if (currentPath && rawEntries.length > 0) {
+      putLruCache(`${activeTabId}:${currentPath}`, rawEntries);
     }
 
     const newHistory = history.slice(0, historyIndex + 1);
@@ -222,7 +233,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       currentPath: newPath,
       history: newHistory,
       historyIndex: newHistory.length - 1,
+      rawEntries: [],
       entries: [],
+      filterQuery: '',
       isLoading: true,
       error: undefined,
       selectedPaths: new Set(),
@@ -234,10 +247,10 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   },
 
   goBack: () => {
-    const { history, historyIndex, activeTabId, tabs, currentPath, entries } = get();
+    const { history, historyIndex, activeTabId, tabs, currentPath, rawEntries } = get();
     if (historyIndex > 0) {
-      if (currentPath && entries.length > 0) {
-        putLruCache(`${activeTabId}:${currentPath}`, entries);
+      if (currentPath && rawEntries.length > 0) {
+        putLruCache(`${activeTabId}:${currentPath}`, rawEntries);
       }
       const prevPath = history[historyIndex - 1];
       const nextIdx = historyIndex - 1;
@@ -252,7 +265,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
         tabs: updatedTabs,
         currentPath: prevPath,
         historyIndex: nextIdx,
+        rawEntries: [],
         entries: [],
+        filterQuery: '',
         isLoading: true,
         error: undefined,
         selectedPaths: new Set(),
@@ -265,10 +280,10 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   },
 
   goForward: () => {
-    const { history, historyIndex, activeTabId, tabs, currentPath, entries } = get();
+    const { history, historyIndex, activeTabId, tabs, currentPath, rawEntries } = get();
     if (historyIndex < history.length - 1) {
-      if (currentPath && entries.length > 0) {
-        putLruCache(`${activeTabId}:${currentPath}`, entries);
+      if (currentPath && rawEntries.length > 0) {
+        putLruCache(`${activeTabId}:${currentPath}`, rawEntries);
       }
       const nextPath = history[historyIndex + 1];
       const nextIdx = historyIndex + 1;
@@ -283,7 +298,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
         tabs: updatedTabs,
         currentPath: nextPath,
         historyIndex: nextIdx,
+        rawEntries: [],
         entries: [],
+        filterQuery: '',
         isLoading: true,
         error: undefined,
         selectedPaths: new Set(),
@@ -321,6 +338,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     cancelListing(activeTabId);
 
     set({
+      rawEntries: [],
       entries: [],
       isLoading: true,
       error: undefined,
@@ -351,6 +369,13 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     );
     set({ sortField: field, sortDirection: nextDir, tabs: updatedTabs });
     triggerSessionSave();
+  },
+
+  setFilterQuery: (query: string) => {
+    set((state) => ({
+      filterQuery: query,
+      entries: applyInstantFilter(state.rawEntries, query),
+    }));
   },
 
   selectItem: (path: string, multi: boolean) => {
@@ -389,8 +414,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     const state = get();
     const path = targetPath || state.currentPath || '/';
 
-    if (state.currentPath && state.entries.length > 0) {
-      putLruCache(`${state.activeTabId}:${state.currentPath}`, state.entries);
+    if (state.currentPath && state.rawEntries.length > 0) {
+      putLruCache(`${state.activeTabId}:${state.currentPath}`, state.rawEntries);
     }
     cancelListing(state.activeTabId);
 
@@ -426,7 +451,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       sortField: created.sortField,
       sortDirection: created.sortDirection,
       selectedPaths: new Set(),
+      rawEntries: [],
       entries: [],
+      filterQuery: '',
       isLoading: true,
       error: undefined,
       currentRequestId: requestId,
@@ -443,9 +470,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     const target = state.tabs.find((t) => t.id === tabId);
     if (!target) return;
 
-    // Salvar listagem atual no cache LRU antes de trocar
-    if (state.currentPath && state.entries.length > 0) {
-      putLruCache(`${state.activeTabId}:${state.currentPath}`, state.entries);
+    if (state.currentPath && state.rawEntries.length > 0) {
+      putLruCache(`${state.activeTabId}:${state.currentPath}`, state.rawEntries);
     }
     cancelListing(state.activeTabId);
 
@@ -477,7 +503,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       sortField: target.sortField,
       sortDirection: target.sortDirection,
       selectedPaths: new Set(target.selectedPaths),
+      rawEntries: cachedEntries ?? [],
       entries: cachedEntries ?? [],
+      filterQuery: '',
       isLoading: !cachedEntries,
       error: undefined,
       currentRequestId: cachedEntries ? '' : requestId,
@@ -500,7 +528,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
   closeTab: (tabId: string) => {
     const state = get();
-    if (state.tabs.length <= 1) return; // Mantém ao menos uma aba aberta
+    if (state.tabs.length <= 1) return;
 
     const idx = state.tabs.findIndex((t) => t.id === tabId);
     if (idx === -1) return;
@@ -543,7 +571,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       sortField: nextActive.sortField,
       sortDirection: nextActive.sortDirection,
       selectedPaths: new Set(nextActive.selectedPaths),
+      rawEntries: cachedEntries ?? [],
       entries: cachedEntries ?? [],
+      filterQuery: '',
       isLoading: !cachedEntries,
       error: undefined,
       currentRequestId: cachedEntries ? '' : requestId,
@@ -626,7 +656,6 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   togglePinTab: (tabId: string) => {
     set((state) => {
       const updated = state.tabs.map((t) => (t.id === tabId ? { ...t, pinned: !t.pinned } : t));
-      // Abas fixadas ficam sempre à esquerda
       const pinned = updated.filter((t) => t.pinned);
       const unpinned = updated.filter((t) => !t.pinned);
       return { tabs: [...pinned, ...unpinned] };
@@ -684,7 +713,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
             sortField: active.sortField,
             sortDirection: active.sortDirection,
             selectedPaths: new Set(active.selectedPaths || []),
+            rawEntries: [],
             entries: [],
+            filterQuery: '',
             isLoading: true,
             error: undefined,
             currentRequestId: requestId,
@@ -706,7 +737,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       currentPath: first.path,
       history: first.history,
       historyIndex: first.historyIndex,
+      rawEntries: [],
       entries: [],
+      filterQuery: '',
       isLoading: true,
       error: undefined,
       currentRequestId: requestId,
@@ -720,9 +753,13 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       const { currentRequestId } = get();
       if (event.requestId !== currentRequestId) return;
 
-      set((state) => ({
-        entries: [...state.entries, ...event.entries],
-      }));
+      set((state) => {
+        const nextRaw = [...state.rawEntries, ...event.entries];
+        return {
+          rawEntries: nextRaw,
+          entries: applyInstantFilter(nextRaw, state.filterQuery),
+        };
+      });
     });
 
     const unsubDone = subscribeEvent<ListingDoneEvent>('listing:done', (event) => {
@@ -730,8 +767,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       if (event.requestId !== currentRequestId) return;
 
       set((state) => {
-        if (!event.error && currentPath && state.entries.length > 0) {
-          putLruCache(`${activeTabId}:${currentPath}`, state.entries);
+        if (!event.error && currentPath && state.rawEntries.length > 0) {
+          putLruCache(`${activeTabId}:${currentPath}`, state.rawEntries);
         }
         return {
           isLoading: false,

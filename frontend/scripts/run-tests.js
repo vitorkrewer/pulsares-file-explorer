@@ -31,7 +31,7 @@ const sample = ['arquivo10.txt', 'arquivo2.txt', 'Arquivo1.txt'];
 sample.sort((a, b) => collator.compare(a, b));
 assert.deepEqual(sample, ['Arquivo1.txt', 'arquivo2.txt', 'arquivo10.txt']);
 
-// 3. Garantir que códigos de erro e namespaces (0.1.0 a 0.6.0) existem nos 3 catálogos
+// 3. Garantir que códigos de erro e namespaces (0.1.0 a 0.7.0) existem nos 3 catálogos
 const requiredErrorKeys = ['notFound', 'permissionDenied', 'generic'];
 const requiredTabKeys = ['newTab', 'closeTab', 'duplicateTab', 'pinTab', 'unpinTab', 'closeOthers', 'closeRight', 'reopenClosed'];
 const requiredTreeKeys = ['title', 'followActiveTab', 'refresh', 'loading', 'empty', 'symlink'];
@@ -57,6 +57,11 @@ const requiredPreviewKeys = [
   'title', 'togglePanel', 'quickLook', 'selectItem',
   'noPreview', 'openDefault', 'truncated', 'folderItems',
   'zoomIn', 'zoomOut', 'zoomReset'
+];
+const requiredSearchKeys = [
+  'title', 'instantFilterPlaceholder', 'toggleAdvanced',
+  'queryPlaceholder', 'contentPlaceholder', 'extensionsPlaceholder',
+  'useRegex', 'useIndex', 'indexCurrentFolder', 'start', 'noResults'
 ];
 
 for (const lang of ['pt-BR', 'en', 'es']) {
@@ -89,6 +94,9 @@ for (const lang of ['pt-BR', 'en', 'es']) {
   for (const prevKey of requiredPreviewKeys) {
     assert.ok(typeof data.preview?.[prevKey] === 'string' && data.preview[prevKey].length > 0);
   }
+  for (const searchKey of requiredSearchKeys) {
+    assert.ok(typeof data.search?.[searchKey] === 'string' && data.search[searchKey].length > 0);
+  }
 }
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.6.0) passaram com sucesso.');
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 0.7.0) passaram com sucesso.');

@@ -107,3 +107,4 @@ func TestReadPreview_ImageMarkdownTextAndBinary(t *testing.T) {
 		t.Fatalf("expected PreviewBinary, got %s", binPrev.Kind)
 	}
 }
+

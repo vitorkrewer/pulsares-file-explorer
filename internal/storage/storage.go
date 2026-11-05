@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -34,6 +35,22 @@ type RecentItem struct {
 	LastVisited string `json:"lastVisited"`
 }
 
+type IndexedRoot struct {
+	RootPath  string `json:"rootPath"`
+	ItemCount int    `json:"itemCount"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type IndexedEntry struct {
+	Path    string `json:"path"`
+	Root    string `json:"root"`
+	Name    string `json:"name"`
+	Ext     string `json:"ext"`
+	Kind    string `json:"kind"`
+	Size    int64  `json:"size"`
+	ModTime string `json:"modTime"`
+}
+
 func Open() (*DB, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -45,6 +62,10 @@ func Open() (*DB, error) {
 	}
 
 	dbPath := filepath.Join(appDir, "explorer.db")
+	return OpenPath(dbPath)
+}
+
+func OpenPath(dbPath string) (*DB, error) {
 	sqlDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
@@ -104,6 +125,26 @@ func (db *DB) migrate() error {
 		visit_count INTEGER NOT NULL DEFAULT 1,
 		last_visited DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS index_roots (
+		root_path TEXT PRIMARY KEY,
+		item_count INTEGER NOT NULL DEFAULT 0,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS index_entries (
+		path TEXT PRIMARY KEY,
+		root_path TEXT NOT NULL,
+		name TEXT NOT NULL,
+		name_lower TEXT NOT NULL,
+		ext TEXT NOT NULL,
+		kind TEXT NOT NULL,
+		size INTEGER NOT NULL DEFAULT 0,
+		mod_time TEXT NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_entries_name_lower ON index_entries(name_lower);
+	CREATE INDEX IF NOT EXISTS idx_entries_root ON index_entries(root_path);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -298,6 +339,111 @@ func (db *DB) ListRecent(limit int) ([]RecentItem, error) {
 			return nil, err
 		}
 		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) ReplaceIndexedEntries(rootPath string, entries []IndexedEntry) error {
+	cleanRoot := filepath.Clean(rootPath)
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec("DELETE FROM index_entries WHERE root_path = ?", cleanRoot); err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare(`
+		INSERT OR REPLACE INTO index_entries (path, root_path, name, name_lower, ext, kind, size, mod_time)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, e := range entries {
+		if _, err := stmt.Exec(
+			e.Path,
+			cleanRoot,
+			e.Name,
+			strings.ToLower(e.Name),
+			strings.ToLower(e.Ext),
+			e.Kind,
+			e.Size,
+			e.ModTime,
+		); err != nil {
+			return err
+		}
+	}
+
+	if _, err := tx.Exec(`
+		INSERT INTO index_roots (root_path, item_count, updated_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(root_path) DO UPDATE SET
+			item_count = excluded.item_count,
+			updated_at = CURRENT_TIMESTAMP
+	`, cleanRoot, len(entries)); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (db *DB) ListIndexRoots() ([]IndexedRoot, error) {
+	rows, err := db.Query("SELECT root_path, item_count, updated_at FROM index_roots ORDER BY root_path ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []IndexedRoot
+	for rows.Next() {
+		var r IndexedRoot
+		if err := rows.Scan(&r.RootPath, &r.ItemCount, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) RemoveIndexRoot(rootPath string) error {
+	cleanRoot := filepath.Clean(rootPath)
+	_, _ = db.Exec("DELETE FROM index_entries WHERE root_path = ?", cleanRoot)
+	_, err := db.Exec("DELETE FROM index_roots WHERE root_path = ?", cleanRoot)
+	return err
+}
+
+func (db *DB) QueryIndexedEntries(rootPrefix string, nameQuery string, limit int) ([]IndexedEntry, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	q := "%" + strings.ToLower(strings.TrimSpace(nameQuery)) + "%"
+	cleanPrefix := filepath.Clean(rootPrefix)
+
+	rows, err := db.Query(`
+		SELECT path, root_path, name, ext, kind, size, mod_time
+		FROM index_entries
+		WHERE (root_path = ? OR path LIKE ?)
+		  AND name_lower LIKE ?
+		ORDER BY kind ASC, name ASC
+		LIMIT ?
+	`, cleanPrefix, cleanPrefix+"%", q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []IndexedEntry
+	for rows.Next() {
+		var e IndexedEntry
+		if err := rows.Scan(&e.Path, &e.Root, &e.Name, &e.Ext, &e.Kind, &e.Size, &e.ModTime); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
 	}
 	return out, rows.Err()
 }
