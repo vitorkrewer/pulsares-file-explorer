@@ -7,8 +7,28 @@
     "refresh": "Refresh",
     "newFolder": "New folder",
     "toggleHidden": "Hidden files",
+    "toggleSidebar": "Toggle sidebar (Ctrl+B)",
     "viewDetails": "Details view",
     "addressPlaceholder": "Type a path or select..."
+  },
+  "tabs": {
+    "newTab": "New tab (Ctrl+T)",
+    "closeTab": "Close tab (Ctrl+W)",
+    "duplicateTab": "Duplicate tab",
+    "pinTab": "Pin tab",
+    "unpinTab": "Unpin tab",
+    "closeOthers": "Close other tabs",
+    "closeRight": "Close tabs to the right",
+    "reopenClosed": "Reopen closed tab (Ctrl+Shift+T)",
+    "root": "Root"
+  },
+  "tree": {
+    "title": "Folders",
+    "followActiveTab": "Follow active tab",
+    "refresh": "Refresh tree (F5)",
+    "loading": "Loading...",
+    "empty": "No subfolders",
+    "symlink": "Shortcut / Symbolic link"
   },
   "columns": {
     "name": "Name",
@@ -43,4 +63,3 @@
     "generic": "An error occurred while accessing the path."
   }
 }
-

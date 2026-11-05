@@ -8,14 +8,39 @@ import (
 )
 
 var (
-	ErrNotFound      = errors.New("not found")
-	ErrPermission    = errors.New("permission denied")
-	ErrExists        = errors.New("already exists")
-	ErrNotEmpty      = errors.New("directory not empty")
-	ErrCrossDevice   = errors.New("cross device link/move")
-	ErrUnsupported   = errors.New("unsupported operation")
-	ErrInvalidPath   = errors.New("invalid path")
+	ErrNotFound    = errors.New("not found")
+	ErrPermission  = errors.New("permission denied")
+	ErrExists      = errors.New("already exists")
+	ErrNotEmpty    = errors.New("directory not empty")
+	ErrCrossDevice = errors.New("cross device link/move")
+	ErrUnsupported = errors.New("unsupported operation")
+	ErrInvalidPath = errors.New("invalid path")
 )
+
+// ErrorCode converte um erro de domínio em um código estável para tradução no frontend.
+func ErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return "notFound"
+	case errors.Is(err, ErrPermission):
+		return "permissionDenied"
+	case errors.Is(err, ErrExists):
+		return "alreadyExists"
+	case errors.Is(err, ErrNotEmpty):
+		return "notEmpty"
+	case errors.Is(err, ErrCrossDevice):
+		return "crossDevice"
+	case errors.Is(err, ErrUnsupported):
+		return "unsupported"
+	case errors.Is(err, ErrInvalidPath):
+		return "invalidPath"
+	default:
+		return "generic"
+	}
+}
 
 type Kind string
 
@@ -53,4 +78,3 @@ type FileSystem interface {
 	ReadDir(ctx context.Context, loc Location, batch int) (<-chan []Entry, <-chan error)
 	Open(ctx context.Context, loc Location) (io.ReadCloser, error)
 }
-

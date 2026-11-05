@@ -7,6 +7,7 @@ import (
 	"pulsares-file-explorer/internal/listing"
 	"pulsares-file-explorer/internal/platform"
 	"pulsares-file-explorer/internal/storage"
+	"pulsares-file-explorer/internal/tree"
 	"pulsares-file-explorer/internal/vfs"
 	"pulsares-file-explorer/internal/vfs/local"
 )
@@ -15,6 +16,7 @@ type App struct {
 	ctx     context.Context
 	fs      vfs.FileSystem
 	listing *listing.Manager
+	tree    *tree.Service
 	storage *storage.DB
 }
 
@@ -24,12 +26,14 @@ type InitialState struct {
 	Drives         []platform.DriveInfo `json:"drives"`
 	Language       string               `json:"language"`
 	Theme          string               `json:"theme"`
+	SessionData    string               `json:"sessionData,omitempty"`
 }
 
 func NewApp() *App {
 	localFS := local.New()
 	return &App{
-		fs: localFS,
+		fs:   localFS,
+		tree: tree.NewService(localFS),
 	}
 }
 
@@ -58,12 +62,16 @@ func (a *App) GetInitialState() InitialState {
 
 	lang := "auto"
 	theme := "system"
+	sessionData := ""
 	if a.storage != nil {
 		if l, _ := a.storage.GetSetting("language"); l != "" {
 			lang = l
 		}
 		if t, _ := a.storage.GetSetting("theme"); t != "" {
 			theme = t
+		}
+		if s, _ := a.storage.LoadSession(); s != "" {
+			sessionData = s
 		}
 	}
 
@@ -73,6 +81,7 @@ func (a *App) GetInitialState() InitialState {
 		Drives:         drives,
 		Language:       lang,
 		Theme:          theme,
+		SessionData:    sessionData,
 	}
 }
 
@@ -86,6 +95,41 @@ func (a *App) ListDirectory(tabID string, requestID string, path string) {
 
 func (a *App) CancelListing(tabID string) {
 	a.listing.Cancel(tabID)
+}
+
+func (a *App) TreeRoots() ([]tree.Node, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.tree.Roots(ctx)
+}
+
+func (a *App) TreeChildren(path string, showHidden bool) ([]tree.Node, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	loc := vfs.Location{
+		Provider: "local",
+		Path:     path,
+	}
+	return a.tree.Children(ctx, loc, showHidden)
+}
+
+func (a *App) SaveSession(data string) error {
+	if a.storage == nil {
+		return nil
+	}
+	return a.storage.SaveSession(data)
+}
+
+func (a *App) LoadSession() string {
+	if a.storage == nil {
+		return ""
+	}
+	data, _ := a.storage.LoadSession()
+	return data
 }
 
 func (a *App) OpenPath(path string) error {
@@ -110,4 +154,3 @@ func (a *App) SetSetting(key, val string) error {
 	}
 	return a.storage.SetSetting(key, val)
 }
-

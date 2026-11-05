@@ -7,8 +7,28 @@
     "refresh": "Atualizar",
     "newFolder": "Nova pasta",
     "toggleHidden": "Arquivos ocultos",
+    "toggleSidebar": "Alternar painel lateral (Ctrl+B)",
     "viewDetails": "Modo detalhes",
     "addressPlaceholder": "Digite um caminho ou selecione..."
+  },
+  "tabs": {
+    "newTab": "Nova aba (Ctrl+T)",
+    "closeTab": "Fechar aba (Ctrl+W)",
+    "duplicateTab": "Duplicar aba",
+    "pinTab": "Fixar aba",
+    "unpinTab": "Desafixar aba",
+    "closeOthers": "Fechar outras abas",
+    "closeRight": "Fechar abas à direita",
+    "reopenClosed": "Reabrir aba fechada (Ctrl+Shift+T)",
+    "root": "Raiz"
+  },
+  "tree": {
+    "title": "Pastas",
+    "followActiveTab": "Acompanhar aba ativa",
+    "refresh": "Atualizar árvore (F5)",
+    "loading": "Carregando...",
+    "empty": "Sem subpastas",
+    "symlink": "Atalho / Link simbólico"
   },
   "columns": {
     "name": "Nome",
@@ -43,4 +63,3 @@
     "generic": "Ocorreu um erro ao acessar o caminho."
   }
 }
-

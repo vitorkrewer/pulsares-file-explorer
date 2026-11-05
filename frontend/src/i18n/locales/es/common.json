@@ -7,8 +7,28 @@
     "refresh": "Actualizar",
     "newFolder": "Nueva carpeta",
     "toggleHidden": "Archivos ocultos",
+    "toggleSidebar": "Alternar panel lateral (Ctrl+B)",
     "viewDetails": "Vista de detalles",
     "addressPlaceholder": "Escriba una ruta o seleccione..."
+  },
+  "tabs": {
+    "newTab": "Nueva pestaña (Ctrl+T)",
+    "closeTab": "Cerrar pestaña (Ctrl+W)",
+    "duplicateTab": "Duplicar pestaña",
+    "pinTab": "Fijar pestaña",
+    "unpinTab": "Desfijar pestaña",
+    "closeOthers": "Cerrar otras pestañas",
+    "closeRight": "Cerrar pestañas a la derecha",
+    "reopenClosed": "Reabrir pestaña cerrada (Ctrl+Shift+T)",
+    "root": "Raíz"
+  },
+  "tree": {
+    "title": "Carpetas",
+    "followActiveTab": "Seguir pestaña activa",
+    "refresh": "Actualizar árbol (F5)",
+    "loading": "Cargando...",
+    "empty": "Sin subcarpetas",
+    "symlink": "Acceso directo / Enlace simbólico"
   },
   "columns": {
     "name": "Nombre",
@@ -43,4 +63,3 @@
     "generic": "Ocurrió un error al acceder a la ruta."
   }
 }
-

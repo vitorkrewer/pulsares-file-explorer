@@ -10,8 +10,10 @@ import {
   Sun,
   Moon,
   Globe,
+  PanelLeft,
 } from 'lucide-react';
 import { useBrowserStore } from '../browser/store';
+import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { saveSetting } from '../../lib/wails';
 
 interface AddressBarProps {
@@ -34,6 +36,7 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
     toggleHidden,
     navigateTo,
   } = useBrowserStore();
+  const { visible: sidebarVisible, toggleSidebar } = useFolderTreeStore();
 
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(currentPath);
@@ -82,6 +85,14 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
     <div style={styles.container}>
       {/* Botões de Navegação */}
       <div style={styles.navButtons}>
+        <button
+          style={sidebarVisible ? { ...styles.btn, color: 'var(--accent)' } : styles.btn}
+          onClick={toggleSidebar}
+          title={t('nav.toggleSidebar')}
+          aria-label={t('nav.toggleSidebar')}
+        >
+          <PanelLeft size={16} />
+        </button>
         <button
           style={historyIndex <= 0 ? styles.disabledBtn : styles.btn}
           disabled={historyIndex <= 0}
@@ -281,4 +292,3 @@ const styles: Record<string, React.CSSProperties> = {
     outline: 'none',
   },
 };
-

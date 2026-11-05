@@ -22,6 +22,16 @@ export interface Entry {
   target?: Location;
 }
 
+export type Tri = 'yes' | 'no' | 'unknown';
+
+export interface TreeNode {
+  name: string;
+  location: Location;
+  hasChildren: Tri;
+  isLink: boolean;
+  hidden: boolean;
+}
+
 export interface DriveInfo {
   path: string;
   label: string;
@@ -36,6 +46,7 @@ export interface InitialState {
   drives: DriveInfo[];
   language: string;
   theme: string;
+  sessionData?: string;
 }
 
 export interface ListingBatchEvent {
@@ -58,6 +69,10 @@ declare global {
           GetInitialState: () => Promise<InitialState>;
           ListDirectory: (tabId: string, requestId: string, path: string) => Promise<void>;
           CancelListing: (tabId: string) => Promise<void>;
+          TreeRoots: () => Promise<TreeNode[]>;
+          TreeChildren: (path: string, showHidden: boolean) => Promise<TreeNode[]>;
+          SaveSession: (data: string) => Promise<void>;
+          LoadSession: () => Promise<string>;
           OpenPath: (path: string) => Promise<void>;
           GetDrives: () => Promise<DriveInfo[]>;
           GetSetting: (key: string) => Promise<string>;
@@ -86,6 +101,7 @@ export async function getInitialState(): Promise<InitialState> {
     drives: [{ path: '/', label: '/' }],
     language: 'auto',
     theme: 'system',
+    sessionData: '',
   };
 }
 
@@ -100,6 +116,41 @@ export async function cancelListing(tabId: string): Promise<void> {
   if (isWailsAvailable()) {
     return window.go!.app.App.CancelListing(tabId);
   }
+}
+
+export async function treeRoots(): Promise<TreeNode[]> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TreeRoots();
+  }
+  return [
+    {
+      name: '/',
+      location: { provider: 'local', root: '/', path: '/' },
+      hasChildren: 'yes',
+      isLink: false,
+      hidden: false,
+    },
+  ];
+}
+
+export async function treeChildren(path: string, showHidden: boolean): Promise<TreeNode[]> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.TreeChildren(path, showHidden);
+  }
+  return [];
+}
+
+export async function saveSession(data: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.SaveSession(data);
+  }
+}
+
+export async function loadSession(): Promise<string> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.LoadSession();
+  }
+  return '';
 }
 
 export async function openPath(path: string): Promise<void> {
@@ -123,4 +174,3 @@ export function subscribeEvent<T>(eventName: string, callback: (data: T) => void
   }
   return () => {};
 }
-

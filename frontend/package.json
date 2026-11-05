@@ -1,7 +1,7 @@
 {
   "name": "pulsares-explorer-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "i18n:check": "node scripts/check-i18n.js",
-    "test": "node --version"
+    "test": "node scripts/run-tests.js"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.13.0",
@@ -31,4 +31,3 @@
     "vite": "^6.1.0"
   }
 }
-

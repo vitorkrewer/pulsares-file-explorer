@@ -55,6 +55,12 @@ func (db *DB) migrate() error {
 		data TEXT NOT NULL,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS closed_tabs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		data TEXT NOT NULL,
+		closed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -77,3 +83,19 @@ func (db *DB) SetSetting(key, val string) error {
 	return err
 }
 
+func (db *DB) SaveSession(data string) error {
+	_, err := db.Exec(
+		"INSERT INTO session (id, data, updated_at) VALUES ('default', ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = CURRENT_TIMESTAMP",
+		data,
+	)
+	return err
+}
+
+func (db *DB) LoadSession() (string, error) {
+	var data string
+	err := db.QueryRow("SELECT data FROM session WHERE id = 'default'").Scan(&data)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return data, err
+}
