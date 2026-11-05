@@ -11,10 +11,11 @@ import {
   Moon,
   Globe,
   PanelLeft,
+  Folder,
 } from 'lucide-react';
 import { useBrowserStore } from '../browser/store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
-import { saveSetting } from '../../lib/wails';
+import { saveSetting, expandPath, autocompletePath } from '../../lib/wails';
 
 interface AddressBarProps {
   currentTheme: string;
@@ -40,6 +41,8 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
 
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(currentPath);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState<number>(-1);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -50,15 +53,65 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
+    } else {
+      setSuggestions([]);
+      setSelectedSuggestionIdx(-1);
     }
   }, [isEditing]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      if (inputValue.trim()) {
-        navigateTo(inputValue.trim());
-      }
+  // Ouvir evento global de foco na barra de endereço (Ctrl+L / Alt+D)
+  useEffect(() => {
+    const onFocusAddress = () => {
+      setIsEditing(true);
+    };
+    window.addEventListener('pulsares:focus-address-bar', onFocusAddress);
+    return () => window.removeEventListener('pulsares:focus-address-bar', onFocusAddress);
+  }, []);
+
+  const handleInputChange = async (value: string) => {
+    setInputValue(value);
+    setSelectedSuggestionIdx(-1);
+    if (value.trim().length > 0) {
+      const items = await autocompletePath(value, showHidden);
+      setSuggestions(items);
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+  const commitNavigation = async (rawPath: string) => {
+    const trimmed = rawPath.trim();
+    if (!trimmed) {
       setIsEditing(false);
+      return;
+    }
+    const resolved = await expandPath(trimmed);
+    setSuggestions([]);
+    setIsEditing(false);
+    navigateTo(resolved || trimmed);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown' && suggestions.length > 0) {
+      e.preventDefault();
+      setSelectedSuggestionIdx((prev) => (prev + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp' && suggestions.length > 0) {
+      e.preventDefault();
+      setSelectedSuggestionIdx((prev) => (prev - 1 + suggestions.length) % suggestions.length);
+    } else if (e.key === 'Tab' && suggestions.length > 0) {
+      e.preventDefault();
+      const chosen = suggestions[selectedSuggestionIdx >= 0 ? selectedSuggestionIdx : 0];
+      if (chosen) {
+        setInputValue(chosen);
+        handleInputChange(chosen);
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const target =
+        selectedSuggestionIdx >= 0 && suggestions[selectedSuggestionIdx]
+          ? suggestions[selectedSuggestionIdx]
+          : inputValue;
+      commitNavigation(target);
     } else if (e.key === 'Escape') {
       setInputValue(currentPath);
       setIsEditing(false);
@@ -121,43 +174,71 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
         </button>
       </div>
 
-      {/* Barra de Endereço / Breadcrumbs */}
-      <div style={styles.addressBox}>
-        {isEditing ? (
-          <input
-            ref={inputRef}
-            type="text"
-            style={styles.addressInput}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={() => setIsEditing(false)}
-            placeholder={t('nav.addressPlaceholder')}
-          />
-        ) : (
-          <div style={styles.breadcrumbs} onClick={() => setIsEditing(true)}>
-            {parts.map((part, index) => {
-              const fullTillNow = isWindows
-                ? index === 0
-                  ? `${part}\\`
-                  : parts.slice(0, index + 1).join('\\')
-                : '/' + parts.slice(0, index + 1).join('/');
+      {/* Barra de Endereço / Breadcrumbs + Autocompletar */}
+      <div style={styles.addressWrapper}>
+        <div style={styles.addressBox}>
+          {isEditing ? (
+            <input
+              ref={inputRef}
+              type="text"
+              style={styles.addressInput}
+              value={inputValue}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={() => {
+                // Pequeno atraso para permitir clique em sugestão
+                setTimeout(() => setIsEditing(false), 150);
+              }}
+              placeholder={t('nav.addressPlaceholder')}
+            />
+          ) : (
+            <div style={styles.breadcrumbs} onClick={() => setIsEditing(true)}>
+              {parts.map((part, index) => {
+                const fullTillNow = isWindows
+                  ? index === 0
+                    ? `${part}\\`
+                    : parts.slice(0, index + 1).join('\\')
+                  : '/' + parts.slice(0, index + 1).join('/');
 
-              return (
-                <React.Fragment key={fullTillNow}>
-                  <span
-                    style={styles.crumb}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigateTo(fullTillNow);
-                    }}
-                  >
-                    {part}
-                  </span>
-                  {index < parts.length - 1 && <span style={styles.separator}>›</span>}
-                </React.Fragment>
-              );
-            })}
+                return (
+                  <React.Fragment key={fullTillNow}>
+                    <span
+                      style={styles.crumb}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateTo(fullTillNow);
+                      }}
+                    >
+                      {part}
+                    </span>
+                    {index < parts.length - 1 && <span style={styles.separator}>›</span>}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {isEditing && suggestions.length > 0 && (
+          <div style={styles.suggestionsPopup} role="listbox">
+            {suggestions.map((item, idx) => (
+              <div
+                key={item}
+                role="option"
+                aria-selected={idx === selectedSuggestionIdx}
+                style={{
+                  ...styles.suggestionItem,
+                  ...(idx === selectedSuggestionIdx ? styles.suggestionItemActive : {}),
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  commitNavigation(item);
+                }}
+              >
+                <Folder size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <span style={styles.suggestionText}>{item}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -232,9 +313,14 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'not-allowed',
     opacity: 0.4,
   },
-  addressBox: {
+  addressWrapper: {
+    position: 'relative',
     flex: 1,
     height: 30,
+  },
+  addressBox: {
+    width: '100%',
+    height: '100%',
     backgroundColor: 'var(--bg-app)',
     border: '1px solid var(--border-subtle)',
     borderRadius: 6,
@@ -269,6 +355,38 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     fontSize: 12,
     color: 'var(--text-primary)',
+  },
+  suggestionsPopup: {
+    position: 'absolute',
+    top: 34,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    backgroundColor: 'var(--bg-surface)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 6,
+    padding: 4,
+    maxHeight: 260,
+    overflowY: 'auto',
+    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.35)',
+  },
+  suggestionItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '5px 8px',
+    borderRadius: 4,
+    fontSize: 12,
+    color: 'var(--text-primary)',
+    cursor: 'pointer',
+  },
+  suggestionItemActive: {
+    backgroundColor: 'var(--bg-selected, rgba(59, 130, 246, 0.2))',
+  },
+  suggestionText: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   actions: {
     display: 'flex',

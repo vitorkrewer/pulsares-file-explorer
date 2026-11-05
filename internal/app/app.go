@@ -86,11 +86,20 @@ func (a *App) GetInitialState() InitialState {
 }
 
 func (a *App) ListDirectory(tabID string, requestID string, path string) {
+	resolved := platform.ExpandPath(path)
 	loc := vfs.Location{
 		Provider: "local",
-		Path:     path,
+		Path:     resolved,
 	}
 	a.listing.Start(tabID, requestID, loc, 500)
+}
+
+func (a *App) ExpandPath(path string) string {
+	return platform.ExpandPath(path)
+}
+
+func (a *App) AutocompletePath(partial string, showHidden bool) []string {
+	return platform.AutocompleteDirs(partial, showHidden, 12)
 }
 
 func (a *App) CancelListing(tabID string) {

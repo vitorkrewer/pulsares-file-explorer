@@ -3,7 +3,9 @@ build/bin/
 frontend/dist/
 frontend/wailsjs/
 frontend/node_modules/
+frontend/package.json.md5
 node_modules/
+*.syso
 
 # Go
 *.test
@@ -29,4 +31,3 @@ desktop.ini
 # Fixtures geradas para testes de desempenho
 tools/fixtures-out/
 tools/
-

@@ -24,6 +24,8 @@ export const App: React.FC = () => {
     tabs,
     goBack,
     goForward,
+    goUp,
+    refresh,
   } = useBrowserStore();
   const { hydrateSidebar, toggleSidebar } = useFolderTreeStore();
   const [theme, setTheme] = useState<string>('dark');
@@ -57,13 +59,55 @@ export const App: React.FC = () => {
   // Atalhos globais de teclado e botões laterais do mouse (0.1.0 + 0.2.0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const targetEl = e.target as HTMLElement | null;
+      const isInputFocused =
+        targetEl?.tagName === 'INPUT' ||
+        targetEl?.tagName === 'TEXTAREA' ||
+        targetEl?.isContentEditable;
+
       const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      // Focar barra de endereço: Ctrl+L ou Alt+D
+      if ((mod && key === 'l') || (e.altKey && key === 'd')) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('pulsares:focus-address-bar'));
+        return;
+      }
+
+      // Navegação Alt+Setas e F5
+      if (e.altKey && !mod) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          goBack();
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          goForward();
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          goUp();
+          return;
+        }
+      }
+
+      if (!isInputFocused && e.key === 'F5') {
+        e.preventDefault();
+        refresh();
+        return;
+      }
+
       if (!mod) return;
 
-      const key = e.key.toLowerCase();
       if (key === 'b') {
         e.preventDefault();
         toggleSidebar();
+      } else if (key === 'r') {
+        e.preventDefault();
+        refresh();
       } else if (key === 't' && !e.shiftKey) {
         e.preventDefault();
         newTab();
@@ -113,6 +157,8 @@ export const App: React.FC = () => {
     tabs,
     goBack,
     goForward,
+    goUp,
+    refresh,
   ]);
 
   const handleThemeChange = (newTheme: string) => {

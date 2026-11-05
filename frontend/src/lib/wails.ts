@@ -68,6 +68,8 @@ declare global {
         App: {
           GetInitialState: () => Promise<InitialState>;
           ListDirectory: (tabId: string, requestId: string, path: string) => Promise<void>;
+          ExpandPath: (path: string) => Promise<string>;
+          AutocompletePath: (partial: string, showHidden: boolean) => Promise<string[]>;
           CancelListing: (tabId: string) => Promise<void>;
           TreeRoots: () => Promise<TreeNode[]>;
           TreeChildren: (path: string, showHidden: boolean) => Promise<TreeNode[]>;
@@ -110,6 +112,21 @@ export async function listDirectory(tabId: string, requestId: string, path: stri
     return window.go!.app.App.ListDirectory(tabId, requestId, path);
   }
   console.warn('[Wails Mock] listDirectory', { tabId, requestId, path });
+}
+
+export async function expandPath(path: string): Promise<string> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.ExpandPath(path);
+  }
+  return path;
+}
+
+export async function autocompletePath(partial: string, showHidden: boolean): Promise<string[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.AutocompletePath(partial, showHidden);
+    return res || [];
+  }
+  return [];
 }
 
 export async function cancelListing(tabId: string): Promise<void> {
