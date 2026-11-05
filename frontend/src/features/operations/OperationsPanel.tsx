@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pause, Play, X, AlertTriangle } from 'lucide-react';
+import { Pause, Play, X, AlertTriangle, Info, ExternalLink, Terminal, FolderOpen } from 'lucide-react';
 import { useOperationsStore } from './store';
 import { formatBytes, formatDateTime } from '../../i18n/format';
-import { ConflictPolicy } from '../../lib/wails';
+import {
+  ConflictPolicy,
+  openWithDialog,
+  openExternalTerminal,
+  revealInSystemExplorer,
+} from '../../lib/wails';
 
 const FILE_EXTENSION_OPTIONS = [
   { ext: '.txt', label: '.txt — Texto Simples' },
@@ -38,6 +43,10 @@ export const OperationsPanel: React.FC = () => {
     promptInitialValue,
     closePrompt,
     submitPrompt,
+    propertiesOpen,
+    propertiesLoading,
+    propertiesData,
+    closeProperties,
     pause,
     resume,
     cancel,
@@ -200,6 +209,119 @@ export const OperationsPanel: React.FC = () => {
                 style={styles.primaryBtn}
                 onClick={() => submitPrompt(resolvePromptValue())}
               >
+                {t('ops.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Propriedades do Item / Pasta (Alt+Enter) */}
+      {propertiesOpen && (
+        <div style={styles.backdrop} onClick={closeProperties}>
+          <div style={{ ...styles.modal, width: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...styles.modalHeader, justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Info size={15} style={{ color: 'var(--accent)' }} />
+                {t('os.propertiesTitle')}
+              </span>
+              <button type="button" style={styles.iconBtn} onClick={closeProperties}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {propertiesLoading || !propertiesData ? (
+              <div style={styles.emptyText}>{t('tree.loading')}</div>
+            ) : (
+              <>
+                <div style={styles.conflictBox}>
+                  <div style={styles.conflictRow}>
+                    <strong>{t('columns.name')}:</strong>
+                    <div style={styles.conflictPath}>{propertiesData.name}</div>
+                  </div>
+                  <div style={styles.conflictRow}>
+                    <strong>{t('columns.type')}:</strong>
+                    <div style={styles.conflictMeta}>
+                      {t(`types.${propertiesData.kind}`)}
+                      {propertiesData.extension ? ` (.${propertiesData.extension})` : ''}
+                    </div>
+                  </div>
+                  <div style={styles.conflictRow}>
+                    <strong>{t('os.location')}:</strong>
+                    <div style={styles.conflictPath}>{propertiesData.path}</div>
+                  </div>
+                  <div style={styles.conflictRow}>
+                    <strong>{t('columns.size')}:</strong>
+                    <div style={styles.conflictMeta}>
+                      {formatBytes(propertiesData.size, i18n.language)}
+                      {propertiesData.kind === 'folder' &&
+                        ` (${propertiesData.fileCount} ${t('status.items_plural', { count: propertiesData.fileCount })}, ${propertiesData.folderCount} ${t('tree.title').toLowerCase()})`}
+                    </div>
+                  </div>
+                  <div style={styles.conflictRow}>
+                    <strong>{t('columns.modified')}:</strong>
+                    <div style={styles.conflictMeta}>
+                      {formatDateTime(propertiesData.modifiedAt, i18n.language)}
+                    </div>
+                  </div>
+                  <div style={styles.conflictRow}>
+                    <strong>{t('os.permissions')}:</strong>
+                    <div style={styles.conflictMeta}>
+                      <code>{propertiesData.permissions}</code>
+                      {propertiesData.isReadOnly ? ` • ${t('os.readOnly')}` : ''}
+                      {propertiesData.isHidden ? ` • ${t('nav.toggleHidden')}` : ''}
+                    </div>
+                  </div>
+                  {propertiesData.sha256 && (
+                    <div style={styles.conflictRow}>
+                      <strong>SHA-256:</strong>
+                      <div
+                        style={{
+                          ...styles.conflictPath,
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {propertiesData.sha256}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {propertiesData.kind === 'file' && (
+                    <button
+                      type="button"
+                      style={styles.secondaryBtn}
+                      onClick={() => void openWithDialog(propertiesData.path)}
+                    >
+                      <ExternalLink size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                      {t('os.openWith')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    style={styles.secondaryBtn}
+                    onClick={() => void openExternalTerminal(propertiesData.path)}
+                  >
+                    <Terminal size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                    {t('os.openExternalTerminal')}
+                  </button>
+                  <button
+                    type="button"
+                    style={styles.secondaryBtn}
+                    onClick={() => void revealInSystemExplorer(propertiesData.path)}
+                  >
+                    <FolderOpen size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                    {t('os.revealInSystem')}
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div style={styles.modalActions}>
+              <button type="button" style={styles.primaryBtn} onClick={closeProperties}>
                 {t('ops.confirm')}
               </button>
             </div>

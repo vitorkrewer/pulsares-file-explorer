@@ -11,9 +11,9 @@ export function getCollator(locale: string): Intl.Collator {
   return c;
 }
 
-export function formatDateTime(isoString: string, locale: string): string {
-  if (!isoString) return '';
-  const d = new Date(isoString);
+export function formatDateTime(value: string | number, locale: string): string {
+  if (value === '' || value === null || value === undefined) return '';
+  const d = new Date(value);
   if (isNaN(d.getTime())) return '';
 
   let f = dateFormatterCache.get(locale);

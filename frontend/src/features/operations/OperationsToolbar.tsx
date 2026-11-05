@@ -27,6 +27,7 @@ import {
   SlidersHorizontal,
   Search,
   Filter,
+  Info,
   X,
 } from 'lucide-react';
 import { useOperationsStore } from './store';
@@ -48,6 +49,7 @@ export const OperationsToolbar: React.FC = () => {
     setPanelOpen,
     toggleVerifyHash,
     openPrompt,
+    openProperties,
     copySelection,
     cutSelection,
     pasteIntoCurrent,
@@ -188,6 +190,16 @@ export const OperationsToolbar: React.FC = () => {
 
         <button type="button" style={styles.btn} onClick={redo} title={t('ops.redo')}>
           <Redo2 size={14} />
+        </button>
+
+        <button
+          type="button"
+          style={styles.btn}
+          onClick={() => void openProperties()}
+          title={t('os.propertiesShortcut')}
+          aria-label={t('os.propertiesShortcut')}
+        >
+          <Info size={14} />
         </button>
 
         {layoutMode !== 'single' && (

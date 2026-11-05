@@ -53,6 +53,7 @@ export const App: React.FC = () => {
     requestPermanentDelete,
     requestRenameSelection,
     openPrompt,
+    openProperties,
     undo,
     redo,
   } = useOperationsStore();
@@ -229,8 +230,13 @@ export const App: React.FC = () => {
         }
       }
 
-      // Navegação Alt+Setas
+      // Navegação Alt+Setas e Propriedades (Alt+Enter)
       if (e.altKey && !mod) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          void openProperties();
+          return;
+        }
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
           goBack();

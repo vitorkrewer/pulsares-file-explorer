@@ -189,6 +189,17 @@
     "file": "File",
     "symlink": "Shortcut"
   },
+  "os": {
+    "propertiesTitle": "Item Properties",
+    "propertiesShortcut": "Properties (Alt+Enter)",
+    "location": "Location",
+    "permissions": "Permissions / Attributes",
+    "readOnly": "Read-only",
+    "openWith": "Open with...",
+    "openExternalTerminal": "Open in external terminal",
+    "revealInSystem": "Reveal in system explorer",
+    "ejectDrive": "Eject removable drive"
+  },
   "settings": {
     "title": "Settings",
     "language": "Language",

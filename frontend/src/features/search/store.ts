@@ -190,3 +190,4 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
     set({ indexedRoots: roots });
   },
 }));
+

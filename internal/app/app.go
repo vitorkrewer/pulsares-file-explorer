@@ -14,6 +14,7 @@ import (
 	"pulsares-file-explorer/internal/tree"
 	"pulsares-file-explorer/internal/vfs"
 	"pulsares-file-explorer/internal/vfs/local"
+	"pulsares-file-explorer/internal/watch"
 )
 
 type App struct {
@@ -25,6 +26,7 @@ type App struct {
 	terminal *terminal.Service
 	thumbs   *thumbs.Service
 	search   *search.Service
+	watch    *watch.Service
 	storage  *storage.DB
 }
 
@@ -63,6 +65,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.listing = listing.NewManager(a.fs, emitter)
 	a.ops = ops.NewManager(a.storage, emitter)
 	a.search = search.New(a.storage, emitter)
+	a.watch = watch.New(0, 0, emitter)
 	if a.terminal == nil {
 		a.terminal = terminal.New(emitter)
 	} else {
@@ -74,6 +77,9 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 func (a *App) Shutdown(ctx context.Context) {
+	if a.watch != nil {
+		a.watch.Close()
+	}
 	if a.storage != nil {
 		a.storage.Close()
 	}
@@ -120,6 +126,9 @@ func (a *App) ListDirectory(tabID string, requestID string, path string) {
 	resolved := platform.ExpandPath(path)
 	if a.storage != nil {
 		_ = a.storage.RecordVisit(resolved)
+	}
+	if a.watch != nil {
+		a.watch.Watch(resolved)
 	}
 	loc := vfs.Location{
 		Provider: "local",
@@ -407,6 +416,32 @@ func (a *App) LoadSession() string {
 
 func (a *App) OpenPath(path string) error {
 	return platform.OpenPath(path)
+}
+
+func (a *App) SetWatchedPaths(paths []string) {
+	if a.watch != nil {
+		a.watch.SetWatchedPaths(paths)
+	}
+}
+
+func (a *App) GetItemProperties(path string) (platform.ItemProperties, error) {
+	return platform.GetItemProperties(path)
+}
+
+func (a *App) OpenWithDialog(path string) error {
+	return platform.OpenWithDialog(path)
+}
+
+func (a *App) OpenExternalTerminal(dirPath string) error {
+	return platform.OpenExternalTerminal(dirPath)
+}
+
+func (a *App) RevealInSystemExplorer(path string) error {
+	return platform.RevealInSystemExplorer(path)
+}
+
+func (a *App) EjectDrive(drivePath string) error {
+	return platform.EjectDrive(drivePath)
 }
 
 func (a *App) GetDrives() []platform.DriveInfo {

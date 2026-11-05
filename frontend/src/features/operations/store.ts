@@ -3,6 +3,7 @@ import {
   JobSnapshot,
   JournalEntry,
   ConflictPolicy,
+  ItemProperties,
   createFolder,
   createFile,
   renameItem,
@@ -15,6 +16,8 @@ import {
   redoOperation,
   listJobs,
   listJournal,
+  getItemProperties,
+  openWithDialog,
   subscribeEvent,
 } from '../../lib/wails';
 import { useBrowserStore } from '../browser/store';
@@ -37,11 +40,19 @@ interface OperationsState {
   promptTargetPath: string;
   promptInitialValue: string;
 
+  propertiesOpen: boolean;
+  propertiesLoading: boolean;
+  propertiesData: ItemProperties | null;
+
   setPanelOpen: (open: boolean) => void;
   toggleVerifyHash: () => void;
   openPrompt: (kind: PromptDialogKind, targetPath?: string, initialValue?: string) => void;
   closePrompt: () => void;
   submitPrompt: (value?: string) => Promise<void>;
+
+  openProperties: (targetPath?: string) => Promise<void>;
+  closeProperties: () => void;
+  openSelectedWithDialog: () => Promise<void>;
 
   copySelection: () => void;
   cutSelection: () => void;
@@ -71,8 +82,38 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
   promptTargetPath: '',
   promptInitialValue: '',
 
+  propertiesOpen: false,
+  propertiesLoading: false,
+  propertiesData: null,
+
   setPanelOpen: (open: boolean) => set({ panelOpen: open }),
   toggleVerifyHash: () => set((s) => ({ verifyHash: !s.verifyHash })),
+
+  openProperties: async (targetPath) => {
+    const browser = useBrowserStore.getState();
+    const selected = Array.from(browser.selectedPaths);
+    const resolved = targetPath || selected[0] || browser.currentPath;
+    if (!resolved) return;
+
+    set({ propertiesOpen: true, propertiesLoading: true, propertiesData: null });
+    try {
+      const data = await getItemProperties(resolved);
+      set({ propertiesData: data, propertiesLoading: false });
+    } catch {
+      set({ propertiesLoading: false });
+    }
+  },
+
+  closeProperties: () => {
+    set({ propertiesOpen: false, propertiesData: null, propertiesLoading: false });
+  },
+
+  openSelectedWithDialog: async () => {
+    const selected = Array.from(useBrowserStore.getState().selectedPaths);
+    if (selected.length > 0) {
+      await openWithDialog(selected[0]);
+    }
+  },
 
   openPrompt: (kind, targetPath = '', initialValue = '') => {
     set({

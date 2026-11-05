@@ -76,3 +76,4 @@ func TestSearch_GlobRegexContentAndSQLiteIndex(t *testing.T) {
 		t.Fatalf("expected indexed match README.md, got %+v (err=%v)", indexedResults, err)
 	}
 }
+

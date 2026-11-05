@@ -189,6 +189,17 @@
     "file": "Arquivo",
     "symlink": "Atalho"
   },
+  "os": {
+    "propertiesTitle": "Propriedades do Item",
+    "propertiesShortcut": "Propriedades (Alt+Enter)",
+    "location": "Localização",
+    "permissions": "Permissões / Atributos",
+    "readOnly": "Somente leitura",
+    "openWith": "Abrir com...",
+    "openExternalTerminal": "Abrir no terminal externo",
+    "revealInSystem": "Mostrar no explorador nativo",
+    "ejectDrive": "Ejetar unidade removível"
+  },
   "settings": {
     "title": "Configurações",
     "language": "Idioma",

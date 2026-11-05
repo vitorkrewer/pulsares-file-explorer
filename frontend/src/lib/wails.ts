@@ -219,6 +219,28 @@ export interface JournalEntry {
   createdAt: string;
 }
 
+export interface ItemProperties {
+  name: string;
+  path: string;
+  parentDir: string;
+  kind: 'file' | 'folder' | 'symlink';
+  extension: string;
+  size: number;
+  fileCount: number;
+  folderCount: number;
+  modifiedAt: number;
+  permissions: string;
+  isReadOnly: boolean;
+  isHidden: boolean;
+  symlinkTarget?: string;
+  sha256?: string;
+}
+
+export interface WatchChangeEvent {
+  path: string;
+  timestamp: number;
+}
+
 // Declaração de objetos injetados pelo Wails runtime
 declare global {
   interface Window {
@@ -274,6 +296,12 @@ declare global {
           SaveSession: (data: string) => Promise<void>;
           LoadSession: () => Promise<string>;
           OpenPath: (path: string) => Promise<void>;
+          SetWatchedPaths: (paths: string[]) => Promise<void>;
+          GetItemProperties: (path: string) => Promise<ItemProperties>;
+          OpenWithDialog: (path: string) => Promise<void>;
+          OpenExternalTerminal: (dirPath: string) => Promise<void>;
+          RevealInSystemExplorer: (path: string) => Promise<void>;
+          EjectDrive: (drivePath: string) => Promise<void>;
           GetDrives: () => Promise<DriveInfo[]>;
           GetSetting: (key: string) => Promise<string>;
           SetSetting: (key: string, val: string) => Promise<void>;
@@ -635,6 +663,56 @@ export async function openPath(path: string): Promise<void> {
     return window.go!.app.App.OpenPath(path);
   }
   console.log('[Wails Mock] OpenPath', path);
+}
+
+export async function setWatchedPaths(paths: string[]): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.SetWatchedPaths(paths);
+  }
+}
+
+export async function getItemProperties(path: string): Promise<ItemProperties> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.GetItemProperties(path);
+  }
+  return {
+    name: path.split(/[/\\]/).pop() || path,
+    path,
+    parentDir: path,
+    kind: 'file',
+    extension: '',
+    size: 0,
+    fileCount: 0,
+    folderCount: 0,
+    modifiedAt: Date.now(),
+    permissions: '-rw-r--r--',
+    isReadOnly: false,
+    isHidden: false,
+  };
+}
+
+export async function openWithDialog(path: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.OpenWithDialog(path);
+  }
+}
+
+export async function openExternalTerminal(dirPath: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.OpenExternalTerminal(dirPath);
+  }
+}
+
+export async function revealInSystemExplorer(path: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.RevealInSystemExplorer(path);
+  }
+}
+
+export async function ejectDrive(drivePath: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.EjectDrive(drivePath);
+  }
 }
 
 export async function saveSetting(key: string, val: string): Promise<void> {

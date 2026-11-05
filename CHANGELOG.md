@@ -2,6 +2,19 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [0.8.0] - 2026-11-05
+
+### Adicionado
+
+- Serviço `internal/watch` com monitoramento de diretórios e debounce configurável (`watch:changed`), atualizando automaticamente a pasta visível quando arquivos ou pastas são criados, modificados ou removidos externamente.
+- Integração nativa com o sistema operacional em `internal/platform`: cálculo completo de propriedades de arquivos e pastas (`GetItemProperties` com contagem recursiva de arquivos/subpastas, tamanho total, permissões, atributos e checksum SHA-256), seletor nativo **Abrir com…** (`OpenWithDialog`), abertura de **Terminal externo do sistema** (`OpenExternalTerminal`), **Mostrar no explorador nativo** (`RevealInSystemExplorer`) e **Ejeção segura de unidades removíveis** (`EjectDrive`).
+- Modal de **Propriedades do Item/Pasta** (`Alt+Enter` ou botão na barra de ferramentas) com ações rápidas de integração com o SO e botão de ejeção de unidades removíveis na `Sidebar`.
+- Seletor de extensões de arquivo com chips de acesso rápido no modal de **Novo arquivo**.
+
+### Modificado
+
+- Compactada a barra de ferramentas (`OperationsToolbar`) exibindo apenas ícones para **Nova pasta**, **Novo arquivo**, **Terminal** e **Fila de jobs**, além de tornar a **Barra de visualização** recolhível e desativada por padrão na inicialização para eliminar scroll horizontal em telas menores.
+
 ## [0.7.0] - 2026-11-05
 
 ### Adicionado

@@ -6,6 +6,7 @@ import {
   subscribeEvent,
   ListingBatchEvent,
   ListingDoneEvent,
+  WatchChangeEvent,
   saveSession,
 } from '../../lib/wails';
 
@@ -777,9 +778,20 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       });
     });
 
+    const unsubWatch = subscribeEvent<WatchChangeEvent>('watch:changed', (event) => {
+      const { currentPath, isLoading } = get();
+      if (!currentPath || isLoading || !event?.path) return;
+      const normCurr = currentPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      const normEv = event.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      if (normCurr === normEv) {
+        get().refresh();
+      }
+    });
+
     return () => {
       unsubBatch();
       unsubDone();
+      unsubWatch();
     };
   },
 }));

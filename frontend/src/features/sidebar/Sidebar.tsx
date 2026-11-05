@@ -8,12 +8,14 @@ import {
   Clock,
   ChevronDown,
   ChevronRight,
+  Unplug,
   X,
 } from 'lucide-react';
 import { useFolderTreeStore } from './folder-tree/store';
 import { FolderTree } from './folder-tree/FolderTree';
 import { useBrowserStore, getTabLabel } from '../browser/store';
 import { formatBytes } from '../../i18n/format';
+import { ejectDrive } from '../../lib/wails';
 
 export const Sidebar: React.FC = () => {
   const { t, i18n } = useTranslation('common');
@@ -27,6 +29,7 @@ export const Sidebar: React.FC = () => {
     setSidebarWidth,
     toggleFollowActiveTab,
     loadRoots,
+    refreshSidebarMeta,
     toggleFavorite,
   } = useFolderTreeStore();
   const { navigateTo, newTab, currentPath } = useBrowserStore();
@@ -198,7 +201,20 @@ export const Sidebar: React.FC = () => {
               >
                 <div style={styles.driveTop}>
                   <HardDrive size={13} style={{ color: 'var(--text-secondary)' }} />
-                  <span style={styles.driveLabel}>{d.label || d.path}</span>
+                  <span style={{ ...styles.driveLabel, flex: 1 }}>{d.label || d.path}</span>
+                  {d.isRemovable && (
+                    <button
+                      type="button"
+                      style={styles.removeBtn}
+                      title={t('os.ejectDrive')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void ejectDrive(d.path).then(() => refreshSidebarMeta());
+                      }}
+                    >
+                      <Unplug size={11} />
+                    </button>
+                  )}
                 </div>
                 {total > 0 && (
                   <>
