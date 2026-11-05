@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, FileCode2 } from 'lucide-react';
 import { usePreviewStore } from './store';
 import { useBrowserStore } from '../browser/store';
+import { useEditorStore } from '../editor/store';
 import { formatBytes, formatDate } from '../../i18n/format';
 import { openPath, PreviewData } from '../../lib/wails';
 
@@ -57,7 +58,33 @@ const PreviewBody: React.FC<{
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Metadados do item */}
       <div style={styles.metaBar}>
-        <div style={{ fontWeight: 600, fontSize: 13, wordBreak: 'break-all' }}>{data.name}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+          <div style={{ fontWeight: 600, fontSize: 13, wordBreak: 'break-all' }}>{data.name}</div>
+          {(data.kind === 'markdown' || data.kind === 'code' || data.kind === 'text') && (
+            <button
+              type="button"
+              onClick={() => void useEditorStore.getState().openFileInEditor(data.path)}
+              title="Editar no Studio Editor (Monaco)"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 4,
+                border: '1px solid var(--accent-primary)',
+                backgroundColor: 'var(--accent-subtle)',
+                color: 'var(--accent-text)',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <FileCode2 size={12} />
+              <span>Editar</span>
+            </button>
+          )}
+        </div>
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
           {data.kind === 'folder'
             ? t('preview.folderItems', { count: data.childCount ?? 0 })

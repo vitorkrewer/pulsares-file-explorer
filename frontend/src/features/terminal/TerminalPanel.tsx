@@ -7,6 +7,7 @@ import {
   TerminalDataEvent,
   TerminalExitEvent,
   openPath,
+  terminalAutocomplete,
 } from '../../lib/wails';
 
 interface PaneViewProps {
@@ -36,6 +37,8 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
   const [cmdHistory, setCmdHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState<number>(-1);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [completionMatches, setCompletionMatches] = useState<string[]>([]);
+  const [completionIdx, setCompletionIdx] = useState<number>(-1);
 
   useEffect(() => {
     if (outputRef.current) {
@@ -65,6 +68,43 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
   }, [session.id, fontSize, resizeSession]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (
+        completionMatches.length > 0 &&
+        completionIdx >= 0 &&
+        session.inputDraft === completionMatches[completionIdx]
+      ) {
+        const nextIdx = e.shiftKey
+          ? (completionIdx - 1 + completionMatches.length) % completionMatches.length
+          : (completionIdx + 1) % completionMatches.length;
+        setCompletionIdx(nextIdx);
+        setInputDraft(session.id, completionMatches[nextIdx]);
+        return;
+      }
+
+      void (async () => {
+        const matches = await terminalAutocomplete(
+          session.id,
+          session.cwd,
+          session.inputDraft
+        );
+        if (matches && matches.length > 0) {
+          setCompletionMatches(matches);
+          setCompletionIdx(0);
+          setInputDraft(session.id, matches[0]);
+        }
+      })();
+      return;
+    }
+
+    if (e.key === 'Escape' && completionMatches.length > 0) {
+      e.preventDefault();
+      setCompletionMatches([]);
+      setCompletionIdx(-1);
+      return;
+    }
+
     if (e.key === 'Enter') {
       e.preventDefault();
       const cmd = session.inputDraft;
@@ -72,6 +112,8 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
         setCmdHistory((prev) => [...prev.slice(-49), cmd]);
       }
       setHistoryIdx(-1);
+      setCompletionMatches([]);
+      setCompletionIdx(-1);
       setInputDraft(session.id, '');
       void sendInput(session.id, `${cmd}\r\n`);
       return;
@@ -243,6 +285,54 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
         )}
       </div>
 
+      {completionMatches.length > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 12px',
+            borderTop: '1px solid var(--border-subtle)',
+            backgroundColor: 'var(--bg-subtle)',
+            overflowX: 'auto',
+            fontSize: '11px',
+          }}
+        >
+          <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
+            Tab ({completionIdx + 1}/{completionMatches.length}):
+          </span>
+          {completionMatches.slice(0, 18).map((cand, idx) => {
+            const label = cand.trim().split(/\s+/).pop() || cand;
+            const active = idx === completionIdx;
+            return (
+              <button
+                key={`${cand}-${idx}`}
+                type="button"
+                onClick={() => {
+                  setCompletionIdx(idx);
+                  setInputDraft(session.id, cand);
+                }}
+                style={{
+                  padding: '1px 6px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: active
+                    ? '1px solid var(--accent-primary)'
+                    : '1px solid var(--border-subtle)',
+                  backgroundColor: active ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+                  color: active ? 'var(--accent-text)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div
         style={{
           display: 'flex',
@@ -258,7 +348,11 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
           type="text"
           value={session.inputDraft}
           disabled={session.exited}
-          onChange={(e) => setInputDraft(session.id, e.target.value)}
+          onChange={(e) => {
+            setCompletionMatches([]);
+            setCompletionIdx(-1);
+            setInputDraft(session.id, e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           placeholder={t('terminal.inputPlaceholder')}
           aria-label={t('terminal.inputPlaceholder')}

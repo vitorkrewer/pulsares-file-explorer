@@ -379,10 +379,197 @@ func (s *Service) Write(id string, data []byte) error {
 		return errors.New("terminal session closed")
 	}
 	stdin := sess.stdin
+	currentCwd := sess.cwd
 	sess.mu.Unlock()
+
+	if nextCwd := detectCdTarget(currentCwd, string(data)); nextCwd != "" {
+		sess.mu.Lock()
+		sess.cwd = nextCwd
+		sess.mu.Unlock()
+	}
 
 	_, err := stdin.Write(data)
 	return err
+}
+
+func detectCdTarget(baseCwd string, rawInput string) string {
+	line := strings.TrimSpace(rawInput)
+	if line == "" || !strings.ContainsAny( rawInput, "\r\n") {
+		return ""
+	}
+	lower := strings.ToLower(line)
+	var arg string
+	switch {
+	case strings.HasPrefix(lower, "cd /d "):
+		arg = strings.TrimSpace(line[6:])
+	case strings.HasPrefix(lower, "cd -- "):
+		arg = strings.TrimSpace(line[6:])
+	case strings.HasPrefix(lower, "cd "):
+		arg = strings.TrimSpace(line[3:])
+	case strings.HasPrefix(lower, "set-location -literalpath "):
+		arg = strings.TrimSpace(line[26:])
+	case strings.HasPrefix(lower, "set-location "):
+		arg = strings.TrimSpace(line[13:])
+	case strings.HasPrefix(lower, "sl "):
+		arg = strings.TrimSpace(line[3:])
+	default:
+		return ""
+	}
+	arg = strings.Trim(arg, `"'`)
+	if arg == "" {
+		return ""
+	}
+	if arg == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
+	}
+	target := arg
+	if !filepath.IsAbs(target) && baseCwd != "" {
+		target = filepath.Join(baseCwd, target)
+	}
+	target = filepath.Clean(target)
+	if info, err := os.Stat(target); err == nil && info.IsDir() {
+		return target
+	}
+	return ""
+}
+
+// Autocomplete sugere complementos de linha de comando (arquivos, pastas e comandos comuns) para o Tab no terminal.
+func (s *Service) Autocomplete(id string, cwdFallback string, line string) ([]string, error) {
+	s.mu.RLock()
+	sess, ok := s.sessions[id]
+	s.mu.RUnlock()
+
+	cwd := strings.TrimSpace(cwdFallback)
+	if ok {
+		sess.mu.Lock()
+		if strings.TrimSpace(sess.cwd) != "" {
+			cwd = sess.cwd
+		}
+		sess.mu.Unlock()
+	}
+	if cwd == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			cwd = home
+		} else {
+			cwd = "."
+		}
+	}
+
+	prefix, token, quoteChar := splitLastToken(line)
+	cleanToken := token
+
+	sep := string(os.PathSeparator)
+	if strings.Contains(cleanToken, "/") && !strings.Contains(cleanToken, `\`) {
+		sep = "/"
+	}
+
+	var dirPart, filePrefix string
+	lastSlash := strings.LastIndexAny(cleanToken, `/\`)
+	if lastSlash >= 0 {
+		dirPart = cleanToken[:lastSlash+1]
+		filePrefix = cleanToken[lastSlash+1:]
+	} else {
+		dirPart = ""
+		filePrefix = cleanToken
+	}
+
+	searchDir := cwd
+	if dirPart != "" {
+		expandedDir := dirPart
+		if strings.HasPrefix(expandedDir, "~") {
+			if home, err := os.UserHomeDir(); err == nil {
+				expandedDir = filepath.Join(home, expandedDir[1:])
+			}
+		}
+		if filepath.IsAbs(expandedDir) || (runtime.GOOS == "windows" && strings.HasPrefix(expandedDir, `\`)) {
+			searchDir = filepath.Clean(expandedDir)
+		} else {
+			searchDir = filepath.Join(cwd, expandedDir)
+		}
+	}
+
+	var candidates []string
+
+	// Se estiver no primeiro token e sem separador de diretório, sugere também comandos frequentes do shell
+	if strings.TrimSpace(prefix) == "" && dirPart == "" && filePrefix != "" {
+		commonCmds := []string{
+			"cd", "ls", "dir", "cls", "clear", "pwd", "echo", "cat", "type",
+			"mkdir", "rmdir", "rm", "del", "cp", "copy", "mv", "move",
+			"git", "go", "npm", "npx", "pnpm", "yarn", "node", "python",
+			"pytest", "cargo", "docker", "kubectl", "code", "ssh", "scp", "curl", "tar", "zip",
+		}
+		lowerPref := strings.ToLower(filePrefix)
+		for _, cmdName := range commonCmds {
+			if strings.HasPrefix(cmdName, lowerPref) && cmdName != lowerPref {
+				candidates = append(candidates, prefix+cmdName+" ")
+			}
+		}
+	}
+
+	entries, err := os.ReadDir(searchDir)
+	if err == nil {
+		lowerFilePref := strings.ToLower(filePrefix)
+		for _, entry := range entries {
+			name := entry.Name()
+			if !strings.HasPrefix(strings.ToLower(name), lowerFilePref) {
+				continue
+			}
+			completedPath := dirPart + name
+			if entry.IsDir() {
+				completedPath += sep
+			}
+			needsQuotes := strings.Contains(completedPath, " ")
+			var formattedToken string
+			if quoteChar != 0 {
+				formattedToken = string(quoteChar) + completedPath + string(quoteChar)
+			} else if needsQuotes {
+				formattedToken = `"` + completedPath + `"`
+			} else {
+				formattedToken = completedPath
+			}
+			candidates = append(candidates, prefix+formattedToken)
+			if len(candidates) >= 60 {
+				break
+			}
+		}
+	}
+
+	return candidates, nil
+}
+
+func splitLastToken(line string) (prefix string, token string, quoteChar byte) {
+	if line == "" {
+		return "", "", 0
+	}
+	inQuote := byte(0)
+	tokenStart := 0
+	for i := 0; i < len(line); i++ {
+		ch := line[i]
+		if inQuote != 0 {
+			if ch == inQuote {
+				inQuote = 0
+			}
+			continue
+		}
+		if ch == '"' || ch == '\'' {
+			inQuote = ch
+			tokenStart = i
+			continue
+		}
+		if ch == ' ' || ch == '\t' {
+			tokenStart = i + 1
+		}
+	}
+	prefix = line[:tokenStart]
+	rawToken := line[tokenStart:]
+	if len(rawToken) > 0 && (rawToken[0] == '"' || rawToken[0] == '\'') {
+		quoteChar = rawToken[0]
+		rawToken = strings.TrimPrefix(rawToken, string(quoteChar))
+		rawToken = strings.TrimSuffix(rawToken, string(quoteChar))
+	}
+	return prefix, rawToken, quoteChar
 }
 
 // Resize atualiza as dimensões lógicas da sessão do terminal.

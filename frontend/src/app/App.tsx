@@ -21,7 +21,13 @@ import { useTerminalStore } from '../features/terminal/store';
 import { usePreviewStore } from '../features/preview/store';
 import { useSearchStore } from '../features/search/store';
 import { useProductivityStore } from '../features/productivity/store';
-import { getInitialState, enqueueOperation } from '../lib/wails';
+import { useEditorStore } from '../features/editor/store';
+import { CodeEditorModal } from '../features/editor/CodeEditorModal';
+import {
+  FileContextMenu,
+  ContextMenuTarget,
+} from '../features/context-menu/FileContextMenu';
+import { Entry, getInitialState, enqueueOperation } from '../lib/wails';
 import { resolveLanguage } from '../i18n/config';
 
 export const App: React.FC = () => {
@@ -84,7 +90,17 @@ export const App: React.FC = () => {
   const { toggleDrawer: toggleSearchDrawer } = useSearchStore();
   const { togglePalette, openBatchRename, loadTags } = useProductivityStore();
   const [theme, setTheme] = useState<string>('dark');
+  const [contextMenuTarget, setContextMenuTarget] = useState<ContextMenuTarget | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
+
+  // Bloqueia o menu de contexto padrão do navegador/WebView2 globalmente
+  useEffect(() => {
+    const suppressNativeBrowserMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('contextmenu', suppressNativeBrowserMenu);
+    return () => window.removeEventListener('contextmenu', suppressNativeBrowserMenu);
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-density', density);
@@ -273,6 +289,17 @@ export const App: React.FC = () => {
       if (key === 'b') {
         e.preventDefault();
         toggleSidebar();
+      } else if (key === 'e') {
+        e.preventDefault();
+        const firstSelected = Array.from(selectedPaths)[0];
+        const entry = useBrowserStore
+          .getState()
+          .entries.find((it) => it.location.path === firstSelected);
+        if (entry && entry.kind !== 'dir') {
+          void useEditorStore.getState().openFileInEditor(entry.location.path);
+        } else {
+          useEditorStore.getState().openNewUntitledTab(currentPath, 'markdown');
+        }
       } else if (key === 'r') {
         e.preventDefault();
         refresh();
@@ -427,6 +454,60 @@ export const App: React.FC = () => {
     }
   };
 
+  const handlePrimaryContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFocusedPane('primary');
+
+    const { entries: currentEntries, selectedPaths: currentSel, selectItem } =
+      useBrowserStore.getState();
+    const byPath = new Map<string, Entry>();
+    const byName = new Map<string, Entry>();
+    for (const item of currentEntries) {
+      byPath.set(item.location.path, item);
+      byName.set(item.name, item);
+    }
+
+    let matched: Entry | null = null;
+    let node = e.target as HTMLElement | null;
+    const stopNode = e.currentTarget;
+
+    while (node && node !== stopNode) {
+      const attrPath = node.getAttribute('data-entry-path');
+      if (attrPath && byPath.has(attrPath)) {
+        matched = byPath.get(attrPath)!;
+        break;
+      }
+
+      if (node.children.length <= 6) {
+        const directText = node.textContent?.trim();
+        if (directText && byName.has(directText)) {
+          matched = byName.get(directText)!;
+          break;
+        }
+        for (let i = 0; i < node.children.length; i++) {
+          const childText = node.children[i]?.textContent?.trim();
+          if (childText && byName.has(childText)) {
+            matched = byName.get(childText)!;
+            break;
+          }
+        }
+        if (matched) break;
+      }
+      node = node.parentElement;
+    }
+
+    if (matched && !currentSel.has(matched.location.path)) {
+      selectItem(matched.location.path, false);
+    }
+
+    setContextMenuTarget({
+      x: e.clientX,
+      y: e.clientY,
+      entry: matched,
+    });
+  };
+
   return (
     <div style={styles.appRoot}>
       <TabBar />
@@ -445,6 +526,7 @@ export const App: React.FC = () => {
             >
               <div
                 onClick={() => setFocusedPane('primary')}
+                onContextMenu={handlePrimaryContextMenu}
                 draggable={selectedPaths.size > 0}
                 onDragStart={(e) => {
                   if (selectedPaths.size > 0) {
@@ -485,6 +567,11 @@ export const App: React.FC = () => {
       </div>
       <SearchDrawer />
       <ProductivityModals />
+      <CodeEditorModal />
+      <FileContextMenu
+        target={contextMenuTarget}
+        onClose={() => setContextMenuTarget(null)}
+      />
       <OperationsPanel />
       <StatusBar />
     </div>

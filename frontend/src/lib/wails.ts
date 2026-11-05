@@ -316,6 +316,15 @@ export interface RemoteProfile {
   createdAt?: string;
 }
 
+export interface TextFilePayload {
+  path: string;
+  name: string;
+  content: string;
+  lineEnding: 'LF' | 'CRLF';
+  encoding: string;
+  size: number;
+}
+
 // Declaração de objetos injetados pelo Wails runtime
 declare global {
   interface Window {
@@ -368,6 +377,9 @@ declare global {
           TerminalHasRunningChildren: (sessionId: string) => Promise<boolean>;
           TerminalChangeDir: (sessionId: string, path: string) => Promise<void>;
           TerminalQuotePaths: (sessionId: string, paths: string[]) => Promise<string>;
+          TerminalAutocomplete: (sessionId: string, cwdFallback: string, line: string) => Promise<string[]>;
+          ReadTextFile: (path: string) => Promise<TextFilePayload>;
+          WriteTextFile: (path: string, content: string) => Promise<void>;
           SaveSession: (data: string) => Promise<void>;
           LoadSession: () => Promise<string>;
           OpenPath: (path: string) => Promise<void>;
@@ -729,6 +741,38 @@ export async function terminalQuotePaths(sessionId: string, paths: string[]): Pr
     return window.go!.app.App.TerminalQuotePaths(sessionId, paths);
   }
   return paths.map((p) => `'${p.replace(/'/g, "''")}'`).join(' ');
+}
+
+export async function terminalAutocomplete(
+  sessionId: string,
+  cwdFallback: string,
+  line: string
+): Promise<string[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.TerminalAutocomplete(sessionId, cwdFallback, line);
+    return res || [];
+  }
+  return [];
+}
+
+export async function readTextFile(path: string): Promise<TextFilePayload> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.ReadTextFile(path);
+  }
+  return {
+    path,
+    name: path.split(/[/\\]/).pop() || path,
+    content: '',
+    lineEnding: 'LF',
+    encoding: 'UTF-8',
+    size: 0,
+  };
+}
+
+export async function writeTextFile(path: string, content: string): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.WriteTextFile(path, content);
+  }
 }
 
 export async function getDrives(): Promise<DriveInfo[]> {

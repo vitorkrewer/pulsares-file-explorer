@@ -29,6 +29,7 @@ import {
   Filter,
   Info,
   Command,
+  FileCode2,
   X,
 } from 'lucide-react';
 import { useOperationsStore } from './store';
@@ -39,6 +40,7 @@ import { useTerminalStore } from '../terminal/store';
 import { usePreviewStore, GroupByOption, GridThumbSize } from '../preview/store';
 import { useSearchStore } from '../search/store';
 import { useProductivityStore } from '../productivity/store';
+import { useEditorStore } from '../editor/store';
 
 export const OperationsToolbar: React.FC = () => {
   const { t } = useTranslation('common');
@@ -203,6 +205,26 @@ export const OperationsToolbar: React.FC = () => {
           aria-label={t('os.propertiesShortcut')}
         >
           <Info size={14} />
+        </button>
+
+        <button
+          type="button"
+          style={styles.btn}
+          onClick={() => {
+            const firstSelected = Array.from(selectedPaths)[0];
+            const entry = useBrowserStore
+              .getState()
+              .entries.find((e) => e.location.path === firstSelected);
+            if (entry && entry.kind !== 'dir') {
+              void useEditorStore.getState().openFileInEditor(entry.location.path);
+            } else {
+              useEditorStore.getState().openNewUntitledTab(currentPath, 'markdown');
+            }
+          }}
+          title="Pulsares Studio Editor (Monaco)"
+          aria-label="Pulsares Studio Editor (Monaco)"
+        >
+          <FileCode2 size={14} />
         </button>
 
         {layoutMode !== 'single' && (

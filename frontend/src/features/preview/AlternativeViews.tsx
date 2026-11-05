@@ -183,6 +183,7 @@ export const AlternativeViews: React.FC = () => {
                 return (
                   <div
                     key={entry.location.path}
+                    data-entry-path={entry.location.path}
                     onClick={(e) => selectItem(entry.location.path, e.ctrlKey || e.metaKey)}
                     onDoubleClick={() => handleOpen(entry)}
                     style={{
@@ -229,6 +230,7 @@ export const AlternativeViews: React.FC = () => {
                 return (
                   <div
                     key={entry.location.path}
+                    data-entry-path={entry.location.path}
                     onClick={(e) => selectItem(entry.location.path, e.ctrlKey || e.metaKey)}
                     onDoubleClick={() => handleOpen(entry)}
                     style={{

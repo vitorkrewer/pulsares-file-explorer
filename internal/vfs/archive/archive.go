@@ -378,3 +378,4 @@ func extractTar(tarPath, destRoot string, gzipped bool) (int, error) {
 	}
 	return extracted, nil
 }
+

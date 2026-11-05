@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -161,5 +163,29 @@ func TestTerminalService_LifecycleResizeAndUTF8Output(t *testing.T) {
 	}
 	if err := svc.Kill(sessID); err != nil {
 		t.Fatalf("Kill failed: %v", err)
+	}
+}
+
+func TestAutocomplete_FilesDirsAndCommands(t *testing.T) {
+	tmp := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(tmp, "docs-api"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmp, "pasta com espacos"), 0o755)
+	_ = os.WriteFile(filepath.Join(tmp, "readme.md"), []byte("# Readme"), 0o644)
+
+	svc := New(nil)
+	matches, err := svc.Autocomplete("unknown-session", tmp, "cd doc")
+	if err != nil {
+		t.Fatalf("Autocomplete failed: %v", err)
+	}
+	if len(matches) != 1 || !strings.HasPrefix(matches[0], "cd docs-api") {
+		t.Fatalf("unexpected matches for 'cd doc': %+v", matches)
+	}
+
+	spacedMatches, err := svc.Autocomplete("unknown-session", tmp, "cd pas")
+	if err != nil {
+		t.Fatalf("Autocomplete spaced failed: %v", err)
+	}
+	if len(spacedMatches) != 1 || !strings.Contains(spacedMatches[0], `"pasta com espacos`) {
+		t.Fatalf("expected quoted spaced path, got: %+v", spacedMatches)
 	}
 }

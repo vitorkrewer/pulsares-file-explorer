@@ -68,3 +68,4 @@ func TestCreateListAndExtractZipAndTarGz(t *testing.T) {
 		t.Fatalf("expected safeJoinDest to block traversal path")
 	}
 }
+

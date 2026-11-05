@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"pulsares-file-explorer/internal/listing"
@@ -399,6 +402,49 @@ func (a *App) TerminalChangeDir(sessionID string, path string) error {
 
 func (a *App) TerminalQuotePaths(sessionID string, paths []string) (string, error) {
 	return a.terminal.QuotePathsForSession(sessionID, paths)
+}
+
+func (a *App) TerminalAutocomplete(sessionID string, cwdFallback string, line string) ([]string, error) {
+	return a.terminal.Autocomplete(sessionID, cwdFallback, line)
+}
+
+type TextFilePayload struct {
+	Path       string `json:"path"`
+	Name       string `json:"name"`
+	Content    string `json:"content"`
+	LineEnding string `json:"lineEnding"`
+	Encoding   string `json:"encoding"`
+	Size       int64  `json:"size"`
+}
+
+func (a *App) ReadTextFile(path string) (TextFilePayload, error) {
+	clean := filepath.Clean(path)
+	data, err := os.ReadFile(clean)
+	if err != nil {
+		return TextFilePayload{}, err
+	}
+	content := string(data)
+	lineEnding := "LF"
+	if strings.Contains(content, "\r\n") {
+		lineEnding = "CRLF"
+	}
+	return TextFilePayload{
+		Path:       clean,
+		Name:       filepath.Base(clean),
+		Content:    content,
+		LineEnding: lineEnding,
+		Encoding:   "UTF-8",
+		Size:       int64(len(data)),
+	}, nil
+}
+
+func (a *App) WriteTextFile(path string, content string) error {
+	clean := filepath.Clean(path)
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(clean); err == nil {
+		mode = info.Mode().Perm()
+	}
+	return os.WriteFile(clean, []byte(content), mode)
 }
 
 func (a *App) SaveSession(data string) error {
