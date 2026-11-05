@@ -1,0 +1,314 @@
+name: Release
+
+# Execução somente manual (Actions > Release > Run workflow).
+# Push de commits ou tags NÃO dispara release.
+#
+# A versão precisa ter uma seção "## [X.Y.Z] - AAAA-MM-DD" no CHANGELOG.md, que vira a nota
+# da release. Se o campo "version" ficar em branco, usa a versão mais recente do CHANGELOG.
+#
+# A release é publicada neste mesmo repositório com o GITHUB_TOKEN. Para publicar em um
+# repositório público separado, troque "repository"/"token" no job "publish" por um secret
+# com permissão "Contents: Read and write" limitada ao repositório de destino.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão sem o prefixo v, por exemplo 0.1.0. Em branco: usa a mais recente do CHANGELOG.md"
+        required: false
+        default: ""
+        type: string
+      prerelease:
+        description: "Publicar como pré-release"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  APP_NAME: Pulsares-Explorer
+  BIN_NAME: pulsares-explorer
+  DISPLAY_NAME: Pulsares Explorer
+  WAILS_VERSION: v2.16.0
+  NODE_VERSION: "22.x"
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  validate-release:
+    name: Validar versão e notas
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_VERSION#v}"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+            echo "Versão detectada no CHANGELOG.md: '$VERSION'"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Versão inválida: '$VERSION'. Use o formato X.Y.Z, por exemplo 0.1.0."
+            exit 1
+          fi
+          if ! awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+            END { if (!found) exit 1 }
+          ' CHANGELOG.md > RELEASE_NOTES.md; then
+            echo "::error::Seção ## [$VERSION] não encontrada no CHANGELOG.md."
+            exit 1
+          fi
+          if ! grep -q '[^[:space:]]' RELEASE_NOTES.md; then
+            echo "::error::A seção ## [$VERSION] do CHANGELOG.md está vazia."
+            exit 1
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+  quality:
+    name: Tipos, lint e testes
+    needs: validate-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Dependências Linux (CGO do Wails)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Frontend
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run lint
+          npm run i18n:check
+          npm test -- --run
+          npm run build
+
+      - name: Go
+        run: |
+          go vet -tags webkit2_41 ./...
+          go test -tags webkit2_41 ./...
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: [validate-release, quality]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            platform: windows/amd64
+            artifact: dist-windows-x64
+          - name: Linux x64
+            os: ubuntu-latest
+            platform: linux/amd64
+            artifact: dist-linux-x64
+          - name: macOS universal
+            os: macos-latest
+            platform: darwin/universal
+            artifact: dist-macos-universal
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Dependências Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Instalar Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Dependências do frontend
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      # Os bindings (frontend/wailsjs) não são versionados; o Wails os gera no build.
+      # A versão do binário vem do CHANGELOG validado, via ldflags.
+      - name: Build Windows
+        if: runner.os == 'Windows'
+        run: wails build -clean -trimpath -platform ${{ matrix.platform }} -webview2 download -ldflags "-X main.version=${{ needs.validate-release.outputs.version }}"
+
+      - name: Build Linux
+        if: runner.os == 'Linux'
+        run: wails build -clean -trimpath -platform ${{ matrix.platform }} -tags webkit2_41 -ldflags "-X main.version=${{ needs.validate-release.outputs.version }}"
+
+      - name: Build macOS
+        if: runner.os == 'macOS'
+        run: wails build -clean -trimpath -platform ${{ matrix.platform }} -ldflags "-X main.version=${{ needs.validate-release.outputs.version }}"
+
+      - name: Preparar artefato Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          $binary = Get-ChildItem "build/bin" -Filter *.exe | Select-Object -First 1
+          if (-not $binary) { throw "Executável do Windows não encontrado em build/bin" }
+          Copy-Item $binary.FullName "release-assets/$env:APP_NAME-Windows-x64.exe"
+
+      - name: Preparar artefatos Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          CLEAN_VER: ${{ needs.validate-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+
+          BIN_PATH=$(find build/bin -maxdepth 1 -type f ! -name "*.exe" -print -quit)
+          test -n "$BIN_PATH"
+          ICON=build/appicon.png
+
+          DESKTOP_ENTRY=$(printf "%s\n" \
+            "[Desktop Entry]" \
+            "Name=$DISPLAY_NAME" \
+            "Comment=Explorador de arquivos rápido, com abas e painel duplo." \
+            "Exec=$BIN_NAME %U" \
+            "Icon=$BIN_NAME" \
+            "Terminal=false" \
+            "Type=Application" \
+            "Categories=System;FileTools;FileManager;Utility;" \
+            "MimeType=inode/directory;" \
+            "StartupWMClass=$DISPLAY_NAME")
+
+          # 1. tar.gz
+          TAR_DIR="build-tar/$APP_NAME"
+          rm -rf build-tar && mkdir -p "$TAR_DIR"
+          install -m 755 "$BIN_PATH" "$TAR_DIR/$BIN_NAME"
+          cp "$ICON" "$TAR_DIR/$BIN_NAME.png"
+          tar -C build-tar -czf "release-assets/$APP_NAME-Linux-x64.tar.gz" "$APP_NAME"
+
+          # 2. .deb
+          DEB_ROOT="build-deb/$BIN_NAME"
+          rm -rf build-deb
+          mkdir -p "$DEB_ROOT/DEBIAN" "$DEB_ROOT/usr/bin" "$DEB_ROOT/usr/share/applications" \
+                   "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps"
+          install -m 755 "$BIN_PATH" "$DEB_ROOT/usr/bin/$BIN_NAME"
+          cp "$ICON" "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps/$BIN_NAME.png"
+          echo "$DESKTOP_ENTRY" > "$DEB_ROOT/usr/share/applications/$BIN_NAME.desktop"
+          printf "%s\n" \
+            "Package: $BIN_NAME" \
+            "Version: ${CLEAN_VER}" \
+            "Section: utils" \
+            "Priority: optional" \
+            "Architecture: amd64" \
+            "Maintainer: Vitor Krewer <47862173+vitorkrewer@users.noreply.github.com>" \
+            "Depends: libgtk-3-0, libwebkit2gtk-4.1-0" \
+            "Description: $DISPLAY_NAME" \
+            " Explorador de arquivos multiplataforma, rapido, com abas e painel duplo." \
+            > "$DEB_ROOT/DEBIAN/control"
+          dpkg-deb --build --root-owner-group "$DEB_ROOT" "release-assets/$APP_NAME-Linux-x64.deb"
+
+          # 3. AppImage
+          APPDIR="build-appimage/$APP_NAME.AppDir"
+          rm -rf build-appimage
+          mkdir -p "$APPDIR/usr/bin"
+          install -m 755 "$BIN_PATH" "$APPDIR/usr/bin/$BIN_NAME"
+          cp "$ICON" "$APPDIR/$BIN_NAME.png"
+          cp "$ICON" "$APPDIR/.DirIcon"
+          echo "$DESKTOP_ENTRY" > "$APPDIR/$BIN_NAME.desktop"
+          printf "%s\n" \
+            "#!/bin/sh" \
+            'HERE=$(dirname "$(readlink -f "$0")")' \
+            "exec \"\$HERE/usr/bin/$BIN_NAME\" \"\$@\"" \
+            > "$APPDIR/AppRun"
+          chmod +x "$APPDIR/AppRun"
+          curl -fsSL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool.AppImage
+          chmod +x appimagetool.AppImage
+          ./appimagetool.AppImage --appimage-extract > /dev/null
+          ARCH=x86_64 ./squashfs-root/AppRun "$APPDIR" "release-assets/$APP_NAME-Linux-x64.AppImage"
+
+      - name: Preparar artefato macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets build-mac
+          APP_PATH=$(find build/bin -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$APP_PATH"
+          cp -R "$APP_PATH" "build-mac/$DISPLAY_NAME.app"
+          ditto -c -k --sequesterRsrc --keepParent "build-mac/$DISPLAY_NAME.app" "release-assets/$APP_NAME-macOS-universal.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  publish:
+    name: Publicar release
+    needs: [validate-release, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: dist-*
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: notes
+
+      - name: Gerar SHA256SUMS
+        shell: bash
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.validate-release.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ env.DISPLAY_NAME }} v${{ needs.validate-release.outputs.version }}
+          body_path: notes/RELEASE_NOTES.md
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          files: release-assets/*

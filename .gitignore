@@ -1,0 +1,32 @@
+# Build
+build/bin/
+frontend/dist/
+frontend/wailsjs/
+frontend/node_modules/
+node_modules/
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Dados locais e segredos
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.env.*
+
+# Editores e SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Fixtures geradas para testes de desempenho
+tools/fixtures-out/
+tools/
+
