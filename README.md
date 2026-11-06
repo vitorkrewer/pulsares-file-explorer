@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://vitorkrewer.github.io/pulsares-file-explorer/"><img src="https://img.shields.io/badge/Site%20Oficial-GitHub%20Pages-informational?style=for-the-badge&logo=githubpages&logoColor=white" alt="Site Oficial" /></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versão-v1.1.0-blue?style=for-the-badge&logo=semver" alt="Versão v1.1.0" /></a>
   <img src="https://img.shields.io/badge/plataforma-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Plataformas Suportadas" />
   <img src="https://img.shields.io/badge/Wails-v2.11+-DF0000?style=for-the-badge&logo=wails&logoColor=white" alt="Wails v2" />
