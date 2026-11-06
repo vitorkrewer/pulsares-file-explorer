@@ -1,5 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  Terminal,
+  Plus,
+  Columns2,
+  Trash2,
+  Search,
+  FolderSync,
+  ArrowLeftRight,
+  Maximize2,
+  Minimize2,
+  X,
+  Eraser,
+  ExternalLink,
+  Folder,
+  Pencil,
+} from 'lucide-react';
 import { useTerminalStore, TerminalTabSession } from './store';
 import { useBrowserStore } from '../browser/store';
 import {
@@ -230,11 +246,12 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
               color: 'var(--accent-primary)',
               background: 'none',
               border: 'none',
-              textDecoration: 'underline',
+              display: 'inline-flex',
+              alignItems: 'center',
               cursor: 'pointer',
             }}
           >
-            ↗
+            <ExternalLink size={12} />
           </button>
         )}
         {winPathMatch && (
@@ -248,11 +265,12 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
               color: 'var(--accent-primary)',
               background: 'none',
               border: 'none',
-              textDecoration: 'underline',
+              display: 'inline-flex',
+              alignItems: 'center',
               cursor: 'pointer',
             }}
           >
-            📂
+            <Folder size={12} />
           </button>
         )}
       </div>
@@ -519,123 +537,67 @@ export const TerminalPanel: React.FC = () => {
         }}
       />
 
-      {/* Barra de cabeçalho do terminal */}
+      {/* Barra de cabeçalho limpa em linha única (estilo VS Code) */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '4px 10px',
+          height: '34px',
+          padding: '0 10px',
           borderBottom: '1px solid var(--border-subtle)',
+          backgroundColor: 'var(--bg-subtle)',
           gap: '8px',
-          flexWrap: 'wrap',
+          flexShrink: 0,
         }}
       >
-        {/* Abas de terminal */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflowX: 'auto' }}>
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              color: 'var(--text-secondary)',
-              marginRight: '6px',
-            }}
-          >
-            {t('terminal.title')}
-          </span>
+        {/* Esquerda: Título do Painel + Badge da Sessão Ativa */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Terminal size={14} style={{ color: 'var(--accent)' }} />
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--text-primary)',
+              }}
+            >
+              {t('terminal.title')}
+            </span>
+          </div>
 
-          {sessions.map((sess) => {
-            const isActive = sess.id === activeSession?.id;
-            return (
-              <div
-                key={sess.id}
-                onClick={() => setActiveTab(sess.id)}
-                onDoubleClick={() => {
-                  setEditingTabId(sess.id);
-                  setEditingTitle(sess.title);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '3px 8px',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  backgroundColor: isActive ? 'var(--bg-tertiary)' : 'transparent',
-                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  border: isActive
-                    ? '1px solid var(--accent-primary)'
-                    : '1px solid var(--border-subtle)',
-                }}
-              >
-                {editingTabId === sess.id ? (
-                  <input
-                    type="text"
-                    value={editingTitle}
-                    autoFocus
-                    onChange={(e) => setEditingTitle(e.target.value)}
-                    onBlur={() => {
-                      renameTab(sess.id, editingTitle);
-                      setEditingTabId(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        renameTab(sess.id, editingTitle);
-                        setEditingTabId(null);
-                      } else if (e.key === 'Escape') {
-                        setEditingTabId(null);
-                      }
-                    }}
-                    style={{
-                      width: '90px',
-                      fontSize: '12px',
-                      backgroundColor: 'var(--bg-primary)',
-                      color: 'var(--text-primary)',
-                      border: '1px solid var(--accent-primary)',
-                    }}
-                  />
-                ) : (
-                  <span>{sess.title}</span>
-                )}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void requestCloseTab(sess.id);
-                  }}
-                  title={t('terminal.closeTab')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
-                    fontSize: '11px',
-                    padding: '0 2px',
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            );
-          })}
+          {activeSession && (
+            <span
+              style={{
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+                padding: '1px 7px',
+                borderRadius: '999px',
+                backgroundColor: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                maxWidth: '280px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={activeSession.cwd}
+            >
+              {activeSession.title} • {activeSession.cwd}
+            </span>
+          )}
+        </div>
 
+        {/* Direita: Controles de criação, perfil e ações em linha única */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
           <button
             type="button"
             onClick={() => void createSession(currentPath || '/', defaultProfileId)}
             title={t('terminal.newTab')}
-            style={{
-              padding: '2px 8px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              fontSize: '12px',
-            }}
+            style={termActionBtnStyle}
           >
-            +
+            <Plus size={13} />
           </button>
 
           <select
@@ -644,12 +606,14 @@ export const TerminalPanel: React.FC = () => {
             aria-label={t('terminal.selectProfile')}
             title={t('terminal.selectProfile')}
             style={{
+              height: '24px',
               fontSize: '11px',
-              padding: '2px 6px',
+              padding: '0 6px',
               borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--border-subtle)',
-              backgroundColor: 'var(--bg-primary)',
+              backgroundColor: 'var(--bg-surface)',
               color: 'var(--text-secondary)',
+              cursor: 'pointer',
             }}
           >
             {profiles.map((p) => (
@@ -658,10 +622,16 @@ export const TerminalPanel: React.FC = () => {
               </option>
             ))}
           </select>
-        </div>
 
-        {/* Ações do painel do terminal */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div
+            style={{
+              width: '1px',
+              height: '14px',
+              backgroundColor: 'var(--border-subtle)',
+              margin: '0 2px',
+            }}
+          />
+
           {activeSession && (
             <button
               type="button"
@@ -669,16 +639,10 @@ export const TerminalPanel: React.FC = () => {
                 void changeDirectoryInSession(activeSession.id, currentPath || '/')
               }
               title={t('terminal.cdCurrentFolder')}
-              style={{
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border-subtle)',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '11px',
-              }}
+              style={termActionBtnStyle}
             >
-              📂 {t('terminal.cdCurrentFolder')}
+              <FolderSync size={13} />
+              <span>{t('terminal.cdCurrentFolder')}</span>
             </button>
           )}
 
@@ -687,15 +651,13 @@ export const TerminalPanel: React.FC = () => {
             onClick={() => setFollowOsc7(!followOsc7)}
             title={t('terminal.followOsc7')}
             style={{
-              padding: '2px 7px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: followOsc7 ? 'var(--bg-selected)' : 'var(--bg-primary)',
-              color: 'var(--text-secondary)',
-              fontSize: '11px',
+              ...termActionBtnStyle,
+              borderColor: followOsc7 ? 'var(--accent-primary)' : 'var(--border-subtle)',
+              color: followOsc7 ? 'var(--accent)' : 'var(--text-secondary)',
             }}
           >
-            ⇄ OSC7
+            <ArrowLeftRight size={12} />
+            <span>OSC7</span>
           </button>
 
           {sessions.length > 1 && (
@@ -704,15 +666,12 @@ export const TerminalPanel: React.FC = () => {
               onClick={() => toggleSplitWithTab()}
               title={t('terminal.splitTerminal')}
               style={{
-                padding: '2px 7px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border-subtle)',
-                backgroundColor: splitSession ? 'var(--bg-selected)' : 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '11px',
+                ...termActionBtnStyle,
+                borderColor: splitSession ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                color: splitSession ? 'var(--accent)' : 'var(--text-secondary)',
               }}
             >
-              ◫
+              <Columns2 size={13} />
             </button>
           )}
 
@@ -721,44 +680,27 @@ export const TerminalPanel: React.FC = () => {
             onClick={() => setSearchOpen(!searchOpen)}
             title={t('terminal.searchPlaceholder')}
             style={{
-              padding: '2px 7px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: searchOpen ? 'var(--bg-selected)' : 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              fontSize: '11px',
+              ...termActionBtnStyle,
+              borderColor: searchOpen ? 'var(--accent-primary)' : 'var(--border-subtle)',
+              color: searchOpen ? 'var(--accent)' : 'var(--text-secondary)',
             }}
           >
-            🔍
+            <Search size={13} />
           </button>
 
           <button
             type="button"
             onClick={() => setFontSize(fontSize - 1)}
-            title="A-"
-            style={{
-              padding: '2px 6px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: 'var(--bg-primary)',
-              color: 'var(--text-secondary)',
-              fontSize: '11px',
-            }}
+            title="Diminuir fonte (A-)"
+            style={termActionBtnStyle}
           >
             A-
           </button>
           <button
             type="button"
             onClick={() => setFontSize(fontSize + 1)}
-            title="A+"
-            style={{
-              padding: '2px 6px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: 'var(--bg-primary)',
-              color: 'var(--text-secondary)',
-              fontSize: '11px',
-            }}
+            title="Aumentar fonte (A+)"
+            style={termActionBtnStyle}
           >
             A+
           </button>
@@ -768,16 +710,9 @@ export const TerminalPanel: React.FC = () => {
               type="button"
               onClick={() => clearOutput(activeSession.id)}
               title={t('terminal.clearOutput')}
-              style={{
-                padding: '2px 7px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border-subtle)',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-secondary)',
-                fontSize: '11px',
-              }}
+              style={termActionBtnStyle}
             >
-              ⌫
+              <Eraser size={13} />
             </button>
           )}
 
@@ -785,32 +720,18 @@ export const TerminalPanel: React.FC = () => {
             type="button"
             onClick={toggleMaximized}
             title={maximized ? t('terminal.restorePanel') : t('terminal.maximizePanel')}
-            style={{
-              padding: '2px 7px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              fontSize: '11px',
-            }}
+            style={termActionBtnStyle}
           >
-            {maximized ? '🗗' : '⤢'}
+            {maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           </button>
 
           <button
             type="button"
             onClick={() => setPanelVisible(false)}
             title={t('terminal.hidePanel')}
-            style={{
-              padding: '2px 7px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              fontSize: '11px',
-            }}
+            style={termActionBtnStyle}
           >
-            ✕
+            <X size={13} />
           </button>
         </div>
       </div>
@@ -827,6 +748,7 @@ export const TerminalPanel: React.FC = () => {
             backgroundColor: 'var(--bg-tertiary)',
           }}
         >
+          <Search size={13} style={{ color: 'var(--text-muted)' }} />
           <input
             type="text"
             value={searchQuery}
@@ -854,56 +776,279 @@ export const TerminalPanel: React.FC = () => {
               border: 'none',
               color: 'var(--text-secondary)',
               cursor: 'pointer',
-              fontSize: '12px',
+              display: 'inline-flex',
+              alignItems: 'center',
             }}
           >
-            ✕
+            <X size={13} />
           </button>
         </div>
       )}
 
-      {/* Área das sessões (única ou dividida lado a lado) */}
+      {/* Corpo principal: Viewport do Terminal à esquerda + Lista Lateral de Sessões (estilo VS Code) à direita */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-        {activeSession ? (
-          <>
-            <TerminalViewport
-              session={activeSession}
-              fontSize={fontSize}
-              searchQuery={searchQuery}
-              onNavigatePath={(p) => void navigateTo(p)}
-            />
-            {splitSession && (
-              <>
-                <div
-                  style={{
-                    width: '1px',
-                    backgroundColor: 'var(--border-subtle)',
-                    flexShrink: 0,
-                  }}
-                />
-                <TerminalViewport
-                  session={splitSession}
-                  fontSize={fontSize}
-                  searchQuery={searchQuery}
-                  onNavigatePath={(p) => void navigateTo(p)}
-                />
-              </>
-            )}
-          </>
-        ) : (
+        {/* Área das sessões (única ou dividida lado a lado) */}
+        <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
+          {activeSession ? (
+            <>
+              <TerminalViewport
+                session={activeSession}
+                fontSize={fontSize}
+                searchQuery={searchQuery}
+                onNavigatePath={(p) => void navigateTo(p)}
+              />
+              {splitSession && (
+                <>
+                  <div
+                    style={{
+                      width: '1px',
+                      backgroundColor: 'var(--border-subtle)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <TerminalViewport
+                    session={splitSession}
+                    fontSize={fontSize}
+                    searchQuery={searchQuery}
+                    onNavigatePath={(p) => void navigateTo(p)}
+                  />
+                </>
+              )}
+            </>
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-muted)',
+                fontSize: '12px',
+              }}
+            >
+              {t('terminal.emptyState')}
+            </div>
+          )}
+        </div>
+
+        {/* Barra lateral direita de instâncias de terminais (padrão VS Code) */}
+        <aside
+          aria-label="Sessões do Terminal"
+          style={{
+            width: '215px',
+            flexShrink: 0,
+            borderLeft: '1px solid var(--border-subtle)',
+            backgroundColor: 'var(--bg-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            userSelect: 'none',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '5px 10px',
+              borderBottom: '1px solid var(--border-subtle)',
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              color: 'var(--text-muted)',
+            }}
+          >
+            <span>Sessões ({sessions.length})</span>
+            <button
+              type="button"
+              onClick={() => void createSession(currentPath || '/', defaultProfileId)}
+              title={t('terminal.newTab')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '2px',
+                borderRadius: '4px',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+              }}
+            >
+              <Plus size={13} />
+            </button>
+          </div>
+
           <div
             style={{
               flex: 1,
+              overflowY: 'auto',
+              padding: '4px',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-muted)',
-              fontSize: '12px',
+              flexDirection: 'column',
+              gap: '2px',
             }}
           >
-            {t('terminal.emptyState')}
+            {sessions.map((sess, idx) => {
+              const isActive = sess.id === activeSession?.id;
+              const isSplit = sess.id === splitSession?.id;
+              const folderLabel =
+                sess.cwd.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || sess.cwd;
+
+              return (
+                <div
+                  key={sess.id}
+                  onClick={() => setActiveTab(sess.id)}
+                  onDoubleClick={() => {
+                    setEditingTabId(sess.id);
+                    setEditingTitle(sess.title);
+                  }}
+                  title={`${sess.title} — ${sess.cwd}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '7px',
+                    padding: '5px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    backgroundColor: isActive
+                      ? 'var(--bg-selected)'
+                      : isSplit
+                      ? 'var(--bg-surface)'
+                      : 'transparent',
+                    color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    borderLeft: isActive
+                      ? '2px solid var(--accent-primary)'
+                      : isSplit
+                      ? '2px solid var(--accent)'
+                      : '2px solid transparent',
+                  }}
+                >
+                  <Terminal
+                    size={13}
+                    style={{
+                      color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+                      flexShrink: 0,
+                    }}
+                  />
+
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    {editingTabId === sess.id ? (
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        autoFocus
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onBlur={() => {
+                          renameTab(sess.id, editingTitle);
+                          setEditingTabId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            renameTab(sess.id, editingTitle);
+                            setEditingTabId(null);
+                          } else if (e.key === 'Escape') {
+                            setEditingTabId(null);
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          fontSize: '11px',
+                          padding: '1px 4px',
+                          backgroundColor: 'var(--bg-primary)',
+                          color: 'var(--text-primary)',
+                          border: '1px solid var(--accent-primary)',
+                          borderRadius: '3px',
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <span
+                          style={{
+                            fontWeight: isActive ? 600 : 400,
+                            fontSize: '12px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {idx + 1}: {sess.title}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            color: 'var(--text-muted)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {folderLabel}
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '2px',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTabId(sess.id);
+                        setEditingTitle(sess.title);
+                      }}
+                      title="Renomear sessão"
+                      style={sideItemIconBtnStyle}
+                    >
+                      <Pencil size={11} />
+                    </button>
+                    {sessions.length > 1 && ! isActive && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSplitWithTab(sess.id);
+                        }}
+                        title={t('terminal.splitTerminal')}
+                        style={{
+                          ...sideItemIconBtnStyle,
+                          color: isSplit ? 'var(--accent)' : 'var(--text-muted)',
+                        }}
+                      >
+                        <Columns2 size={11} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void requestCloseTab(sess.id);
+                      }}
+                      title={t('terminal.closeTab')}
+                      style={sideItemIconBtnStyle}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </aside>
       </div>
 
       {/* Modal de confirmação ao fechar aba com processos filhos ativos */}
@@ -974,4 +1119,32 @@ export const TerminalPanel: React.FC = () => {
     </section>
   );
 };
+
+const termActionBtnStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '4px',
+  height: '24px',
+  padding: '0 7px',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid var(--border-subtle)',
+  backgroundColor: 'var(--bg-surface)',
+  color: 'var(--text-secondary)',
+  fontSize: '11px',
+  cursor: 'pointer',
+};
+
+const sideItemIconBtnStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '3px',
+  borderRadius: '4px',
+  background: 'none',
+  border: 'none',
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
+};
+
 
