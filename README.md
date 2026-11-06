@@ -25,10 +25,10 @@
 
 ---
 
-## 📖 Sumário
+## Sumário
 
-- [Visão Geral](#-visão-geral)
-- [Destaques e Funcionalidades](#-destaques-e-funcionalidades)
+- [Visão Geral](#visão-geral)
+- [Destaques e Funcionalidades](#destaques-e-funcionalidades)
   - [Navegação, Abas e Painel Duplo](#1-navegação-abas-e-painel-duplo)
   - [Conexões Seguras SSH / SFTP (TOFU)](#2-conexões-seguras-ssh--sftp)
   - [Pré-visualizador Multimídia Avançado](#3-pré-visualizador-multimídia-avançado)
@@ -37,15 +37,15 @@
   - [Terminal Integrado Multi-Shell](#6-terminal-integrado-multi-shell)
   - [Operações Atômicas e Desfazer (Undo/Redo)](#7-operações-atômicas-e-desfazer-undoredo)
   - [Produtividade & Utilitários](#8-produtividade--utilitários)
-- [Arquitetura & Segurança](#-arquitetura--segurança)
-- [Atalhos de Teclado Essenciais](#-atalhos-de-teclado-essenciais)
-- [Como Compilar e Executar](#-como-compilar-e-executar)
-- [Documentação do Projeto](#-documentação-do-projeto)
-- [Licença](#-licença)
+- [Arquitetura & Segurança](#arquitetura--segurança)
+- [Atalhos de Teclado Essenciais](#atalhos-de-teclado-essenciais)
+- [Como Compilar e Executar](#como-compilar-e-executar)
+- [Documentação do Projeto](#documentação-do-projeto)
+- [Licença](#licença)
 
 ---
 
-## ⚡ Visão Geral
+## Visão Geral
 
 O **Pulsares Explorer** foi projetado para suprir as carências dos exploradores tradicionais de desktop (como o Windows Explorer ou Nautilus), que costumam ser lentos com pastas massivas, carecem de painel duplo fluido, sofrem com cópias descontroladas de arquivos e não atendem ao fluxo de trabalho de desenvolvedores e administradores de sistemas.
 
@@ -53,7 +53,7 @@ O Pulsares une a performance nativa em **Go**, uma interface fluida e moderna co
 
 ---
 
-## 🚀 Destaques e Funcionalidades
+## Destaques e Funcionalidades
 
 ### 1. Navegação, Abas e Painel Duplo
 - **Listagem Virtualizada em Streaming**: Diretórios contendo dezenas de milhares de arquivos abrem instantaneamente sem congelar a interface.
@@ -149,7 +149,7 @@ O Pulsares une a performance nativa em **Go**, uma interface fluida e moderna co
 
 ---
 
-## 🛡️ Arquitetura & Segurança
+## Arquitetura & Segurança
 
 O Pulsares Explorer foi construído sob o princípio de **Segurança por Padrão** (*Security by Design*) e **Privacidade Total**:
 
@@ -170,7 +170,7 @@ graph TD
 
 ---
 
-## ⌨️ Atalhos de Teclado Essenciais
+## Atalhos de Teclado Essenciais
 
 | Atalho | Ação |
 | :--- | :--- |
@@ -193,7 +193,7 @@ graph TD
 
 ---
 
-## 🛠️ Como Compilar e Executar
+## Como Compilar e Executar
 
 ### Pré-requisitos
 - **Go 1.24+**: [golang.org](https://golang.org/dl/)
@@ -224,7 +224,7 @@ O executável compilado estará localizado em `build/bin/pulsares-explorer.exe` 
 
 ---
 
-## 📚 Documentação do Projeto
+## Documentação do Projeto
 
 - [CHANGELOG.md](CHANGELOG.md) — Histórico detalhado de alterações por versão.
 - [AGENTS.md](AGENTS.md) — Diretrizes de desenvolvimento, regras de arquitetura e padrões de código.
@@ -234,6 +234,6 @@ O executável compilado estará localizado em `build/bin/pulsares-explorer.exe` 
 
 ---
 
-## 📄 Licença
+## Licença
 
 Distribuído sob a licença **MIT**. Consulte o arquivo [LICENSE](LICENSE) para obter mais informações.

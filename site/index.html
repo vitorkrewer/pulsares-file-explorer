@@ -49,7 +49,7 @@
 
       <div class="header-actions">
         <a href="https://github.com/vitorkrewer/pulsares-file-explorer" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">
-          <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <svg class="svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
           </svg>
           <span>GitHub</span>
@@ -81,7 +81,11 @@
         <div class="hero-cta-group">
           <div class="cta-primary-box">
             <a href="https://github.com/vitorkrewer/pulsares-file-explorer/releases/latest" id="primaryDownloadBtn" class="btn btn-primary btn-lg">
-              <span id="primaryOsIcon" class="btn-icon">⬇️</span>
+              <span id="primaryOsIcon" class="btn-icon">
+                <svg class="svg-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </span>
               <div class="btn-label-group">
                 <span class="btn-main-label" id="primaryDownloadLabel">Baixar para Windows (x64)</span>
                 <span class="btn-sub-label" id="primaryDownloadSub">Executável Portátil • v1.1.0</span>
@@ -91,15 +95,39 @@
 
           <a href="#downloads" class="btn btn-secondary btn-lg">
             <span>Ver Todas as Plataformas</span>
-            <span class="btn-arrow">↓</span>
+            <span class="btn-arrow">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+              </svg>
+            </span>
           </a>
         </div>
 
         <div class="platform-chips">
-          <span class="chip"><span class="chip-icon">🪟</span> Windows 10/11</span>
-          <span class="chip"><span class="chip-icon">🐧</span> Linux (.AppImage / .deb / .tar.gz)</span>
-          <span class="chip"><span class="chip-icon">🍎</span> macOS Universal</span>
-          <span class="chip chip-accent"><span class="chip-icon">🔒</span> 100% Offline & Local</span>
+          <span class="chip">
+            <svg class="svg-icon chip-svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+              <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.551H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.951-1.801"/>
+            </svg>
+            Windows 10/11
+          </span>
+          <span class="chip">
+            <svg class="svg-icon chip-svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+              <path d="M12.002 0c-2.4 0-4.35 1.95-4.35 4.35 0 .45.075.9.225 1.35C4.502 7.05 2.252 10.35 2.252 14.4c0 3.3 1.5 5.85 3.9 7.05-.3-.9-.45-1.95-.45-3 0-1.65.6-3.15 1.65-4.2-.15-.45-.3-.9-.3-1.35 0-1.65 1.35-3 3-3s3 1.35 3 3c0 .45-.15.9-.3 1.35 1.05 1.05 1.65 2.55 1.65 4.2 0 1.05-.15 2.1-.45 3 2.4-1.2 3.9-3.75 3.9-7.05 0-4.05-2.25-7.35-5.625-8.7.15-.45.225-.9.225-1.35 0-2.4-1.95-4.35-4.25-4.35z"/>
+            </svg>
+            Linux (.AppImage / .deb / .tar.gz)
+          </span>
+          <span class="chip">
+            <svg class="svg-icon chip-svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.4c.67-.82 1.12-1.96.99-3.1-.97.04-2.15.65-2.85 1.46-.61.71-1.15 1.87-1.01 2.98 1.09.08 2.2-.52 2.87-1.34z"/>
+            </svg>
+            macOS Universal
+          </span>
+          <span class="chip chip-accent">
+            <svg class="svg-icon chip-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            100% Offline & Local
+          </span>
         </div>
       </div>
     </section>
@@ -129,19 +157,34 @@
           <!-- Interactive Mode Switcher -->
           <div class="mockup-tab-bar">
             <button class="mock-tab active" data-tab="explorer">
-              <span class="tab-icon">📂</span> Explorador de Arquivos
+              <svg class="svg-icon tab-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+              Explorador de Arquivos
             </button>
             <button class="mock-tab" data-tab="sftp">
-              <span class="tab-icon">🔒</span> Conexão SSH / SFTP
+              <svg class="svg-icon tab-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+              </svg>
+              Conexão SSH / SFTP
             </button>
             <button class="mock-tab" data-tab="editor">
-              <span class="tab-icon">💻</span> Pulsares Studio Editor
+              <svg class="svg-icon tab-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+              </svg>
+              Pulsares Studio Editor
             </button>
             <button class="mock-tab" data-tab="dbstudio">
-              <span class="tab-icon">🗄️</span> DB Studio (SQLite)
+              <svg class="svg-icon tab-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+              </svg>
+              DB Studio (SQLite)
             </button>
             <button class="mock-tab" data-tab="terminal">
-              <span class="tab-icon">⌨️</span> Terminal Integrado
+              <svg class="svg-icon tab-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+              </svg>
+              Terminal Integrado
             </button>
           </div>
 
@@ -149,32 +192,100 @@
           <div class="mock-view-content active" id="view-explorer">
             <div class="mock-toolbar">
               <div class="mock-tool-group">
-                <span class="mock-btn" title="Nova Pasta">📁+</span>
-                <span class="mock-btn" title="Novo Arquivo">📄+</span>
-                <span class="mock-btn" title="Favorito">⭐</span>
+                <span class="mock-btn" title="Nova Pasta">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+                  </svg>
+                </span>
+                <span class="mock-btn" title="Novo Arquivo">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+                  </svg>
+                </span>
+                <span class="mock-btn" title="Favorito">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                </span>
                 <span class="mock-divider"></span>
-                <span class="mock-btn" title="Copiar">📋</span>
-                <span class="mock-btn" title="Recortar">✂️</span>
-                <span class="mock-btn" title="Desfazer">↩️</span>
-                <span class="mock-btn" title="Refazer">↪️</span>
+                <span class="mock-btn" title="Copiar">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </span>
+                <span class="mock-btn" title="Recortar">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>
+                  </svg>
+                </span>
+                <span class="mock-btn" title="Desfazer">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+                  </svg>
+                </span>
+                <span class="mock-btn" title="Refazer">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/>
+                  </svg>
+                </span>
                 <span class="mock-divider"></span>
-                <span class="mock-btn active" title="Editor">💻 Editor</span>
-                <span class="mock-btn" title="DB Studio">🗄️ DB Studio</span>
-                <span class="mock-btn" title="Servidores SSH">🌐 SSH/SFTP (1)</span>
+                <span class="mock-btn active" title="Editor">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                  </svg>
+                  Editor
+                </span>
+                <span class="mock-btn" title="DB Studio">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                  </svg>
+                  DB Studio
+                </span>
+                <span class="mock-btn" title="Servidores SSH">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                  </svg>
+                  SSH/SFTP (1)
+                </span>
               </div>
               <div class="mock-tool-group">
                 <div class="mock-filter-input">
-                  🔍 <input type="text" value="" placeholder="Filtro instantâneo (Ctrl+F)..." readonly />
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  <input type="text" value="" placeholder="Filtro instantâneo (Ctrl+F)..." readonly />
                 </div>
-                <span class="mock-btn" title="Terminal">⌨️ Terminal</span>
-                <span class="mock-btn" title="Painel Duplo">⊞ Duplo</span>
+                <span class="mock-btn" title="Terminal">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                  </svg>
+                  Terminal
+                </span>
+                <span class="mock-btn" title="Painel Duplo">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/>
+                  </svg>
+                  Duplo
+                </span>
               </div>
             </div>
 
             <div class="mock-address-bar">
-              <span class="mock-nav-btn">◀</span>
-              <span class="mock-nav-btn">▶</span>
-              <span class="mock-nav-btn">▲</span>
+              <span class="mock-nav-btn">
+                <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+              </span>
+              <span class="mock-nav-btn">
+                <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </span>
+              <span class="mock-nav-btn">
+                <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="18 15 12 9 6 15"/>
+                </svg>
+              </span>
               <div class="mock-breadcrumb-box">
                 <span class="crumb">home</span>
                 <span class="crumb-sep">/</span>
@@ -183,27 +294,60 @@
                 <span class="crumb">projects</span>
                 <span class="crumb-sep">/</span>
                 <span class="crumb crumb-active">backend-service</span>
-                <button class="mock-copy-btn" id="mockCopyBtn" title="Copiar caminho">📋</button>
+                <button class="mock-copy-btn" id="mockCopyBtn" title="Copiar caminho">
+                  <svg class="svg-icon copy-icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
               </div>
-              <span class="mock-nav-btn">🔄</span>
+              <span class="mock-nav-btn">
+                <svg class="svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+              </span>
             </div>
 
             <div class="mock-body-layout">
               <!-- Left Sidebar -->
               <div class="mock-sidebar">
                 <div class="mock-side-section">
-                  <div class="mock-side-title">⭐ FAVORITOS</div>
-                  <div class="mock-tree-item active">📁 backend-service</div>
-                  <div class="mock-tree-item">📁 downloads</div>
-                  <div class="mock-tree-item">📁 backups-s3</div>
+                  <div class="mock-side-title">
+                    <svg class="svg-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                    </svg>
+                    FAVORITOS
+                  </div>
+                  <div class="mock-tree-item active">
+                    <svg class="svg-icon item-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    backend-service
+                  </div>
+                  <div class="mock-tree-item">
+                    <svg class="svg-icon item-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    downloads
+                  </div>
+                  <div class="mock-tree-item">
+                    <svg class="svg-icon item-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    backups-s3
+                  </div>
                 </div>
 
                 <div class="mock-side-section">
-                  <div class="mock-side-title">🌐 SSH / SFTP (TOFU)</div>
+                  <div class="mock-side-title">
+                    <svg class="svg-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                    </svg>
+                    SSH / SFTP (TOFU)
+                  </div>
                   <div class="mock-tree-item sftp-item">
                     <span class="status-online"></span>
                     <span class="item-name">srv-intranet-01</span>
-                    <span class="item-action">Terminal</span>
+                    <span class="item-action">SSH</span>
                   </div>
                   <div class="mock-tree-item sftp-item">
                     <span class="status-offline"></span>
@@ -212,12 +356,30 @@
                 </div>
 
                 <div class="mock-side-section">
-                  <div class="mock-side-title">📁 ÁRVORE DE PASTAS</div>
-                  <div class="mock-tree-item">📂 cmd</div>
-                  <div class="mock-tree-item">📂 internal/api</div>
-                  <div class="mock-tree-item">📂 internal/db</div>
-                  <div class="mock-tree-item">📂 migrations</div>
-                  <div class="mock-tree-item">📁 node_modules</div>
+                  <div class="mock-side-title">
+                    <svg class="svg-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    ÁRVORE DE PASTAS
+                  </div>
+                  <div class="mock-tree-item">
+                    <svg class="svg-icon item-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    cmd
+                  </div>
+                  <div class="mock-tree-item">
+                    <svg class="svg-icon item-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    internal/api
+                  </div>
+                  <div class="mock-tree-item">
+                    <svg class="svg-icon item-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    internal/db
+                  </div>
                 </div>
               </div>
 
@@ -230,43 +392,78 @@
                   <span class="col-size">Tamanho</span>
                 </div>
                 <div class="table-row">
-                  <span class="col-name"><span class="f-icon">📁</span> internal</span>
+                  <span class="col-name">
+                    <svg class="svg-icon f-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#38bdf8" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    internal
+                  </span>
                   <span class="col-date">Hoje, 16:40</span>
                   <span class="col-type">Pasta</span>
                   <span class="col-size">—</span>
                 </div>
                 <div class="table-row">
-                  <span class="col-name"><span class="f-icon">📁</span> migrations</span>
+                  <span class="col-name">
+                    <svg class="svg-icon f-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#38bdf8" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    migrations
+                  </span>
                   <span class="col-date">Hoje, 15:20</span>
                   <span class="col-type">Pasta</span>
                   <span class="col-size">—</span>
                 </div>
                 <div class="table-row row-selected">
-                  <span class="col-name"><span class="f-icon icon-code">🔷</span> main.go</span>
+                  <span class="col-name">
+                    <svg class="svg-icon f-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#00ADD8" stroke-width="2">
+                      <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                    </svg>
+                    main.go
+                  </span>
                   <span class="col-date">Hoje, 17:15</span>
                   <span class="col-type">Código Go</span>
                   <span class="col-size">4.2 KB</span>
                 </div>
                 <div class="table-row">
-                  <span class="col-name"><span class="f-icon icon-db">🗄️</span> analytics.sqlite3</span>
+                  <span class="col-name">
+                    <svg class="svg-icon f-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#0ea5e9" stroke-width="2">
+                      <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                    </svg>
+                    analytics.sqlite3
+                  </span>
                   <span class="col-date">Ontem, 21:05</span>
                   <span class="col-type">SQLite Database</span>
                   <span class="col-size">148.5 MB</span>
                 </div>
                 <div class="table-row">
-                  <span class="col-name"><span class="f-icon icon-video">🎬</span> demo-arquitetura.mp4</span>
+                  <span class="col-name">
+                    <svg class="svg-icon f-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#a855f7" stroke-width="2">
+                      <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    demo-arquitetura.mp4
+                  </span>
                   <span class="col-date">04/11/2026</span>
                   <span class="col-type">Vídeo MP4</span>
                   <span class="col-size">1.84 GB</span>
                 </div>
                 <div class="table-row">
-                  <span class="col-name"><span class="f-icon icon-pres">📊</span> apresentacao-equipe.pptx</span>
+                  <span class="col-name">
+                    <svg class="svg-icon f-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#ea580c" stroke-width="2">
+                      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                    </svg>
+                    apresentacao-equipe.pptx
+                  </span>
                   <span class="col-date">03/11/2026</span>
                   <span class="col-type">Apresentação</span>
                   <span class="col-size">12.3 MB</span>
                 </div>
                 <div class="table-row">
-                  <span class="col-name"><span class="f-icon icon-json">📜</span> config.production.json</span>
+                  <span class="col-name">
+                    <svg class="svg-icon f-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#f59e0b" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    config.production.json
+                  </span>
                   <span class="col-date">02/11/2026</span>
                   <span class="col-type">Configuração JSON</span>
                   <span class="col-size">1.1 KB</span>
@@ -280,7 +477,11 @@
                   <span class="preview-tag">Quick Look (Espaço)</span>
                 </div>
                 <div class="preview-body">
-                  <div class="preview-file-icon">🔷</div>
+                  <div class="preview-file-icon">
+                    <svg class="svg-icon" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#00ADD8" stroke-width="2">
+                      <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                    </svg>
+                  </div>
                   <div class="preview-file-name">main.go</div>
                   <div class="preview-code-block">
                     <code><span class="code-kw">package</span> main<br><br><span class="code-kw">func</span> <span class="code-fn">main</span>() {<br>&nbsp;&nbsp;sftp := vfs.<span class="code-fn">NewCompositeFS</span>()<br>&nbsp;&nbsp;sftp.<span class="code-fn">ServeWithRange</span>()<br>}</code>
@@ -299,11 +500,19 @@
           <div class="mock-view-content" id="view-sftp">
             <div class="sftp-modal-mock">
               <div class="sftp-modal-title">
-                <span>🛡️ Gerenciador de Conexões Seguras SSH & SFTP v3</span>
+                <span class="sftp-title-text">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10b981" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                  Gerenciador de Conexões Seguras SSH & SFTP v3
+                </span>
                 <span class="badge-safe">TOFU SHA-256 Ativo</span>
               </div>
               <div class="sftp-security-notice">
-                🔒 <strong>Segurança em Memória:</strong> Chaves públicas de servidores são verificadas e fixadas (Pinning). Credenciais e senhas permanecem apenas na memória volátil da sessão ativa, garantindo zero vazamento em disco.
+                <svg class="svg-icon inline-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <strong>Segurança em Memória:</strong> Chaves públicas de servidores são verificadas e fixadas (Pinning). Credenciais e senhas permanecem apenas na memória volátil da sessão ativa, garantindo zero vazamento em disco.
               </div>
               <div class="sftp-form-mock">
                 <div class="form-row">
@@ -350,7 +559,12 @@
               <div class="editor-tabs">
                 <span class="e-tab active">main.go <span class="close-dot">×</span></span>
                 <span class="e-tab">config.production.json <span class="close-dot">×</span></span>
-                <span class="e-tab sftp-tag">🔒 sftp://srv/deploy.sh <span class="close-dot">×</span></span>
+                <span class="e-tab sftp-tag">
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  sftp://srv/deploy.sh <span class="close-dot">×</span>
+                </span>
               </div>
               <div class="editor-toolbar">
                 <span>Quebra de Linha (Alt+Z): <strong>Ligada</strong></span>
@@ -377,7 +591,12 @@
           <div class="mock-view-content" id="view-dbstudio">
             <div class="dbstudio-mock">
               <div class="db-header">
-                <span>🗄️ Pulsares DB Studio — <code>analytics.sqlite3</code> (SQLite 3.44)</span>
+                <span>
+                  <svg class="svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0ea5e9" stroke-width="2">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                  </svg>
+                  Pulsares DB Studio — <code>analytics.sqlite3</code> (SQLite 3.44)
+                </span>
                 <button class="btn btn-primary btn-sm">Executar Query (Ctrl+Enter)</button>
               </div>
               <div class="db-query-box">
@@ -431,63 +650,99 @@
         <div class="features-grid">
           <!-- Card 1 -->
           <div class="feature-card">
-            <div class="feature-icon">⚡</div>
+            <div class="feature-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#38bdf8" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+            </div>
             <h3 class="feature-title">Streaming & Virtualização</h3>
             <p class="feature-desc">Pastas com mais de 100.000 arquivos abrem instantaneamente sem congelar sua interface ou consumir gigabytes de memória RAM.</p>
           </div>
 
           <!-- Card 2 -->
           <div class="feature-card">
-            <div class="feature-icon">🛡️</div>
+            <div class="feature-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#10b981" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
             <h3 class="feature-title">SSH & SFTP v3 com TOFU</h3>
             <p class="feature-desc">Cliente SFTP nativo em Go com verificação de chave do servidor (SHA-256 Pinning) contra ataques MITM e credenciais mantidas apenas em RAM.</p>
           </div>
 
           <!-- Card 3 -->
           <div class="feature-card">
-            <div class="feature-icon">🎬</div>
+            <div class="feature-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#a855f7" stroke-width="2">
+                <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+              </svg>
+            </div>
             <h3 class="feature-title">Vídeos Grandes & Apresentações</h3>
             <p class="feature-desc">Streaming local via HTTP 206 (Range Requests) para vídeos pesados com busca instantânea na timeline, além de suporte a slides PPTX e ODP.</p>
           </div>
 
           <!-- Card 4 -->
           <div class="feature-card">
-            <div class="feature-icon">🗄️</div>
+            <div class="feature-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#0ea5e9" stroke-width="2">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+              </svg>
+            </div>
             <h3 class="feature-title">Pulsares DB Studio</h3>
             <p class="feature-desc">Visualizador e console interativo para bancos SQLite e DuckDB: inspecione tabelas, esquemas, índices e execute queries SQL em tempo real.</p>
           </div>
 
           <!-- Card 5 -->
           <div class="feature-card">
-            <div class="feature-icon">💻</div>
+            <div class="feature-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#3b82f6" stroke-width="2">
+                <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+              </svg>
+            </div>
             <h3 class="feature-title">Pulsares Studio Editor</h3>
             <p class="feature-desc">Editor de código e texto integrado com quebra de linhas (Alt+Z), formatação automática (JSON, CSV, MD, Go, TS) e edição transparente sobre SFTP.</p>
           </div>
 
           <!-- Card 6 -->
           <div class="feature-card">
-            <div class="feature-icon">⌨️</div>
+            <div class="feature-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#f59e0b" stroke-width="2">
+                <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+              </svg>
+            </div>
             <h3 class="feature-title">Terminal Integrado Multi-Shell</h3>
             <p class="feature-desc">Painel estilo VS Code com suporte automático a PowerShell, Bash, CMD, WSL e Zsh, abas independentes e navegação vinculada (OSC 7).</p>
           </div>
 
           <!-- Card 7 -->
           <div class="feature-card">
-            <div class="feature-icon">🔍</div>
+            <div class="feature-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#ec4899" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </div>
             <h3 class="feature-title">Busca Avançada & de Conteúdo</h3>
             <p class="feature-desc">Pesquisa recursiva rápida com Regex, filtros de tamanho/data e busca no conteúdo de arquivos de texto e código com snippets das linhas.</p>
           </div>
 
           <!-- Card 8 -->
           <div class="feature-card">
-            <div class="feature-icon">↩️</div>
+            <div class="feature-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#10b981" stroke-width="2">
+                <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+              </svg>
+            </div>
             <h3 class="feature-title">Fila Segura & Desfazer Global</h3>
             <p class="feature-desc">Operações atômicas com arquivos temporários `.part`, verificação opcional por hash SHA-256 e Desfazer/Refazer (Ctrl+Z / Ctrl+Y) no SQLite.</p>
           </div>
 
           <!-- Card 9 -->
           <div class="feature-card">
-            <div class="feature-icon">📦</div>
+            <div class="feature-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#6366f1" stroke-width="2">
+                <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+              </svg>
+            </div>
             <h3 class="feature-title">Produtividade de Elite</h3>
             <p class="feature-desc">Renomeação em lote com prévia e Regex (F2), comparação de diretórios, cálculo simultâneo de MD5/SHA-1/SHA-256 e arquivos compactados.</p>
           </div>
@@ -512,7 +767,11 @@
             </ul>
           </div>
           <div class="security-badge-card">
-            <div class="shield-big">🛡️</div>
+            <div class="shield-big">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="#10b981" stroke-width="1.8">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
             <div class="shield-label">Security By Design</div>
             <div class="shield-sub">TOFU SHA-256 • RAM-Only Secrets • Zero Telemetry</div>
           </div>
@@ -603,7 +862,11 @@
         <div class="download-grid">
           <!-- Windows Card -->
           <div class="download-card" id="cardWindows">
-            <div class="os-icon">🪟</div>
+            <div class="os-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="38" height="38" fill="#0078D4">
+                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.551H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.951-1.801"/>
+              </svg>
+            </div>
             <h3 class="os-title">Windows</h3>
             <p class="os-desc">Windows 10 e 11 (64-bit)</p>
             <div class="os-files">
@@ -617,7 +880,11 @@
 
           <!-- Linux Card -->
           <div class="download-card" id="cardLinux">
-            <div class="os-icon">🐧</div>
+            <div class="os-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="38" height="38" fill="#E95420">
+                <path d="M12.002 0c-2.4 0-4.35 1.95-4.35 4.35 0 .45.075.9.225 1.35C4.502 7.05 2.252 10.35 2.252 14.4c0 3.3 1.5 5.85 3.9 7.05-.3-.9-.45-1.95-.45-3 0-1.65.6-3.15 1.65-4.2-.15-.45-.3-.9-.3-1.35 0-1.65 1.35-3 3-3s3 1.35 3 3c0 .45-.15.9-.3 1.35 1.05 1.05 1.65 2.55 1.65 4.2 0 1.05-.15 2.1-.45 3 2.4-1.2 3.9-3.75 3.9-7.05 0-4.05-2.25-7.35-5.625-8.7.15-.45.225-.9.225-1.35 0-2.4-1.95-4.35-4.25-4.35z"/>
+              </svg>
+            </div>
             <h3 class="os-title">Linux</h3>
             <p class="os-desc">Ubuntu, Debian, Fedora, Arch e derivados</p>
             <div class="os-files">
@@ -639,7 +906,11 @@
 
           <!-- macOS Card -->
           <div class="download-card" id="cardMac">
-            <div class="os-icon">🍎</div>
+            <div class="os-icon">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="38" height="38" fill="#cbd5e1">
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.4c.67-.82 1.12-1.96.99-3.1-.97.04-2.15.65-2.85 1.46-.61.71-1.15 1.87-1.01 2.98 1.09.08 2.2-.52 2.87-1.34z"/>
+              </svg>
+            </div>
             <h3 class="os-title">macOS</h3>
             <p class="os-desc">Apple Silicon (M1/M2/M3/M4) e Intel</p>
             <div class="os-files">
@@ -692,4 +963,3 @@
   <script src="app.js"></script>
 </body>
 </html>
-

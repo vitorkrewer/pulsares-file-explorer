@@ -27,6 +27,38 @@
   --container-max: 1200px;
 }
 
+.svg-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.tab-svg {
+  margin-right: 6px;
+}
+
+.chip-svg {
+  margin-right: 4px;
+}
+
+.f-svg {
+  margin-right: 6px;
+}
+
+.item-svg {
+  margin-right: 5px;
+}
+
+.inline-svg {
+  margin-right: 4px;
+}
+
+.sftp-title-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -455,6 +487,9 @@ body {
 }
 
 .mock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 4px 8px;
   border-radius: 4px;
   background-color: var(--bg-card);
@@ -558,6 +593,9 @@ body {
 }
 
 .mock-side-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -566,6 +604,9 @@ body {
 }
 
 .mock-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   padding: 4px 6px;
   border-radius: 4px;
   color: var(--text-secondary);
@@ -841,6 +882,12 @@ body {
   margin-bottom: 14px;
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+.db-header > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .db-query-box {
