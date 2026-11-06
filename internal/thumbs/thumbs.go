@@ -13,7 +13,6 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -264,22 +263,22 @@ func (s *Service) ReadPreview(path string, maxTextBytes int) (PreviewData, error
 				data.DataURI = "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(raw)
 			}
 		} else {
-			data.DataURI = "/__localmedia?path=" + url.QueryEscape(path)
+			data.DataURI = LocalMediaURL(path)
 		}
 		return data, nil
 	}
 
-	// Áudio e Vídeo (Streaming HTTP Range Request ilimitado para arquivos grandes + base64 rápido para arquivos pequenos em testes)
+	// Áudio e Vídeo (Streaming HTTP Range Request via servidor loopback 127.0.0.1 para arquivos reais de qualquer tamanho)
 	if isMediaExt(ext) {
 		data.Kind = PreviewMedia
 		data.MimeType = mediaMime(ext)
-		if info.Size() <= 2*1024*1024 {
+		if info.Size() <= 64*1024 {
 			if raw, err := os.ReadFile(path); err == nil {
 				data.DataURI = fmt.Sprintf("data:%s;base64,%s", data.MimeType, base64.StdEncoding.EncodeToString(raw))
 			}
 		}
 		if data.DataURI == "" {
-			data.DataURI = "/__localmedia?path=" + url.QueryEscape(path)
+			data.DataURI = LocalMediaURL(path)
 		}
 		return data, nil
 	}

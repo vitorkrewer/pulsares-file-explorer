@@ -72,6 +72,12 @@ const MediaPlayerSection: React.FC<{ data: PreviewData }> = ({ data }) => {
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const [speed, setSpeed] = useState(1);
   const [loop, setLoop] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMediaError(null);
+    setSpeed(1);
+  }, [data.path]);
 
   const mediaSrc =
     data.dataUri || `/__localmedia?path=${encodeURIComponent(data.path)}`;
@@ -157,12 +163,18 @@ const MediaPlayerSection: React.FC<{ data: PreviewData }> = ({ data }) => {
             {data.name}
           </div>
           <audio
+            key={mediaSrc}
             ref={(el) => {
               mediaRef.current = el;
             }}
             controls
             preload="metadata"
             src={mediaSrc}
+            onError={() =>
+              setMediaError(
+                'Não foi possível decodificar este formato de áudio diretamente no WebView.'
+              )
+            }
             style={{ width: '100%', marginTop: 4 }}
           />
         </div>
@@ -175,19 +187,56 @@ const MediaPlayerSection: React.FC<{ data: PreviewData }> = ({ data }) => {
             background: '#000',
             border: '1px solid var(--border-subtle)',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
           <video
+            key={mediaSrc}
             ref={(el) => {
               mediaRef.current = el;
             }}
             controls
+            playsInline
             preload="metadata"
             src={mediaSrc}
+            onError={() =>
+              setMediaError(
+                'Codec ou container de vídeo não suportado nativamente pelo WebView2. Você pode reproduzi-lo no player padrão do sistema.'
+              )
+            }
             style={{ width: '100%', maxHeight: 380, display: 'block' }}
           />
+        </div>
+      )}
+
+      {mediaError && (
+        <div
+          style={{
+            width: '100%',
+            padding: '8px 10px',
+            borderRadius: 6,
+            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            color: 'var(--text-primary)',
+            fontSize: 11,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 8,
+            textAlign: 'center',
+          }}
+        >
+          <span>{mediaError}</span>
+          <button
+            type="button"
+            style={styles.openExternalBtn}
+            onClick={() => void openPath(data.path)}
+          >
+            <ExternalLink size={12} />
+            <span>Abrir no Reprodutor Padrão</span>
+          </button>
         </div>
       )}
 

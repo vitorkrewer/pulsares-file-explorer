@@ -3,6 +3,9 @@ package thumbs
 import (
 	"archive/zip"
 	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -242,5 +245,45 @@ func TestReadPreview_PresentationPPTXAndODP(t *testing.T) {
 		t.Fatalf("expected odp speaker notes, got %q", odpPrev.Slides[0].Notes)
 	}
 }
+
+func TestLargeVideoStreaming_LoopbackAndClampedRange(t *testing.T) {
+	tmp := t.TempDir()
+	svc := New(filepath.Join(tmp, "cache"), 10*1024*1024)
+
+	// Cria um arquivo de vídeo grande sintético (6 MB)
+	videoPath := filepath.Join(tmp, "filme_grande.mp4")
+	largeData := bytes.Repeat([]byte("MP4VIDEO"), (6*1024*1024)/8)
+	if err := os.WriteFile(videoPath, largeData, 0o644); err != nil {
+		t.Fatalf("write large video failed: %v", err)
+	}
+
+	prev, err := svc.ReadPreview(videoPath, 4096)
+	if err != nil {
+		t.Fatalf("ReadPreview large video failed: %v", err)
+	}
+	if prev.Kind != PreviewMedia || prev.MimeType != "video/mp4" {
+		t.Fatalf("unexpected media preview: %+v", prev)
+	}
+	if !strings.Contains(prev.DataURI, "/__localmedia?path=") {
+		t.Fatalf("expected streaming URL for large video, got %s", prev.DataURI)
+	}
+
+	// Simula requisição Range aberta ("bytes=0-") passando pelo fallback não-TCP (AssetServer ResponseRecorder)
+	req := httptest.NewRequest(http.MethodGet, "/__localmedia?path="+url.QueryEscape(videoPath), nil)
+	req.Header.Set("Range", "bytes=0-")
+	rec := httptest.NewRecorder()
+	ServeLocalMediaHTTP(rec, req)
+
+	if rec.Code != http.StatusPartialContent {
+		t.Fatalf("expected 206 Partial Content, got %d", rec.Code)
+	}
+	if rec.Header().Get("Content-Type") != "video/mp4" {
+		t.Fatalf("expected Content-Type video/mp4, got %s", rec.Header().Get("Content-Type"))
+	}
+	if rec.Body.Len() != 4*1024*1024 {
+		t.Fatalf("expected open range to be clamped to 4MB in non-TCP buffer mode, got %d bytes", rec.Body.Len())
+	}
+}
+
 
 

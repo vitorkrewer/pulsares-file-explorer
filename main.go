@@ -4,13 +4,12 @@ import (
 	"embed"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"pulsares-file-explorer/internal/app"
+	"pulsares-file-explorer/internal/thumbs"
 )
 
 //go:embed all:frontend/dist
@@ -18,36 +17,9 @@ var assets embed.FS
 
 var version = "1.0.0"
 
-// localMediaHandler serve arquivos locais de vídeo, áudio e PDF via HTTP Range Requests (206 Partial Content)
-// sem carregar o arquivo inteiro em memória.
+// localMediaHandler serve arquivos locais de vídeo, áudio e PDF via HTTP Range Requests (206 Partial Content).
 func localMediaHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/__localmedia") {
-			http.NotFound(w, r)
-			return
-		}
-		targetPath := strings.TrimSpace(r.URL.Query().Get("path"))
-		if targetPath == "" {
-			http.Error(w, "missing path", http.StatusBadRequest)
-			return
-		}
-		cleanPath := filepath.Clean(targetPath)
-		info, err := os.Stat(cleanPath)
-		if err != nil || info.IsDir() {
-			http.NotFound(w, r)
-			return
-		}
-		f, err := os.Open(cleanPath)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer f.Close()
-
-		w.Header().Set("Accept-Ranges", "bytes")
-		w.Header().Set("Cache-Control", "no-cache")
-		http.ServeContent(w, r, info.Name(), info.ModTime(), f)
-	})
+	return http.HandlerFunc(thumbs.ServeLocalMediaHTTP)
 }
 
 func main() {
