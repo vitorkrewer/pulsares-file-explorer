@@ -2,6 +2,37 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [1.1.0] - 2026-11-06
+
+### Adicionado
+
+- **Conexões Remotas Seguras (SSH / SFTP v3)**:
+  - Cliente nativo do protocolo SFTP v3 (`internal/vfs/sftp/sftp.go`) implementado sobre `golang.org/x/crypto/ssh` e `golang.org/x/crypto/ssh/agent`, sem dependências de binários externos.
+  - Modelo estrito de segurança criptográfica com verificação de chave pública do servidor **TOFU (Trust On First Use)** e pinning da impressão digital SHA-256 (`SHA256:...`). Bloqueio imediato com alerta caso a chave do servidor mude (prevenção contra ataques *Man-in-the-Middle*).
+  - Suporte completo a múltiplos métodos de autenticação: **Chave Privada SSH** com detecção automática de arquivos em `~/.ssh` (`id_ed25519`, `id_rsa`, `id_ecdsa`, etc.) e suporte a *passphrase*, **SSH Agent** do sistema e **Senha em RAM** (mantida exclusivamente em memória volátil durante a sessão ativa, sem qualquer gravação de credenciais em texto plano no disco).
+  - Sistema de Arquivos Virtual Unificado (`CompositeFS`): navegação transparente em abas (`sftp://<profileId>/...`), árvore de diretórios, pré-visualização, criação, renomeação, exclusão e transferência bidirecional de arquivos (Local ↔ SFTP).
+  - Seção dedicada de **SSH / SFTP** na barra lateral (`Sidebar`) e botão rápido na barra de ferramentas superior (`OperationsToolbar`), com atalho direto para iniciar uma sessão de terminal interativo SSH no Terminal Integrado.
+- **Pré-visualizador de Apresentações (.pptx e .odp)**:
+  - Suporte nativo à inspeção e visualização de apresentações de slides do Microsoft PowerPoint (`.pptx`) e LibreOffice Impress (`.odp`), extraindo texto estruturado, anotações do orador e metadados dos slides.
+- **Streaming Contínuo de Vídeos Grandes**:
+  - Servidor HTTP local integrado com suporte a **HTTP Range Requests** (`206 Partial Content`), permitindo reprodução instantânea, busca temporal (*scrubbing*) sem recarga e suporte estável a arquivos de vídeo pesados (gigabytes) sem sobrecarregar a memória do processo.
+- **Busca por Conteúdo e Otimização de Streaming**:
+  - Busca recursiva avançada no conteúdo de arquivos de texto e código, com proteção contra estouro de memória e arquivos binários.
+  - Flush imediato do primeiro resultado e lotes progressivos a cada 50ms no `SearchDrawer`, eliminando o estado de espera com "0 resultados" durante buscas profundas.
+- **Pulsares Studio Editor**:
+  - Editor embutido de código e texto (`Ctrl+E`), com suporte a quebra automática de linhas (`Alt+Z`), formatação de arquivos estruturados (JSON, CSV, Markdown, Go, TypeScript/JavaScript), e edição direta de arquivos locais e remotos via SFTP.
+- **Pulsares DB Studio**:
+  - Console e visualizador interativo para bancos de dados SQLite (`.db`, `.sqlite`, `.sqlite3`) e DuckDB, permitindo inspeção de esquema, paginação de registros e execução de consultas SQL.
+- **Ícones Especializados por Tipo de Arquivo**:
+  - Diferenciação visual com ícones coloridos dedicados para linguagens de programação (Python, Go, TypeScript, JavaScript, Rust, C/C++, C#, Java, PHP, Ruby, etc.), bancos de dados, arquivos de configuração (JSON, YAML, TOML, CSV, ENV, Dockerfile) e documentos.
+- **Melhorias de Usabilidade na Navegação**:
+  - Botão discreto no canto direito da barra de navegação (`AddressBar`) para copiar o caminho atual para a área de transferência com feedback animado de confirmação.
+  - Botão de colapsar todas as pastas abertas (`collapseAll`) na árvore de diretórios da barra lateral (`Sidebar`).
+
+### Corrigido
+
+- Prevenção da criação excessiva de abas/processos no Terminal Integrado durante a inicialização do aplicativo, garantindo persistência limpa e restauração controlada de sessão.
+
 ## [1.0.0] - 2026-11-05
 
 ### Adicionado
