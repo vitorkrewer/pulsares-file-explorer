@@ -1,12 +1,14 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Folder, FileText, ArrowUp, RotateCw, ArrowLeftRight } from 'lucide-react';
+import { ArrowUp, RotateCw, ArrowLeftRight } from 'lucide-react';
 import { useDualPaneStore } from './store';
 import { useBrowserStore } from '../browser/store';
 import { useOperationsStore } from '../operations/store';
 import { formatBytes, formatDateTime, getCollator } from '../../i18n/format';
 import { openPath, enqueueOperation } from '../../lib/wails';
+import { FileTypeIcon } from '../../ui/FileTypeIcon';
+import { isDatabaseFile, useDBStudioStore } from '../db-studio/store';
 
 export const SecondaryPane: React.FC = () => {
   const { t, i18n } = useTranslation('common');
@@ -173,6 +175,8 @@ export const SecondaryPane: React.FC = () => {
                 onDoubleClick={() => {
                   if (entry.kind === 'dir') {
                     navigateSecondary(path);
+                  } else if (isDatabaseFile(entry.name)) {
+                    void useDBStudioStore.getState().openDatabase(path);
                   } else {
                     openPath(path);
                   }
@@ -184,11 +188,7 @@ export const SecondaryPane: React.FC = () => {
                   height: `${virtualRow.size}px`,
                 }}
               >
-                {entry.kind === 'dir' ? (
-                  <Folder size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                ) : (
-                  <FileText size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                )}
+                <FileTypeIcon name={entry.name} kind={entry.kind} size={14} />
                 <span style={styles.nameCell}>{entry.name}</span>
                 <span style={styles.sizeCell}>
                   {entry.kind === 'dir' ? '' : formatBytes(entry.size, i18n.language)}

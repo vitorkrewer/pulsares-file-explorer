@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next';
 import {
   Search,
   X,
-  Folder,
-  File,
   Database,
   Trash2,
   Play,
@@ -16,6 +14,7 @@ import {
   Edit3,
   CheckSquare,
 } from 'lucide-react';
+import { FileTypeIcon } from '../../ui/FileTypeIcon';
 import { useSearchStore } from './store';
 import { useBrowserStore } from '../browser/store';
 import { useOperationsStore } from '../operations/store';
@@ -523,11 +522,7 @@ export const SearchDrawer: React.FC = () => {
                   }}
                 >
                   <div style={styles.resultMain}>
-                    {r.kind === 'dir' ? (
-                      <Folder size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                    ) : (
-                      <File size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                    )}
+                    <FileTypeIcon name={r.name} kind={r.kind} size={15} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={styles.resultName}>{r.name}</div>
                       <div style={styles.resultPath}>{r.relPath}</div>

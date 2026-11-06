@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Folder, File, Image as ImageIcon, FileText, Film, Archive } from 'lucide-react';
 import { useBrowserStore } from '../browser/store';
 import { usePreviewStore, GroupByOption } from './store';
 import { Entry, openPath, listDirectorySnapshot } from '../../lib/wails';
 import { formatBytes, formatDate, getCollator } from '../../i18n/format';
+import { FileTypeIcon, getFileTypeVisual } from '../../ui/FileTypeIcon';
+import { isDatabaseFile, useDBStudioStore } from '../db-studio/store';
 
 function isImageEntry(name: string): boolean {
   const ext = name.split('.').pop()?.toLowerCase() || '';
@@ -18,11 +19,7 @@ function getEntryGroupLabel(
 ): string {
   if (groupBy === 'type') {
     if (entry.kind === 'dir') return t('types.folder');
-    const idx = entry.name.lastIndexOf('.');
-    if (idx > 0 && idx < entry.name.length - 1) {
-      return entry.name.slice(idx + 1).toUpperCase();
-    }
-    return t('types.file');
+    return getFileTypeVisual(entry.name, entry.kind).typeLabel;
   }
   if (groupBy === 'size') {
     if (entry.kind === 'dir') return t('types.folder');
@@ -39,23 +36,7 @@ function getEntryGroupLabel(
 }
 
 function renderEntryIcon(entry: Entry, size = 18) {
-  if (entry.kind === 'dir') {
-    return <Folder size={size} style={{ color: 'var(--accent)', flexShrink: 0 }} />;
-  }
-  const ext = entry.name.split('.').pop()?.toLowerCase() || '';
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
-    return <ImageIcon size={size} style={{ color: '#38bdf8', flexShrink: 0 }} />;
-  }
-  if (['mp4', 'webm', 'mov', 'mp3', 'wav', 'flac'].includes(ext)) {
-    return <Film size={size} style={{ color: '#a855f7', flexShrink: 0 }} />;
-  }
-  if (['zip', 'tar', 'gz', '7z', 'rar'].includes(ext)) {
-    return <Archive size={size} style={{ color: '#f59e0b', flexShrink: 0 }} />;
-  }
-  if (['md', 'txt', 'json', 'ts', 'tsx', 'go', 'py', 'js'].includes(ext)) {
-    return <FileText size={size} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />;
-  }
-  return <File size={size} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />;
+  return <FileTypeIcon name={entry.name} kind={entry.kind} size={size} />;
 }
 
 export const AlternativeViews: React.FC = () => {
@@ -165,6 +146,8 @@ export const AlternativeViews: React.FC = () => {
   const handleOpen = (entry: Entry) => {
     if (entry.kind === 'dir') {
       navigateTo(entry.location.path);
+    } else if (isDatabaseFile(entry.name)) {
+      void useDBStudioStore.getState().openDatabase(entry.location.path);
     } else {
       void openPath(entry.location.path);
     }

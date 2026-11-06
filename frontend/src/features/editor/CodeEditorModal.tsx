@@ -1,9 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FileCode2,
-  FileJson,
-  FileText,
-  FileTerminal,
   Plus,
   Save,
   Sparkles,
@@ -62,6 +59,7 @@ import {
   windowToggleMaximize,
   windowClose,
 } from '../../lib/wails';
+import { FileTypeIcon } from '../../ui/FileTypeIcon';
 
 interface SnippetItem {
   label: string;
@@ -216,26 +214,6 @@ function commentPrefixForLanguage(lang: string): string {
       return 'REM ';
     default:
       return '// ';
-  }
-}
-
-function renderTabFileIcon(language: string) {
-  switch (language) {
-    case 'csv':
-      return <Table2 size={13} style={{ color: '#10b981', flexShrink: 0 }} />;
-    case 'json':
-    case 'yaml':
-    case 'toml':
-      return <FileJson size={13} style={{ color: '#f59e0b', flexShrink: 0 }} />;
-    case 'markdown':
-    case 'plaintext':
-      return <FileText size={13} style={{ color: '#38bdf8', flexShrink: 0 }} />;
-    case 'shell':
-    case 'powershell':
-    case 'bat':
-      return <FileTerminal size={13} style={{ color: '#22c55e', flexShrink: 0 }} />;
-    default:
-      return <FileCode2 size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />;
   }
 }
 
@@ -1655,7 +1633,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                 flexShrink: 0,
               }}
             >
-              {renderTabFileIcon(tab.language)}
+              <FileTypeIcon name={tab.name} kind="file" size={13} showBadge={false} />
               <span style={{ fontWeight: isActive ? 600 : 400 }}>{tab.name}</span>
               {tab.pinned && <Pin size={11} style={{ color: 'var(--accent)' }} />}
               {isDirty && (
@@ -1958,14 +1936,12 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                         }}
                         title={entry.location.path}
                       >
-                        {entry.kind === 'dir' ? (
-                          <Folder size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                        ) : (
-                          <FileCode2
-                            size={13}
-                            style={{ color: 'var(--text-secondary)', flexShrink: 0 }}
-                          />
-                        )}
+                        <FileTypeIcon
+                          name={entry.name}
+                          kind={entry.kind}
+                          size={13}
+                          showBadge={false}
+                        />
                         <span
                           style={{
                             overflow: 'hidden',

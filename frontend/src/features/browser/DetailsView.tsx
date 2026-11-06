@@ -1,10 +1,12 @@
 import React, { useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Folder, FileText, ArrowUpDown, CornerDownRight } from 'lucide-react';
+import { ArrowUpDown } from 'lucide-react';
 import { useBrowserStore } from './store';
 import { Entry, openPath } from '../../lib/wails';
 import { formatBytes, formatDateTime, getCollator } from '../../i18n/format';
+import { FileTypeIcon, getFileTypeVisual } from '../../ui/FileTypeIcon';
+import { isDatabaseFile, useDBStudioStore } from '../db-studio/store';
 
 export const DetailsView: React.FC = () => {
   const { t, i18n } = useTranslation('common');
@@ -49,7 +51,10 @@ export const DetailsView: React.FC = () => {
           res = a.size - b.size;
           break;
         case 'type':
-          res = collator.compare(a.kind, b.kind);
+          res = collator.compare(
+            getFileTypeVisual(a.name, a.kind).typeLabel,
+            getFileTypeVisual(b.name, b.kind).typeLabel
+          );
           break;
         case 'modTime':
           res = new Date(a.modTime).getTime() - new Date(b.modTime).getTime();
@@ -67,35 +72,27 @@ export const DetailsView: React.FC = () => {
   });
 
   const handleItemClick = (e: React.MouseEvent, entry: Entry) => {
-    selectItem(entry.location.path, e.ctrlKey || e.metaKey);
+    selectItem(entry.location.path, e.ctrlKey || e.metaKey, e.shiftKey);
   };
 
   const handleItemDoubleClick = (entry: Entry) => {
     if (entry.kind === 'dir') {
       navigateTo(entry.location.path);
+    } else if (isDatabaseFile(entry.name)) {
+      void useDBStudioStore.getState().openDatabase(entry.location.path);
     } else {
       openPath(entry.location.path);
     }
   };
 
   const getIcon = (entry: Entry) => {
-    if (entry.kind === 'dir') {
-      return <Folder size={15} style={{ color: '#38bdf8', minWidth: 15 }} />;
-    }
-    if (entry.kind === 'symlink') {
-      return <CornerDownRight size={15} style={{ color: '#a78bfa', minWidth: 15 }} />;
-    }
-    return <FileText size={15} style={{ color: 'var(--text-muted)', minWidth: 15 }} />;
+    return <FileTypeIcon name={entry.name} kind={entry.kind} size={15} />;
   };
 
   const getTypeName = (entry: Entry) => {
     if (entry.kind === 'dir') return t('types.folder');
     if (entry.kind === 'symlink') return t('types.symlink');
-    const dotIndex = entry.name.lastIndexOf('.');
-    if (dotIndex > 0) {
-      return entry.name.slice(dotIndex + 1).toUpperCase() + ' ' + t('types.file');
-    }
-    return t('types.file');
+    return getFileTypeVisual(entry.name, entry.kind).typeLabel;
   };
 
   return (
@@ -143,6 +140,7 @@ export const DetailsView: React.FC = () => {
               return (
                 <div
                   key={item.location.path}
+                  data-entry-path={item.location.path}
                   onClick={(e) => handleItemClick(e, item)}
                   onDoubleClick={() => handleItemDoubleClick(item)}
                   style={{
@@ -267,4 +265,3 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
 };
-

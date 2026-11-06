@@ -19,6 +19,7 @@ import { useEditorStore } from '../editor/store';
 import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { formatBytes, formatDate } from '../../i18n/format';
 import { openPath, PreviewData } from '../../lib/wails';
+import { FileTypeIcon, getFileTypeVisual } from '../../ui/FileTypeIcon';
 
 function renderSimpleMarkdown(md: string): React.ReactNode {
   const lines = md.split('\n');
@@ -271,13 +272,21 @@ const PreviewBody: React.FC<{
 }> = ({ data, imageZoom, setImageZoom, language }) => {
   const { t } = useTranslation('common');
   const isDb = data.kind === 'database' || isDatabaseFile(data.path);
+  const typeVisual = getFileTypeVisual(data.name, data.kind === 'folder' ? 'dir' : 'file');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Metadados do item */}
       <div style={styles.metaBar}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-          <div style={{ fontWeight: 600, fontSize: 13, wordBreak: 'break-all' }}>{data.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <FileTypeIcon
+              name={data.name}
+              kind={data.kind === 'folder' ? 'dir' : 'file'}
+              size={16}
+            />
+            <div style={{ fontWeight: 600, fontSize: 13, wordBreak: 'break-all' }}>{data.name}</div>
+          </div>
           {(data.kind === 'markdown' || data.kind === 'code' || data.kind === 'text') && (
             <button
               type="button"
@@ -327,10 +336,10 @@ const PreviewBody: React.FC<{
             </button>
           )}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
           {data.kind === 'folder'
-            ? t('preview.folderItems', { count: data.childCount ?? 0 })
-            : `${formatBytes(data.size, language)} · ${formatDate(data.modTime, language)}`}
+            ? `${typeVisual.typeLabel} · ${t('preview.folderItems', { count: data.childCount ?? 0 })}`
+            : `${typeVisual.typeLabel} · ${formatBytes(data.size, language)} · ${formatDate(data.modTime, language)}`}
         </div>
         {data.imageWidth && data.imageHeight ? (
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -475,6 +484,14 @@ const PreviewBody: React.FC<{
 
         {!isDb && (data.kind === 'binary' || data.kind === 'folder') && (
           <div style={styles.placeholderBox}>
+            <FileTypeIcon
+              name={data.name}
+              kind={data.kind === 'folder' ? 'dir' : 'file'}
+              size={40}
+            />
+            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
+              {typeVisual.typeLabel}
+            </div>
             <p style={{ margin: 0 }}>{t('preview.noPreview')}</p>
             <button
               type="button"
