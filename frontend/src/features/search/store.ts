@@ -3,11 +3,15 @@ import {
   SearchOptions,
   SearchResultItem,
   IndexedRoot,
+  SavedSearch,
   startSearch,
   cancelSearch,
   indexDirectory,
   listIndexRoots,
   removeIndexRoot,
+  saveSearch,
+  listSavedSearches,
+  deleteSavedSearch,
 } from '../../lib/wails';
 
 interface SearchStoreState {
@@ -26,6 +30,9 @@ interface SearchStoreState {
   isSearching: boolean;
   requestId: string;
   results: SearchResultItem[];
+  selectedResultPaths: Set<string>;
+  lastSelectedResultPath: string | null;
+  savedSearches: SavedSearch[];
   error?: string;
 
   indexedRoots: IndexedRoot[];
@@ -44,6 +51,15 @@ interface SearchStoreState {
   setContentQuery: (v: string) => void;
   setUseIndex: (v: boolean) => void;
   resetFilters: () => void;
+
+  selectResultItem: (path: string, multi: boolean, range?: boolean) => void;
+  selectAllResults: () => void;
+  clearResultSelection: () => void;
+
+  loadSavedSearches: () => Promise<void>;
+  saveCurrentSearchPreset: (name: string) => Promise<void>;
+  applySavedSearchPreset: (preset: SavedSearch) => void;
+  removeSavedSearchPreset: (id: number) => Promise<void>;
 
   runSearch: (rootPath: string, includeHidden: boolean) => Promise<void>;
   stopSearch: () => Promise<void>;
@@ -71,6 +87,9 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
   isSearching: false,
   requestId: '',
   results: [],
+  selectedResultPaths: new Set(),
+  lastSelectedResultPath: null,
+  savedSearches: [],
   error: undefined,
 
   indexedRoots: [],
@@ -101,8 +120,108 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
       modifiedBefore: '',
       contentQuery: '',
       results: [],
+      selectedResultPaths: new Set(),
+      lastSelectedResultPath: null,
       error: undefined,
     }),
+
+  selectResultItem: (path: string, multi: boolean, range = false) => {
+    set((state) => {
+      const ordered = state.results.map((r) => r.path);
+      const anchor =
+        state.lastSelectedResultPath ||
+        (state.selectedResultPaths.size > 0
+          ? Array.from(state.selectedResultPaths)[0]
+          : null);
+
+      if (range && anchor) {
+        const startIdx = ordered.indexOf(anchor);
+        const endIdx = ordered.indexOf(path);
+        if (startIdx !== -1 && endIdx !== -1) {
+          const low = Math.min(startIdx, endIdx);
+          const high = Math.max(startIdx, endIdx);
+          const next = multi ? new Set(state.selectedResultPaths) : new Set<string>();
+          for (let i = low; i <= high; i++) {
+            next.add(ordered[i]);
+          }
+          return { selectedResultPaths: next };
+        }
+      }
+
+      const next = multi ? new Set(state.selectedResultPaths) : new Set<string>();
+      if (multi && next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return {
+        selectedResultPaths: next,
+        lastSelectedResultPath: path,
+      };
+    });
+  },
+
+  selectAllResults: () => {
+    set((state) => ({
+      selectedResultPaths: new Set(state.results.map((r) => r.path)),
+    }));
+  },
+
+  clearResultSelection: () => {
+    set({ selectedResultPaths: new Set(), lastSelectedResultPath: null });
+  },
+
+  loadSavedSearches: async () => {
+    const list = await listSavedSearches();
+    set({ savedSearches: list });
+  },
+
+  saveCurrentSearchPreset: async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const st = get();
+    const payload = JSON.stringify({
+      query: st.query,
+      useRegex: st.useRegex,
+      extensionsText: st.extensionsText,
+      kindFilter: st.kindFilter,
+      minSizeKB: st.minSizeKB,
+      maxSizeKB: st.maxSizeKB,
+      modifiedAfter: st.modifiedAfter,
+      modifiedBefore: st.modifiedBefore,
+      contentQuery: st.contentQuery,
+      useIndex: st.useIndex,
+    });
+    await saveSearch(trimmed, payload);
+    const list = await listSavedSearches();
+    set({ savedSearches: list });
+  },
+
+  applySavedSearchPreset: (preset: SavedSearch) => {
+    try {
+      const parsed = JSON.parse(preset.queryJson) as Partial<SearchStoreState>;
+      set({
+        query: parsed.query ?? '',
+        useRegex: Boolean(parsed.useRegex),
+        extensionsText: parsed.extensionsText ?? '',
+        kindFilter: parsed.kindFilter ?? '',
+        minSizeKB: parsed.minSizeKB ?? '',
+        maxSizeKB: parsed.maxSizeKB ?? '',
+        modifiedAfter: parsed.modifiedAfter ?? '',
+        modifiedBefore: parsed.modifiedBefore ?? '',
+        contentQuery: parsed.contentQuery ?? '',
+        useIndex: parsed.useIndex ?? true,
+      });
+    } catch {
+      // ignora preset inválido
+    }
+  },
+
+  removeSavedSearchPreset: async (id: number) => {
+    await deleteSavedSearch(id);
+    const list = await listSavedSearches();
+    set({ savedSearches: list });
+  },
 
   runSearch: async (rootPath, includeHidden) => {
     const st = get();
@@ -138,6 +257,8 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
       isSearching: true,
       requestId: reqId,
       results: [],
+      selectedResultPaths: new Set(),
+      lastSelectedResultPath: null,
       error: undefined,
     });
 

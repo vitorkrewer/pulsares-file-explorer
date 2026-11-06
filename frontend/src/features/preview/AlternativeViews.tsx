@@ -184,7 +184,9 @@ export const AlternativeViews: React.FC = () => {
                   <div
                     key={entry.location.path}
                     data-entry-path={entry.location.path}
-                    onClick={(e) => selectItem(entry.location.path, e.ctrlKey || e.metaKey)}
+                    onClick={(e) =>
+                      selectItem(entry.location.path, e.ctrlKey || e.metaKey, e.shiftKey)
+                    }
                     onDoubleClick={() => handleOpen(entry)}
                     style={{
                       ...styles.compactListItem,
@@ -231,7 +233,9 @@ export const AlternativeViews: React.FC = () => {
                   <div
                     key={entry.location.path}
                     data-entry-path={entry.location.path}
-                    onClick={(e) => selectItem(entry.location.path, e.ctrlKey || e.metaKey)}
+                    onClick={(e) =>
+                      selectItem(entry.location.path, e.ctrlKey || e.metaKey, e.shiftKey)
+                    }
                     onDoubleClick={() => handleOpen(entry)}
                     style={{
                       ...styles.gridCard,
@@ -311,7 +315,10 @@ export const AlternativeViews: React.FC = () => {
             return (
               <div
                 key={entry.location.path}
-                onClick={(e) => selectItem(entry.location.path, e.ctrlKey || e.metaKey)}
+                data-entry-path={entry.location.path}
+                onClick={(e) =>
+                  selectItem(entry.location.path, e.ctrlKey || e.metaKey, e.shiftKey)
+                }
                 onDoubleClick={() => handleOpen(entry)}
                 style={{
                   ...styles.millerRow,

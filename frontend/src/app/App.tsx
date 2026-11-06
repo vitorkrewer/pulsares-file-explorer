@@ -27,7 +27,7 @@ import {
   FileContextMenu,
   ContextMenuTarget,
 } from '../features/context-menu/FileContextMenu';
-import { Entry, getInitialState, enqueueOperation } from '../lib/wails';
+import { Entry, getInitialState, enqueueOperation, openPath } from '../lib/wails';
 import { resolveLanguage } from '../i18n/config';
 
 export const App: React.FC = () => {
@@ -44,6 +44,10 @@ export const App: React.FC = () => {
     tabs,
     currentPath,
     selectedPaths,
+    filterQuery,
+    entries,
+    rawEntries,
+    setFilterQuery,
     goBack,
     goForward,
     goUp,
@@ -260,9 +264,76 @@ export const App: React.FC = () => {
         if (e.key === 'Escape') {
           if (quickLookOpen) {
             closeQuickLook();
+          } else if (useBrowserStore.getState().filterQuery) {
+            useBrowserStore.getState().setFilterQuery('');
           } else {
             clearSelection();
           }
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          useBrowserStore.getState().stepSelection(1, e.shiftKey);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          useBrowserStore.getState().stepSelection(-1, e.shiftKey);
+          return;
+        }
+        if (e.key === 'Enter' && selectedPaths.size > 0) {
+          e.preventDefault();
+          const firstPath = Array.from(selectedPaths)[0];
+          const entry = useBrowserStore
+            .getState()
+            .entries.find((it) => it.location.path === firstPath);
+          if (entry) {
+            if (entry.kind === 'dir') {
+              useBrowserStore.getState().navigateTo(entry.location.path);
+            } else {
+              void openPath(entry.location.path);
+            }
+          }
+          return;
+        }
+        if (e.key === 'Backspace') {
+          const fq = useBrowserStore.getState().filterQuery;
+          if (fq) {
+            e.preventDefault();
+            useBrowserStore.getState().setFilterQuery(fq.slice(0, -1));
+            return;
+          }
+          e.preventDefault();
+          goUp();
+          return;
+        }
+
+        // Busca intuitiva nativa ao digitar caracteres diretamente dentro da pasta (Type-to-Search)
+        const hasModalOpen =
+          useSearchStore.getState().drawerOpen ||
+          useProductivityStore.getState().paletteOpen ||
+          useProductivityStore.getState().batchRenameOpen ||
+          useProductivityStore.getState().compareOpen ||
+          useProductivityStore.getState().hashOpen ||
+          useProductivityStore.getState().shortcutsOpen ||
+          useProductivityStore.getState().archiveOpen ||
+          useProductivityStore.getState().remoteOpen ||
+          useOperationsStore.getState().promptKind !== null ||
+          useOperationsStore.getState().propertiesData !== null ||
+          (useEditorStore.getState().isOpen && !useEditorStore.getState().isMinimized);
+
+        if (
+          !hasModalOpen &&
+          e.key.length === 1 &&
+          e.code !== 'Space' &&
+          /^[\p{L}\p{N}._-]$/u.test(e.key)
+        ) {
+          e.preventDefault();
+          window.dispatchEvent(
+            new CustomEvent('pulsares:focus-instant-filter', {
+              detail: { appendChar: e.key },
+            })
+          );
           return;
         }
       }
@@ -461,6 +532,60 @@ export const App: React.FC = () => {
     }
   };
 
+  const handlePrimaryMouseDownCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || (!e.shiftKey && !e.ctrlKey && !e.metaKey)) return;
+    if (viewMode !== 'details') return;
+
+    const { entries: currentEntries, selectItem } = useBrowserStore.getState();
+    const byPath = new Map<string, Entry>();
+    const byName = new Map<string, Entry>();
+    for (const item of currentEntries) {
+      byPath.set(item.location.path, item);
+      byName.set(item.name, item);
+    }
+
+    let matched: Entry | null = null;
+    let node = e.target as HTMLElement | null;
+    const stopNode = e.currentTarget;
+
+    while (node && node !== stopNode) {
+      const attrPath = node.getAttribute('data-entry-path');
+      if (attrPath && byPath.has(attrPath)) {
+        matched = byPath.get(attrPath)!;
+        break;
+      }
+
+      if (node.children.length <= 6) {
+        const directText = node.textContent?.trim();
+        if (directText && byName.has(directText)) {
+          matched = byName.get(directText)!;
+          break;
+        }
+        for (let i = 0; i < node.children.length; i++) {
+          const childText = node.children[i]?.textContent?.trim();
+          if (childText && byName.has(childText)) {
+            matched = byName.get(childText)!;
+            break;
+          }
+        }
+        if (matched) break;
+      }
+      node = node.parentElement;
+    }
+
+    if (matched && e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      selectItem(matched.location.path, e.ctrlKey || e.metaKey, true);
+    }
+  };
+
+  const handlePrimaryClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (viewMode === 'details' && e.shiftKey) {
+      e.stopPropagation();
+    }
+  };
+
   const handlePrimaryContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -541,6 +666,8 @@ export const App: React.FC = () => {
             >
               <div
                 onClick={() => setFocusedPane('primary')}
+                onMouseDownCapture={handlePrimaryMouseDownCapture}
+                onClickCapture={handlePrimaryClickCapture}
                 onContextMenu={handlePrimaryContextMenu}
                 draggable={selectedPaths.size > 0}
                 onDragStart={(e) => {
@@ -555,10 +682,74 @@ export const App: React.FC = () => {
                 onDrop={handlePrimaryDrop}
                 style={{
                   ...styles.primaryPaneWrapper,
+                  position: 'relative',
                   flex: layoutMode === 'single' ? 1 : `0 0 ${Math.round(splitRatio * 100)}%`,
                 }}
               >
                 {viewMode === 'details' ? <DetailsView /> : <AlternativeViews />}
+
+                {/* HUD flutuante de busca rápida nativa ao digitar na pasta */}
+                {filterQuery && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: '16px',
+                      bottom: '14px',
+                      zIndex: 80,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '6px 12px',
+                      borderRadius: '999px',
+                      backgroundColor: 'var(--bg-surface)',
+                      border: '1px solid var(--accent-primary)',
+                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+                      fontSize: '12px',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                      Filtro: &ldquo;{filterQuery}&rdquo;
+                    </span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+                      ({entries.length} de {rawEntries.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const q = filterQuery;
+                        useSearchStore.getState().setQuery(q);
+                        useSearchStore.getState().setDrawerOpen(true);
+                        void useSearchStore.getState().runSearch(currentPath || '/', useBrowserStore.getState().showHidden);
+                      }}
+                      title="Expandir para Busca Avançada Recursiva (Ctrl+Shift+S)"
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        backgroundColor: 'var(--accent-primary)',
+                        color: '#ffffff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Busca Avançada
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFilterQuery('')}
+                      title="Limpar filtro (Esc)"
+                      style={{
+                        color: 'var(--text-muted)',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        padding: '0 4px',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
 
               {layoutMode !== 'single' && (

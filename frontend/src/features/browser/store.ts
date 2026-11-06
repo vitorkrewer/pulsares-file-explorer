@@ -9,6 +9,7 @@ import {
   WatchChangeEvent,
   saveSession,
 } from '../../lib/wails';
+import { getCollator } from '../../i18n/format';
 
 export type SortField = 'name' | 'size' | 'type' | 'modTime';
 export type SortDirection = 'asc' | 'desc';
@@ -70,6 +71,36 @@ function applyInstantFilter(raw: Entry[], query: string): Entry[] {
   const q = query.trim().toLowerCase();
   if (!q) return raw;
   return raw.filter((e) => e.name.toLowerCase().includes(q));
+}
+
+export function getSortedVisibleEntries(
+  entries: Entry[],
+  showHidden: boolean,
+  sortField: SortField,
+  sortDirection: SortDirection
+): Entry[] {
+  const visible = showHidden ? entries : entries.filter((e) => !e.attrs.hidden);
+  const collator = getCollator(
+    typeof document !== 'undefined' ? document.documentElement.lang || 'pt-BR' : 'pt-BR'
+  );
+  return [...visible].sort((a, b) => {
+    if (a.kind === 'dir' && b.kind !== 'dir') return -1;
+    if (a.kind !== 'dir' && b.kind === 'dir') return 1;
+
+    let cmp = 0;
+    if (sortField === 'name') {
+      cmp = collator.compare(a.name, b.name);
+    } else if (sortField === 'size') {
+      cmp = a.size - b.size;
+    } else if (sortField === 'modTime') {
+      cmp = new Date(a.modTime).getTime() - new Date(b.modTime).getTime();
+    } else if (sortField === 'type') {
+      const extA = a.kind === 'dir' ? '' : a.name.split('.').pop()?.toLowerCase() || '';
+      const extB = b.kind === 'dir' ? '' : b.name.split('.').pop()?.toLowerCase() || '';
+      cmp = collator.compare(extA, extB) || collator.compare(a.name, b.name);
+    }
+    return sortDirection === 'asc' ? cmp : -cmp;
+  });
 }
 
 let saveSessionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -150,6 +181,7 @@ interface BrowserState {
   error?: string;
   showHidden: boolean;
   selectedPaths: Set<string>;
+  lastSelectedPath: string | null;
   sortField: SortField;
   sortDirection: SortDirection;
   currentRequestId: string;
@@ -163,7 +195,8 @@ interface BrowserState {
   toggleHidden: () => void;
   setSort: (field: SortField) => void;
   setFilterQuery: (query: string) => void;
-  selectItem: (path: string, multi: boolean) => void;
+  selectItem: (path: string, multi: boolean, range?: boolean) => void;
+  stepSelection: (delta: number, extendRange?: boolean) => string | null;
   clearSelection: () => void;
   selectAll: () => void;
 
@@ -199,6 +232,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   error: undefined,
   showHidden: false,
   selectedPaths: new Set(),
+  lastSelectedPath: null,
   sortField: 'name',
   sortDirection: 'asc',
   currentRequestId: '',
@@ -379,10 +413,37 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     }));
   },
 
-  selectItem: (path: string, multi: boolean) => {
+  selectItem: (path: string, multi: boolean, range = false) => {
     set((state) => {
+      const sorted = getSortedVisibleEntries(
+        state.entries,
+        state.showHidden,
+        state.sortField,
+        state.sortDirection
+      );
+      const anchor =
+        state.lastSelectedPath ||
+        (state.selectedPaths.size > 0 ? Array.from(state.selectedPaths)[0] : null);
+
+      if (range && anchor) {
+        const startIdx = sorted.findIndex((e) => e.location.path === anchor);
+        const endIdx = sorted.findIndex((e) => e.location.path === path);
+        if (startIdx !== -1 && endIdx !== -1) {
+          const low = Math.min(startIdx, endIdx);
+          const high = Math.max(startIdx, endIdx);
+          const next = multi ? new Set(state.selectedPaths) : new Set<string>();
+          for (let i = low; i <= high; i++) {
+            next.add(sorted[i].location.path);
+          }
+          const updatedTabs = state.tabs.map((t) =>
+            t.id === state.activeTabId ? { ...t, selectedPaths: Array.from(next) } : t
+          );
+          return { selectedPaths: next, tabs: updatedTabs };
+        }
+      }
+
       const next = multi ? new Set(state.selectedPaths) : new Set<string>();
-      if (next.has(path)) {
+      if (multi && next.has(path)) {
         next.delete(path);
       } else {
         next.add(path);
@@ -390,13 +451,78 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       const updatedTabs = state.tabs.map((t) =>
         t.id === state.activeTabId ? { ...t, selectedPaths: Array.from(next) } : t
       );
-      return { selectedPaths: next, tabs: updatedTabs };
+      return {
+        selectedPaths: next,
+        lastSelectedPath: path,
+        tabs: updatedTabs,
+      };
     });
+  },
+
+  stepSelection: (delta: number, extendRange = false) => {
+    const state = get();
+    const sorted = getSortedVisibleEntries(
+      state.entries,
+      state.showHidden,
+      state.sortField,
+      state.sortDirection
+    );
+    if (sorted.length === 0) return null;
+
+    const selectedArr = Array.from(state.selectedPaths);
+    const activeCursorPath =
+      selectedArr.length > 0
+        ? selectedArr[selectedArr.length - 1]
+        : state.lastSelectedPath;
+    const currentIdx = activeCursorPath
+      ? sorted.findIndex((e) => e.location.path === activeCursorPath)
+      : -1;
+
+    const targetIdx =
+      currentIdx === -1
+        ? delta >= 0
+          ? 0
+          : sorted.length - 1
+        : Math.max(0, Math.min(sorted.length - 1, currentIdx + delta));
+    const targetPath = sorted[targetIdx].location.path;
+
+    if (extendRange) {
+      const anchor = state.lastSelectedPath || activeCursorPath || targetPath;
+      const anchorIdx = sorted.findIndex((e) => e.location.path === anchor);
+      const low = Math.min(anchorIdx === -1 ? targetIdx : anchorIdx, targetIdx);
+      const high = Math.max(anchorIdx === -1 ? targetIdx : anchorIdx, targetIdx);
+      const next = new Set<string>();
+      for (let i = low; i <= high; i++) {
+        next.add(sorted[i].location.path);
+      }
+      // Garante que targetPath seja o último elemento inserido no Set para navegação contínua com Shift+Seta
+      next.delete(targetPath);
+      next.add(targetPath);
+      set((s) => ({
+        selectedPaths: next,
+        lastSelectedPath: anchor,
+        tabs: s.tabs.map((t) =>
+          t.id === s.activeTabId ? { ...t, selectedPaths: Array.from(next) } : t
+        ),
+      }));
+      return targetPath;
+    }
+
+    const next = new Set<string>([targetPath]);
+    set((s) => ({
+      selectedPaths: next,
+      lastSelectedPath: targetPath,
+      tabs: s.tabs.map((t) =>
+        t.id === s.activeTabId ? { ...t, selectedPaths: [targetPath] } : t
+      ),
+    }));
+    return targetPath;
   },
 
   clearSelection: () => {
     set((state) => ({
       selectedPaths: new Set(),
+      lastSelectedPath: null,
       tabs: state.tabs.map((t) => (t.id === state.activeTabId ? { ...t, selectedPaths: [] } : t)),
     }));
   },

@@ -162,7 +162,14 @@ export const SecondaryPane: React.FC = () => {
                     JSON.stringify(paths)
                   );
                 }}
-                onClick={(e) => selectSecondaryItem(path, e.ctrlKey || e.metaKey)}
+                onClick={(e) =>
+                  selectSecondaryItem(
+                    path,
+                    e.ctrlKey || e.metaKey,
+                    e.shiftKey,
+                    sortedEntries.map((it) => it.location.path)
+                  )
+                }
                 onDoubleClick={() => {
                   if (entry.kind === 'dir') {
                     navigateSecondary(path);

@@ -41,10 +41,18 @@ import { usePreviewStore, GroupByOption, GridThumbSize } from '../preview/store'
 import { useSearchStore } from '../search/store';
 import { useProductivityStore } from '../productivity/store';
 import { useEditorStore } from '../editor/store';
+import { openPath } from '../../lib/wails';
 
 export const OperationsToolbar: React.FC = () => {
   const { t } = useTranslation('common');
-  const { selectedPaths, currentPath, filterQuery, setFilterQuery } = useBrowserStore();
+  const {
+    selectedPaths,
+    currentPath,
+    filterQuery,
+    setFilterQuery,
+    stepSelection,
+    navigateTo,
+  } = useBrowserStore();
   const {
     clipboard,
     jobs,
@@ -88,13 +96,32 @@ export const OperationsToolbar: React.FC = () => {
   const [viewBarOpen, setViewBarOpen] = React.useState(false);
 
   useEffect(() => {
-    const onFocusFilter = () => {
-      filterInputRef.current?.focus();
-      filterInputRef.current?.select();
+    const onFocusFilter = (evt: Event) => {
+      const customEvt = evt as CustomEvent<{ appendChar?: string }>;
+      const ch = customEvt.detail?.appendChar;
+      if (ch) {
+        const nextQuery = `${useBrowserStore.getState().filterQuery}${ch}`;
+        setFilterQuery(nextQuery);
+        requestAnimationFrame(() => {
+          const inp = filterInputRef.current;
+          if (inp) {
+            inp.focus();
+            inp.setSelectionRange(nextQuery.length, nextQuery.length);
+          }
+          // Seleciona automaticamente o primeiro item filtrado para navegação imediata
+          const filtered = useBrowserStore.getState().entries;
+          if (filtered.length > 0) {
+            useBrowserStore.getState().selectItem(filtered[0].location.path, false, false);
+          }
+        });
+      } else {
+        filterInputRef.current?.focus();
+        filterInputRef.current?.select();
+      }
     };
     window.addEventListener('pulsares:focus-instant-filter', onFocusFilter);
     return () => window.removeEventListener('pulsares:focus-instant-filter', onFocusFilter);
-  }, []);
+  }, [setFilterQuery]);
 
   const hasSelection = selectedPaths.size > 0;
   const hasSingleSelection = selectedPaths.size === 1;
@@ -262,11 +289,40 @@ export const OperationsToolbar: React.FC = () => {
             ref={filterInputRef}
             type="text"
             value={filterQuery}
-            onChange={(e) => setFilterQuery(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFilterQuery(val);
+              requestAnimationFrame(() => {
+                const filtered = useBrowserStore.getState().entries;
+                if (val.trim() && filtered.length > 0) {
+                  useBrowserStore.getState().selectItem(filtered[0].location.path, false, false);
+                }
+              });
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 setFilterQuery('');
                 filterInputRef.current?.blur();
+              } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                stepSelection(1, e.shiftKey);
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                stepSelection(-1, e.shiftKey);
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const sel = Array.from(useBrowserStore.getState().selectedPaths)[0];
+                const entry = useBrowserStore
+                  .getState()
+                  .entries.find((it) => it.location.path === sel);
+                if (entry) {
+                  filterInputRef.current?.blur();
+                  if (entry.kind === 'dir') {
+                    navigateTo(entry.location.path);
+                  } else {
+                    void openPath(entry.location.path);
+                  }
+                }
               }
             }}
             placeholder={t('search.instantFilterPlaceholder')}

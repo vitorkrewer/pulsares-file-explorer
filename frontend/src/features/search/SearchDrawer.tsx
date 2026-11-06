@@ -1,8 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, X, Folder, File, Database, Trash2, Play, Square } from 'lucide-react';
+import {
+  Search,
+  X,
+  Folder,
+  File,
+  Database,
+  Trash2,
+  Play,
+  Square,
+  BookmarkPlus,
+  Bookmark,
+  Copy,
+  FileCode2,
+  Edit3,
+  CheckSquare,
+} from 'lucide-react';
 import { useSearchStore } from './store';
 import { useBrowserStore } from '../browser/store';
+import { useOperationsStore } from '../operations/store';
+import { useProductivityStore } from '../productivity/store';
+import { useEditorStore } from '../editor/store';
 import {
   subscribeEvent,
   SearchBatchEvent,
@@ -10,6 +28,17 @@ import {
   openPath,
 } from '../../lib/wails';
 import { formatBytes, formatDate } from '../../i18n/format';
+
+const QUICK_TYPE_PRESETS: Array<{ label: string; ext: string; kind?: string }> = [
+  { label: 'Todos', ext: '', kind: '' },
+  { label: 'Código', ext: 'ts,tsx,js,jsx,go,py,rs,java,c,cpp,cs,html,css,sql', kind: 'file' },
+  { label: 'Documentos', ext: 'md,txt,pdf,doc,docx,csv,xls,xlsx', kind: 'file' },
+  { label: 'Configs', ext: 'json,yaml,yml,toml,env,ini,xml', kind: 'file' },
+  { label: 'Imagens', ext: 'png,jpg,jpeg,webp,svg,gif,bmp', kind: 'file' },
+  { label: 'Mídia', ext: 'mp4,webm,mov,mp3,wav,flac', kind: 'file' },
+  { label: 'Compactados', ext: 'zip,tar,gz,7z,rar', kind: 'file' },
+  { label: 'Pastas', ext: '', kind: 'dir' },
+];
 
 export const SearchDrawer: React.FC = () => {
   const { t, i18n } = useTranslation('common');
@@ -28,6 +57,8 @@ export const SearchDrawer: React.FC = () => {
     useIndex,
     isSearching,
     results,
+    selectedResultPaths,
+    savedSearches,
     error,
     indexedRoots,
     indexingRoot,
@@ -43,6 +74,13 @@ export const SearchDrawer: React.FC = () => {
     setContentQuery,
     setUseIndex,
     resetFilters,
+    selectResultItem,
+    selectAllResults,
+    clearResultSelection,
+    loadSavedSearches,
+    saveCurrentSearchPreset,
+    applySavedSearchPreset,
+    removeSavedSearchPreset,
     runSearch,
     stopSearch,
     appendBatch,
@@ -51,6 +89,9 @@ export const SearchDrawer: React.FC = () => {
     indexCurrentRoot,
     deleteIndexedRoot,
   } = useSearchStore();
+
+  const [presetNameInput, setPresetNameInput] = useState('');
+  const [showSavePresetInput, setShowSavePresetInput] = useState(false);
 
   useEffect(() => {
     const unsubBatch = subscribeEvent<SearchBatchEvent>('search:batch', (ev) => {
@@ -68,8 +109,9 @@ export const SearchDrawer: React.FC = () => {
   useEffect(() => {
     if (drawerOpen) {
       void refreshIndexedRoots();
+      void loadSavedSearches();
     }
-  }, [drawerOpen, refreshIndexedRoots]);
+  }, [drawerOpen, refreshIndexedRoots, loadSavedSearches]);
 
   if (!drawerOpen) return null;
 
@@ -196,6 +238,42 @@ export const SearchDrawer: React.FC = () => {
           </div>
 
           <div style={{ ...styles.row, justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                Filtros Rápidos:
+              </span>
+              {QUICK_TYPE_PRESETS.map((preset) => {
+                const isActive =
+                  extensionsText === preset.ext &&
+                  (preset.kind === undefined || kindFilter === preset.kind);
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setExtensionsText(preset.ext);
+                      if (preset.kind !== undefined) setKindFilter(preset.kind);
+                    }}
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      border: isActive
+                        ? '1px solid var(--accent-primary)'
+                        : '1px solid var(--border-subtle)',
+                      backgroundColor: isActive ? 'var(--bg-selected)' : 'var(--bg-surface)',
+                      color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ ...styles.row, justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <label style={styles.checkboxLabel}>
                 <input
@@ -217,6 +295,42 @@ export const SearchDrawer: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {showSavePresetInput ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="text"
+                    value={presetNameInput}
+                    autoFocus
+                    onChange={(e) => setPresetNameInput(e.target.value)}
+                    placeholder="Nome da busca..."
+                    style={{ ...styles.input, width: 130, height: 26 }}
+                  />
+                  <button
+                    type="button"
+                    style={styles.secondaryBtn}
+                    onClick={() => {
+                      if (presetNameInput.trim()) {
+                        void saveCurrentSearchPreset(presetNameInput.trim());
+                        setPresetNameInput('');
+                        setShowSavePresetInput(false);
+                      }
+                    }}
+                  >
+                    Salvar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  style={styles.secondaryBtn}
+                  onClick={() => setShowSavePresetInput(true)}
+                  title="Salvar combinação atual de filtros"
+                >
+                  <BookmarkPlus size={12} />
+                  <span>Salvar Filtro</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 style={styles.secondaryBtn}
@@ -234,6 +348,41 @@ export const SearchDrawer: React.FC = () => {
             </div>
           </div>
         </form>
+
+        {/* Buscas salvas pelo usuário */}
+        {savedSearches.length > 0 && (
+          <div style={styles.indexBar}>
+            <Bookmark size={12} style={{ color: 'var(--accent)' }} />
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>
+              Buscas Salvas:
+            </span>
+            {savedSearches.map((sv) => (
+              <span
+                key={sv.id}
+                style={{ ...styles.indexChip, cursor: 'pointer' }}
+                onClick={() => {
+                  applySavedSearchPreset(sv);
+                  setTimeout(() => {
+                    void useSearchStore.getState().runSearch(currentPath || '/', showHidden);
+                  }, 20);
+                }}
+              >
+                <span>{sv.name}</span>
+                <button
+                  type="button"
+                  style={styles.chipDelBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void removeSavedSearchPreset(sv.id);
+                  }}
+                  title="Remover busca salva"
+                >
+                  <Trash2 size={10} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Raízes indexadas */}
         {indexedRoots.length > 0 && (
@@ -259,63 +408,173 @@ export const SearchDrawer: React.FC = () => {
           </div>
         )}
 
+        {/* Barra de ações em lote sobre múltiplos resultados selecionados (Shift+Clique / Ctrl+Clique) */}
+        {results.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 14px',
+              borderBottom: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-subtle)',
+              fontSize: 11,
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                style={styles.secondaryBtn}
+                onClick={() =>
+                  selectedResultPaths.size === results.length
+                    ? clearResultSelection()
+                    : selectAllResults()
+                }
+              >
+                <CheckSquare size={12} />
+                <span>
+                  {selectedResultPaths.size === results.length
+                    ? 'Desmarcar Todos'
+                    : 'Selecionar Todos'}
+                </span>
+              </button>
+              <span style={{ color: 'var(--text-muted)' }}>
+                {selectedResultPaths.size > 0
+                  ? `${selectedResultPaths.size} selecionado(s) (use Shift+Clique para intervalo sequencial)`
+                  : 'Dica: Clique e segure Shift para selecionar vários resultados sequencialmente'}
+              </span>
+            </div>
+
+            {selectedResultPaths.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  style={styles.secondaryBtn}
+                  onClick={() => {
+                    const paths = Array.from(selectedResultPaths);
+                    for (const p of paths) {
+                      void useEditorStore.getState().openFileInEditor(p);
+                    }
+                    setDrawerOpen(false);
+                  }}
+                >
+                  <FileCode2 size={12} />
+                  <span>Abrir no Studio ({selectedResultPaths.size})</span>
+                </button>
+                <button
+                  type="button"
+                  style={styles.secondaryBtn}
+                  onClick={() => {
+                    const paths = Array.from(selectedResultPaths);
+                    setDrawerOpen(false);
+                    void useProductivityStore.getState().openBatchRename(paths);
+                  }}
+                >
+                  <Edit3 size={12} />
+                  <span>Renomear em Lote</span>
+                </button>
+                <button
+                  type="button"
+                  style={styles.secondaryBtn}
+                  onClick={() => {
+                    const paths = Array.from(selectedResultPaths);
+                    useOperationsStore.setState({
+                      clipboard: { paths, mode: 'copy' },
+                    });
+                  }}
+                >
+                  <Copy size={12} />
+                  <span>Copiar Seleção</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Lista de resultados em streaming */}
         <div style={styles.resultsArea}>
           {error && <div style={styles.errorBox}>{error}</div>}
           {results.length === 0 && !isSearching ? (
             <div style={styles.emptyBox}>{t('search.noResults')}</div>
           ) : (
-            results.map((r) => (
-              <div
-                key={r.path}
-                style={styles.resultRow}
-                onDoubleClick={() => {
-                  if (r.kind === 'dir') {
-                    navigateTo(r.path);
-                    setDrawerOpen(false);
-                  } else {
-                    void openPath(r.path);
+            results.map((r) => {
+              const isSelected = selectedResultPaths.has(r.path);
+              return (
+                <div
+                  key={r.path}
+                  onClick={(e) =>
+                    selectResultItem(r.path, e.ctrlKey || e.metaKey, e.shiftKey)
                   }
-                }}
-              >
-                <div style={styles.resultMain}>
-                  {r.kind === 'dir' ? (
-                    <Folder size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                  ) : (
-                    <File size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                  )}
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={styles.resultName}>{r.name}</div>
-                    <div style={styles.resultPath}>{r.relPath}</div>
-                    {r.snippet && (
-                      <div style={styles.snippetBox}>
-                        L{r.lineNumber}: {r.snippet}
-                      </div>
+                  style={{
+                    ...styles.resultRow,
+                    backgroundColor: isSelected ? 'var(--bg-selected)' : 'transparent',
+                    borderLeft: isSelected
+                      ? '3px solid var(--accent-primary)'
+                      : '3px solid transparent',
+                  }}
+                  onDoubleClick={() => {
+                    if (r.kind === 'dir') {
+                      navigateTo(r.path);
+                      setDrawerOpen(false);
+                    } else {
+                      void openPath(r.path);
+                    }
+                  }}
+                >
+                  <div style={styles.resultMain}>
+                    {r.kind === 'dir' ? (
+                      <Folder size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                    ) : (
+                      <File size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
                     )}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={styles.resultName}>{r.name}</div>
+                      <div style={styles.resultPath}>{r.relPath}</div>
+                      {r.snippet && (
+                        <div style={styles.snippetBox}>
+                          L{r.lineNumber}: {r.snippet}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={styles.resultRight}>
+                    {r.kind !== 'dir' && (
+                      <span style={styles.metaText}>{formatBytes(r.size, i18n.language)}</span>
+                    )}
+                    <span style={styles.metaText}>{formatDate(r.modTime, i18n.language)}</span>
+                    {r.kind !== 'dir' && (
+                      <button
+                        type="button"
+                        style={styles.smallBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void useEditorStore.getState().openFileInEditor(r.path);
+                          setDrawerOpen(false);
+                        }}
+                      >
+                        Studio
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      style={styles.smallBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (r.kind === 'dir') {
+                          newTab(r.path);
+                        } else {
+                          openParentFolder(r.path);
+                        }
+                        setDrawerOpen(false);
+                      }}
+                    >
+                      {t('search.revealInExplorer')}
+                    </button>
                   </div>
                 </div>
-                <div style={styles.resultRight}>
-                  {r.kind !== 'dir' && (
-                    <span style={styles.metaText}>{formatBytes(r.size, i18n.language)}</span>
-                  )}
-                  <span style={styles.metaText}>{formatDate(r.modTime, i18n.language)}</span>
-                  <button
-                    type="button"
-                    style={styles.smallBtn}
-                    onClick={() => {
-                      if (r.kind === 'dir') {
-                        newTab(r.path);
-                      } else {
-                        openParentFolder(r.path);
-                      }
-                      setDrawerOpen(false);
-                    }}
-                  >
-                    {t('search.revealInExplorer')}
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

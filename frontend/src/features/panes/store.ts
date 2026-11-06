@@ -20,6 +20,7 @@ interface DualPaneState {
   secondaryEntries: Entry[];
   secondaryLoading: boolean;
   secondarySelected: Set<string>;
+  secondaryLastSelected: string | null;
   secondaryRequestId: string;
   focusedPane: 'primary' | 'secondary';
 
@@ -28,7 +29,7 @@ interface DualPaneState {
   setFocusedPane: (pane: 'primary' | 'secondary') => void;
   navigateSecondary: (path: string) => void;
   refreshSecondary: () => void;
-  selectSecondaryItem: (path: string, multi: boolean) => void;
+  selectSecondaryItem: (path: string, multi: boolean, range?: boolean, orderedPaths?: string[]) => void;
   copyToOppositePane: () => Promise<void>;
   moveToOppositePane: () => Promise<void>;
   initSecondaryListeners: () => () => void;
@@ -41,6 +42,7 @@ export const useDualPaneStore = create<DualPaneState>((set, get) => ({
   secondaryEntries: [],
   secondaryLoading: false,
   secondarySelected: new Set(),
+  secondaryLastSelected: null,
   secondaryRequestId: '',
   focusedPane: 'primary',
 
@@ -80,15 +82,38 @@ export const useDualPaneStore = create<DualPaneState>((set, get) => ({
     }
   },
 
-  selectSecondaryItem: (path: string, multi: boolean) => {
+  selectSecondaryItem: (path: string, multi: boolean, range = false, orderedPaths?: string[]) => {
     set((state) => {
+      const list = orderedPaths || state.secondaryEntries.map((e) => e.location.path);
+      const anchor =
+        state.secondaryLastSelected ||
+        (state.secondarySelected.size > 0 ? Array.from(state.secondarySelected)[0] : null);
+
+      if (range && anchor) {
+        const startIdx = list.indexOf(anchor);
+        const endIdx = list.indexOf(path);
+        if (startIdx !== -1 && endIdx !== -1) {
+          const low = Math.min(startIdx, endIdx);
+          const high = Math.max(startIdx, endIdx);
+          const next = multi ? new Set(state.secondarySelected) : new Set<string>();
+          for (let i = low; i <= high; i++) {
+            next.add(list[i]);
+          }
+          return { secondarySelected: next, focusedPane: 'secondary' };
+        }
+      }
+
       const next = multi ? new Set(state.secondarySelected) : new Set<string>();
-      if (next.has(path)) {
+      if (multi && next.has(path)) {
         next.delete(path);
       } else {
         next.add(path);
       }
-      return { secondarySelected: next, focusedPane: 'secondary' };
+      return {
+        secondarySelected: next,
+        secondaryLastSelected: path,
+        focusedPane: 'secondary',
+      };
     });
   },
 
