@@ -179,7 +179,49 @@ const EXTENSION_VISUAL_MAP: Record<string, Omit<FileTypeVisual, 'ext'>> = {
     badge: 'ODP',
     color: '#ea580c',
     bgTint: 'rgba(234, 88, 12, 0.14)',
-    typeLabel: 'Apresentação OpenDocument',
+    typeLabel: 'Apresentação OpenDocument (LibreOffice Impress)',
+    category: 'presentation',
+  },
+  otp: {
+    badge: 'OTP',
+    color: '#ea580c',
+    bgTint: 'rgba(234, 88, 12, 0.14)',
+    typeLabel: 'Modelo de Apresentação OpenDocument',
+    category: 'presentation',
+  },
+  fodp: {
+    badge: 'FODP',
+    color: '#ea580c',
+    bgTint: 'rgba(234, 88, 12, 0.14)',
+    typeLabel: 'Apresentação OpenDocument Flat XML',
+    category: 'presentation',
+  },
+  ppsx: {
+    badge: 'PPSX',
+    color: '#ea580c',
+    bgTint: 'rgba(234, 88, 12, 0.14)',
+    typeLabel: 'Apresentação de Slides PowerPoint',
+    category: 'presentation',
+  },
+  potx: {
+    badge: 'POTX',
+    color: '#ea580c',
+    bgTint: 'rgba(234, 88, 12, 0.14)',
+    typeLabel: 'Modelo PowerPoint (.potx)',
+    category: 'presentation',
+  },
+  pps: {
+    badge: 'PPS',
+    color: '#ea580c',
+    bgTint: 'rgba(234, 88, 12, 0.14)',
+    typeLabel: 'Apresentação de Slides PowerPoint 97-2003',
+    category: 'presentation',
+  },
+  pot: {
+    badge: 'POT',
+    color: '#ea580c',
+    bgTint: 'rgba(234, 88, 12, 0.14)',
+    typeLabel: 'Modelo PowerPoint 97-2003',
     category: 'presentation',
   },
 
@@ -1322,3 +1364,4 @@ export const FileTypeIcon: React.FC<FileTypeIconProps> = ({
     </span>
   );
 };
+

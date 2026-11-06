@@ -12,13 +12,20 @@ import {
   Film,
   Repeat,
   PictureInPicture2,
+  ChevronLeft,
+  ChevronRight,
+  Presentation,
+  List,
+  MonitorPlay,
+  Search,
+  MessageSquareText,
 } from 'lucide-react';
 import { usePreviewStore } from './store';
 import { useBrowserStore } from '../browser/store';
 import { useEditorStore } from '../editor/store';
 import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { formatBytes, formatDate } from '../../i18n/format';
-import { openPath, PreviewData } from '../../lib/wails';
+import { openPath, PreviewData, PresentationSlide } from '../../lib/wails';
 import { FileTypeIcon, getFileTypeVisual } from '../../ui/FileTypeIcon';
 
 function renderSimpleMarkdown(md: string): React.ReactNode {
@@ -264,6 +271,575 @@ const MediaPlayerSection: React.FC<{ data: PreviewData }> = ({ data }) => {
   );
 };
 
+const PresentationPreviewSection: React.FC<{ data: PreviewData }> = ({ data }) => {
+  const slides: PresentationSlide[] = data.slides || [];
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [viewMode, setViewMode] = useState<'slide' | 'outline'>('slide');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    setCurrentIdx(0);
+    setSearchQuery('');
+  }, [data.path]);
+
+  const ext = (data.extension || '').toLowerCase();
+  const isOpenDocument = ext === 'odp' || ext === 'otp' || ext === 'fodp';
+  const suiteLabel = isOpenDocument ? 'LibreOffice Impress (ODF)' : 'Microsoft PowerPoint';
+  const accentColor = isOpenDocument ? '#ea580c' : '#d946ef';
+  const accentGradient = isOpenDocument
+    ? 'linear-gradient(135deg, #ea580c 0%, #f59e0b 100%)'
+    : 'linear-gradient(135deg, #ea580c 0%, #e11d48 100%)';
+
+  const safeIdx = Math.min(Math.max(0, currentIdx), Math.max(0, slides.length - 1));
+  const activeSlide = slides[safeIdx] || null;
+
+  const filteredSlides = slides.filter((s) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    if (s.title?.toLowerCase().includes(q)) return true;
+    if (s.subtitle?.toLowerCase().includes(q)) return true;
+    if (s.notes?.toLowerCase().includes(q)) return true;
+    return (s.bullets || []).some((b) => b.toLowerCase().includes(q));
+  });
+
+  if (slides.length === 0) {
+    return (
+      <div style={styles.placeholderBox}>
+        <Presentation size={38} color="#ea580c" />
+        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
+          {suiteLabel}
+        </div>
+        {data.dataUri ? (
+          <img
+            src={data.dataUri}
+            alt={data.name}
+            style={{
+              maxWidth: '100%',
+              maxHeight: 220,
+              borderRadius: 6,
+              border: '1px solid var(--border-subtle)',
+            }}
+          />
+        ) : (
+          <p style={{ margin: 0 }}>Nenhum slide estruturado pôde ser extraído deste arquivo.</p>
+        )}
+        <button
+          type="button"
+          style={styles.openExternalBtn}
+          onClick={() => void openPath(data.path)}
+        >
+          <ExternalLink size={13} />
+          <span>Abrir no Aplicativo Padrão</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        padding: 10,
+        gap: 10,
+        overflowY: 'auto',
+      }}
+    >
+      {/* Barra superior do player de apresentação */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 6,
+          flexWrap: 'wrap',
+          padding: '6px 8px',
+          borderRadius: 6,
+          backgroundColor: 'var(--bg-elevated)',
+          border: '1px solid var(--border-subtle)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 7px',
+              borderRadius: 4,
+              background: accentGradient,
+              color: '#fff',
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.03em',
+            }}
+          >
+            <Presentation size={11} />
+            {ext.toUpperCase() || 'SLIDES'}
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+            {slides.length} {slides.length === 1 ? 'slide' : 'slides'}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('slide')}
+            title="Modo Apresentação (Slide 16:9)"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '3px 7px',
+              fontSize: 10.5,
+              fontWeight: 600,
+              borderRadius: 4,
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: viewMode === 'slide' ? 'var(--accent-primary)' : 'transparent',
+              color: viewMode === 'slide' ? '#fff' : 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            <MonitorPlay size={11} />
+            <span>Slide</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('outline')}
+            title="Modo Roteiro (Todos os slides)"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '3px 7px',
+              fontSize: 10.5,
+              fontWeight: 600,
+              borderRadius: 4,
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: viewMode === 'outline' ? 'var(--accent-primary)' : 'transparent',
+              color: viewMode === 'outline' ? '#fff' : 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            <List size={11} />
+            <span>Roteiro</span>
+          </button>
+        </div>
+      </div>
+
+      {viewMode === 'slide' && activeSlide ? (
+        <>
+          {/* Palco 16:9 do Slide Atual */}
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              minHeight: 195,
+              borderRadius: 8,
+              border: '1px solid var(--border-subtle)',
+              background:
+                'linear-gradient(160deg, var(--bg-base) 0%, var(--bg-elevated) 100%)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.22)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Faixa superior decorativa da suíte */}
+            <div
+              style={{
+                height: 4,
+                width: '100%',
+                background: accentGradient,
+                flexShrink: 0,
+              }}
+            />
+
+            <div
+              style={{
+                padding: '12px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                flex: 1,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 6,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: '#ea580c',
+                  }}
+                >
+                  Slide {activeSlide.index} de {slides.length}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  {suiteLabel}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  fontSize: 14.5,
+                  fontWeight: 700,
+                  color: 'var(--text-primary)',
+                  lineHeight: 1.3,
+                  borderBottom: activeSlide.subtitle || (activeSlide.bullets && activeSlide.bullets.length > 0)
+                    ? '1px solid var(--border-subtle)'
+                    : 'none',
+                  paddingBottom: 6,
+                }}
+              >
+                {activeSlide.title || `Slide ${activeSlide.index}`}
+              </div>
+
+              {activeSlide.subtitle && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {activeSlide.subtitle}
+                </div>
+              )}
+
+              {activeSlide.bullets && activeSlide.bullets.length > 0 && (
+                <ul
+                  style={{
+                    margin: '2px 0 0',
+                    paddingLeft: 16,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                  }}
+                >
+                  {activeSlide.bullets.map((b, i) => (
+                    <li
+                      key={i}
+                      style={{
+                        fontSize: 11.5,
+                        color: 'var(--text-primary)',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* Imagens embutidas no slide (ou miniatura de capa no slide 1) */}
+              {activeSlide.images && activeSlide.images.length > 0 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 8,
+                    flexWrap: 'wrap',
+                    marginTop: 6,
+                    justifyContent: 'center',
+                  }}
+                >
+                  {activeSlide.images.map((imgSrc, i) => (
+                    <img
+                      key={i}
+                      src={imgSrc}
+                      alt={`Slide ${activeSlide.index} figura ${i + 1}`}
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: 160,
+                        objectFit: 'contain',
+                        borderRadius: 6,
+                        border: '1px solid var(--border-subtle)',
+                        backgroundColor: 'rgba(0,0,0,0.12)',
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : safeIdx === 0 && data.dataUri ? (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 6 }}>
+                  <img
+                    src={data.dataUri}
+                    alt={data.name}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: 140,
+                      objectFit: 'contain',
+                      borderRadius: 6,
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Controles Anterior / Próximo */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 6,
+            }}
+          >
+            <button
+              type="button"
+              disabled={safeIdx <= 0}
+              onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 10px',
+                borderRadius: 5,
+                border: '1px solid var(--border-subtle)',
+                backgroundColor: 'var(--bg-elevated)',
+                color: safeIdx <= 0 ? 'var(--text-muted)' : 'var(--text-primary)',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: safeIdx <= 0 ? 'not-allowed' : 'pointer',
+                opacity: safeIdx <= 0 ? 0.5 : 1,
+              }}
+            >
+              <ChevronLeft size={13} />
+              <span>Anterior</span>
+            </button>
+
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {safeIdx + 1} / {slides.length}
+            </span>
+
+            <button
+              type="button"
+              disabled={safeIdx >= slides.length - 1}
+              onClick={() => setCurrentIdx((i) => Math.min(slides.length - 1, i + 1))}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 10px',
+                borderRadius: 5,
+                border: '1px solid var(--border-subtle)',
+                backgroundColor: 'var(--bg-elevated)',
+                color:
+                  safeIdx >= slides.length - 1 ? 'var(--text-muted)' : 'var(--text-primary)',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: safeIdx >= slides.length - 1 ? 'not-allowed' : 'pointer',
+                opacity: safeIdx >= slides.length - 1 ? 0.5 : 1,
+              }}
+            >
+              <span>Próximo</span>
+              <ChevronRight size={13} />
+            </button>
+          </div>
+
+          {/* Tira seletora rápida de slides */}
+          {slides.length > 1 && (
+            <div
+              style={{
+                display: 'flex',
+                gap: 4,
+                overflowX: 'auto',
+                paddingBottom: 4,
+              }}
+            >
+              {slides.map((s, idx) => {
+                const active = idx === safeIdx;
+                return (
+                  <button
+                    key={s.index}
+                    type="button"
+                    onClick={() => setCurrentIdx(idx)}
+                    title={`Slide ${s.index}: ${s.title}`}
+                    style={{
+                      minWidth: 26,
+                      height: 24,
+                      padding: '0 6px',
+                      borderRadius: 4,
+                      border: active
+                        ? '1px solid #ea580c'
+                        : '1px solid var(--border-subtle)',
+                      backgroundColor: active
+                        ? 'rgba(234, 88, 12, 0.18)'
+                        : 'var(--bg-elevated)',
+                      color: active ? '#ea580c' : 'var(--text-secondary)',
+                      fontSize: 10.5,
+                      fontWeight: active ? 700 : 500,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {s.index}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Notas do Apresentador */}
+          {activeSlide.notes && (
+            <div
+              style={{
+                padding: '8px 10px',
+                borderRadius: 6,
+                backgroundColor: 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: accentColor,
+                  textTransform: 'uppercase',
+                }}
+              >
+                <MessageSquareText size={12} />
+                <span>Notas do Apresentador</span>
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.45,
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {activeSlide.notes}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        /* Modo Roteiro / Lista Completa com busca */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 8px',
+              borderRadius: 5,
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-base)',
+            }}
+          >
+            <Search size={12} color="var(--text-muted)" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filtrar slides por título ou conteúdo..."
+              style={{
+                flex: 1,
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                fontSize: 11.5,
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {filteredSlides.map((s) => (
+            <div
+              key={s.index}
+              onClick={() => {
+                setCurrentIdx(s.index - 1);
+                setViewMode('slide');
+              }}
+              style={{
+                padding: '8px 10px',
+                borderRadius: 6,
+                border: '1px solid var(--border-subtle)',
+                backgroundColor: 'var(--bg-elevated)',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span
+                  style={{
+                    padding: '1px 5px',
+                    borderRadius: 3,
+                    backgroundColor: 'rgba(234, 88, 12, 0.16)',
+                    color: '#ea580c',
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}
+                >
+                  #{s.index}
+                </span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {s.title}
+                </span>
+              </div>
+              {s.subtitle && (
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {s.subtitle}
+                </div>
+              )}
+              {s.bullets && s.bullets.length > 0 && (
+                <ul style={{ margin: '2px 0 0', paddingLeft: 16 }}>
+                  {s.bullets.slice(0, 4).map((b, idx) => (
+                    <li
+                      key={idx}
+                      style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}
+                    >
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Botão para abrir no PowerPoint / LibreOffice Impress */}
+      <button
+        type="button"
+        style={{ ...styles.openExternalBtn, alignSelf: 'center', marginTop: 2 }}
+        onClick={() => void openPath(data.path)}
+      >
+        <ExternalLink size={13} />
+        <span>Abrir no {isOpenDocument ? 'LibreOffice / App Padrão' : 'PowerPoint / App Padrão'}</span>
+      </button>
+    </div>
+  );
+};
+
 const PreviewBody: React.FC<{
   data: PreviewData;
   imageZoom: number;
@@ -410,6 +986,8 @@ const PreviewBody: React.FC<{
         )}
 
         {data.kind === 'media' && <MediaPlayerSection data={data} />}
+
+        {data.kind === 'presentation' && <PresentationPreviewSection data={data} />}
 
         {isDb && (
           <div

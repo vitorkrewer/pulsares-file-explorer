@@ -31,7 +31,7 @@ import { formatBytes, formatDate } from '../../i18n/format';
 const QUICK_TYPE_PRESETS: Array<{ label: string; ext: string; kind?: string }> = [
   { label: 'Todos', ext: '', kind: '' },
   { label: 'Código', ext: 'ts,tsx,js,jsx,go,py,rs,java,c,cpp,cs,html,css,sql', kind: 'file' },
-  { label: 'Documentos', ext: 'md,txt,pdf,doc,docx,csv,xls,xlsx', kind: 'file' },
+  { label: 'Documentos', ext: 'md,txt,pdf,doc,docx,odt,csv,xls,xlsx,ods,ppt,pptx,ppsx,potx,odp,otp,fodp', kind: 'file' },
   { label: 'Configs', ext: 'json,yaml,yml,toml,env,ini,xml', kind: 'file' },
   { label: 'Imagens', ext: 'png,jpg,jpeg,webp,svg,gif,bmp', kind: 'file' },
   { label: 'Mídia', ext: 'mp4,webm,mov,mp3,wav,flac', kind: 'file' },

@@ -32,28 +32,31 @@ const (
 	PreviewCode     PreviewKind = "code"
 	PreviewText     PreviewKind = "text"
 	PreviewMedia    PreviewKind = "media"
-	PreviewPDF      PreviewKind = "pdf"
-	PreviewDatabase PreviewKind = "database"
-	PreviewBinary   PreviewKind = "binary"
-	PreviewFolder   PreviewKind = "folder"
+	PreviewPDF          PreviewKind = "pdf"
+	PreviewDatabase     PreviewKind = "database"
+	PreviewPresentation PreviewKind = "presentation"
+	PreviewBinary       PreviewKind = "binary"
+	PreviewFolder       PreviewKind = "folder"
 )
 
 // PreviewData reúne os metadados e o conteúdo seguro para exibição no painel de prévia ou Quick Look.
 type PreviewData struct {
-	Path        string      `json:"path"`
-	Name        string      `json:"name"`
-	Kind        PreviewKind `json:"kind"`
-	Extension   string      `json:"extension"`
-	MimeType    string      `json:"mimeType"`
-	Size        int64       `json:"size"`
-	ModTime     string      `json:"modTime"`
-	TextContent string      `json:"textContent,omitempty"`
-	Truncated   bool        `json:"truncated,omitempty"`
-	LineCount   int         `json:"lineCount,omitempty"`
-	DataURI     string      `json:"dataUri,omitempty"`
-	ImageWidth  int         `json:"imageWidth,omitempty"`
-	ImageHeight int         `json:"imageHeight,omitempty"`
-	ChildCount  int         `json:"childCount,omitempty"`
+	Path        string              `json:"path"`
+	Name        string              `json:"name"`
+	Kind        PreviewKind         `json:"kind"`
+	Extension   string              `json:"extension"`
+	MimeType    string              `json:"mimeType"`
+	Size        int64               `json:"size"`
+	ModTime     string              `json:"modTime"`
+	TextContent string              `json:"textContent,omitempty"`
+	Truncated   bool                `json:"truncated,omitempty"`
+	LineCount   int                 `json:"lineCount,omitempty"`
+	DataURI     string              `json:"dataUri,omitempty"`
+	ImageWidth  int                 `json:"imageWidth,omitempty"`
+	ImageHeight int                 `json:"imageHeight,omitempty"`
+	ChildCount  int                 `json:"childCount,omitempty"`
+	SlideCount  int                 `json:"slideCount,omitempty"`
+	Slides      []PresentationSlide `json:"slides,omitempty"`
 }
 
 // Service gerencia o cache em disco de miniaturas e o carregamento de prévias.
@@ -100,6 +103,12 @@ func (s *Service) Thumbnail(path string, maxDim int) (string, error) {
 			return "", err
 		}
 		return "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(raw), nil
+	}
+
+	if isPresentationExt(strings.TrimPrefix(ext, ".")) {
+		if thumbURI, err := extractPresentationThumbnail(path); err == nil && thumbURI != "" {
+			return thumbURI, nil
+		}
 	}
 
 	if !isSupportedRasterExt(ext) {
@@ -279,6 +288,18 @@ func (s *Service) ReadPreview(path string, maxTextBytes int) (PreviewData, error
 	if isDatabaseExt(ext) {
 		data.Kind = PreviewDatabase
 		data.MimeType = "application/vnd.sqlite3"
+		return data, nil
+	}
+
+	// Apresentações (.pptx, .ppsx, .potx, .ppt, .odp, .otp, .fodp)
+	if isPresentationExt(ext) {
+		data.Kind = PreviewPresentation
+		data.MimeType = presentationMime(ext)
+		if slides, coverThumb, err := readPresentationPreview(path, ext); err == nil {
+			data.Slides = slides
+			data.SlideCount = len(slides)
+			data.DataURI = coverThumb
+		}
 		return data, nil
 	}
 

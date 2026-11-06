@@ -1,6 +1,7 @@
 package thumbs
 
 import (
+	"archive/zip"
 	"bytes"
 	"os"
 	"path/filepath"
@@ -107,4 +108,139 @@ func TestReadPreview_ImageMarkdownTextAndBinary(t *testing.T) {
 		t.Fatalf("expected PreviewBinary, got %s", binPrev.Kind)
 	}
 }
+
+func TestReadPreview_PresentationPPTXAndODP(t *testing.T) {
+	tmp := t.TempDir()
+	svc := New(filepath.Join(tmp, "cache"), 10*1024*1024)
+
+	// 1. Sintetiza um arquivo PowerPoint (.pptx) com 2 slides e notas do apresentador
+	pptxPath := filepath.Join(tmp, "roadmap.pptx")
+	{
+		f, err := os.Create(pptxPath)
+		if err != nil {
+			t.Fatalf("create pptx failed: %v", err)
+		}
+		zw := zip.NewWriter(f)
+
+		slide1 := `<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree>
+    <p:sp>
+      <p:nvSpPr><p:nvPr><p:ph type="ctrTitle"/></p:nvPr></p:nvSpPr>
+      <p:txBody><a:p><a:r><a:t>Pulsares Explorer 2026</a:t></a:r></a:p></p:txBody>
+    </p:sp>
+    <p:sp>
+      <p:nvSpPr><p:nvPr><p:ph type="subTitle"/></p:nvPr></p:nvSpPr>
+      <p:txBody><a:p><a:r><a:t>Arquitetura e Roadmap</a:t></a:r></a:p></p:txBody>
+    </p:sp>
+  </p:spTree></p:cSld>
+</p:sld>`
+		w1, _ := zw.Create("ppt/slides/slide1.xml")
+		_, _ = w1.Write([]byte(slide1))
+
+		slide2 := `<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree>
+    <p:sp>
+      <p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+      <p:txBody><a:p><a:r><a:t>Novos Recursos</a:t></a:r></a:p></p:txBody>
+    </p:sp>
+    <p:sp>
+      <p:nvSpPr><p:nvPr><p:ph type="body"/></p:nvPr></p:nvSpPr>
+      <p:txBody>
+        <a:p><a:r><a:t>Visualizador nativo de PPTX e ODP</a:t></a:r></a:p>
+        <a:p><a:r><a:t>Pulsares DB Studio integrado</a:t></a:r></a:p>
+      </p:txBody>
+    </p:sp>
+  </p:spTree></p:cSld>
+</p:sld>`
+		w2, _ := zw.Create("ppt/slides/slide2.xml")
+		_, _ = w2.Write([]byte(slide2))
+
+		notes1 := `<?xml version="1.0" encoding="UTF-8"?>
+<p:notes xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree>
+    <p:sp>
+      <p:nvSpPr><p:nvPr><p:ph type="body"/></p:nvPr></p:nvSpPr>
+      <p:txBody><a:p><a:r><a:t>Destacar performance em Go e Wails.</a:t></a:r></a:p></p:txBody>
+    </p:sp>
+  </p:spTree></p:cSld>
+</p:notes>`
+		wn1, _ := zw.Create("ppt/notesSlides/notesSlide1.xml")
+		_, _ = wn1.Write([]byte(notes1))
+
+		_ = zw.Close()
+		_ = f.Close()
+	}
+
+	pptxPrev, err := svc.ReadPreview(pptxPath, 4096)
+	if err != nil {
+		t.Fatalf("ReadPreview pptx failed: %v", err)
+	}
+	if pptxPrev.Kind != PreviewPresentation || pptxPrev.SlideCount != 2 || len(pptxPrev.Slides) != 2 {
+		t.Fatalf("unexpected pptx preview: kind=%s count=%d", pptxPrev.Kind, pptxPrev.SlideCount)
+	}
+	if pptxPrev.Slides[0].Title != "Pulsares Explorer 2026" || pptxPrev.Slides[0].Subtitle != "Arquitetura e Roadmap" {
+		t.Fatalf("unexpected slide 1 content: %+v", pptxPrev.Slides[0])
+	}
+	if !strings.Contains(pptxPrev.Slides[0].Notes, "Destacar performance") {
+		t.Fatalf("expected speaker notes on slide 1, got %q", pptxPrev.Slides[0].Notes)
+	}
+	if len(pptxPrev.Slides[1].Bullets) != 2 {
+		t.Fatalf("expected 2 bullets on slide 2, got %+v", pptxPrev.Slides[1].Bullets)
+	}
+
+	// 2. Sintetiza um arquivo LibreOffice Impress (.odp)
+	odpPath := filepath.Join(tmp, "apresentacao_open_source.odp")
+	{
+		f, err := os.Create(odpPath)
+		if err != nil {
+			t.Fatalf("create odp failed: %v", err)
+		}
+		zw := zip.NewWriter(f)
+		contentXML := `<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <office:body><office:presentation>
+    <draw:page draw:name="Intro">
+      <draw:frame presentation:class="title">
+        <draw:text-box><text:p>Ecossistema Open Source</text:p></draw:text-box>
+      </draw:frame>
+      <draw:frame presentation:class="outline">
+        <draw:text-box>
+          <text:p>Suporte completo ao LibreOffice Impress (.odp)</text:p>
+          <text:p>Leitura instantânea sem dependências externas</text:p>
+        </draw:text-box>
+      </draw:frame>
+      <presentation:notes>
+        <draw:frame presentation:class="notes">
+          <draw:text-box><text:p>Lembrar de demonstrar o atalho Espaço (Quick Look).</text:p></draw:text-box>
+        </draw:frame>
+      </presentation:notes>
+    </draw:page>
+  </office:presentation></office:body>
+</office:document-content>`
+		wContent, _ := zw.Create("content.xml")
+		_, _ = wContent.Write([]byte(contentXML))
+		_ = zw.Close()
+		_ = f.Close()
+	}
+
+	odpPrev, err := svc.ReadPreview(odpPath, 4096)
+	if err != nil {
+		t.Fatalf("ReadPreview odp failed: %v", err)
+	}
+	if odpPrev.Kind != PreviewPresentation || odpPrev.SlideCount != 1 {
+		t.Fatalf("unexpected odp preview: kind=%s count=%d", odpPrev.Kind, odpPrev.SlideCount)
+	}
+	if odpPrev.Slides[0].Title != "Ecossistema Open Source" || len(odpPrev.Slides[0].Bullets) != 2 {
+		t.Fatalf("unexpected odp slide content: %+v", odpPrev.Slides[0])
+	}
+	if !strings.Contains(odpPrev.Slides[0].Notes, "Quick Look") {
+		t.Fatalf("expected odp speaker notes, got %q", odpPrev.Slides[0].Notes)
+	}
+}
+
 

@@ -83,8 +83,18 @@ export type PreviewKind =
   | 'media'
   | 'pdf'
   | 'database'
+  | 'presentation'
   | 'binary'
   | 'folder';
+
+export interface PresentationSlide {
+  index: number;
+  title: string;
+  subtitle?: string;
+  bullets?: string[];
+  notes?: string;
+  images?: string[];
+}
 
 export interface PreviewData {
   path: string;
@@ -101,6 +111,8 @@ export interface PreviewData {
   imageWidth?: number;
   imageHeight?: number;
   childCount?: number;
+  slideCount?: number;
+  slides?: PresentationSlide[];
 }
 
 export interface SearchOptions {
