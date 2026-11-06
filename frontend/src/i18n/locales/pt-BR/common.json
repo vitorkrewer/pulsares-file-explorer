@@ -25,6 +25,7 @@
   "tree": {
     "title": "Pastas",
     "followActiveTab": "Acompanhar aba ativa",
+    "collapseAll": "Fechar todas as pastas abertas",
     "refresh": "Atualizar árvore (F5)",
     "loading": "Carregando...",
     "empty": "Sem subpastas",

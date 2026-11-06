@@ -25,6 +25,7 @@
   "tree": {
     "title": "Folders",
     "followActiveTab": "Follow active tab",
+    "collapseAll": "Collapse all open folders",
     "refresh": "Refresh tree (F5)",
     "loading": "Loading...",
     "empty": "No subfolders",

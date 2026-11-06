@@ -6,6 +6,10 @@ import {
   ChevronDown,
   Folder,
   FolderOpen,
+  FolderGit2,
+  FolderCode,
+  FolderCog,
+  Database,
   HardDrive,
   Link2,
   Loader2,
@@ -198,6 +202,44 @@ export const FolderTree: React.FC = () => {
     }
     if (item.node.isLink) {
       return <Link2 size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />;
+    }
+    const lower = (item.node.name || '').toLowerCase();
+    if (lower === '.git' || lower === '.github' || lower === '.gitlab' || lower === '.husky') {
+      return <FolderGit2 size={14} style={{ color: '#f97316', flexShrink: 0 }} />;
+    }
+    if (
+      lower === 'db' ||
+      lower === 'database' ||
+      lower === 'databases' ||
+      lower === 'migrations' ||
+      lower === 'sql' ||
+      lower === 'prisma'
+    ) {
+      return <Database size={14} style={{ color: '#0ea5e9', flexShrink: 0 }} />;
+    }
+    if (
+      lower === 'src' ||
+      lower === 'app' ||
+      lower === 'internal' ||
+      lower === 'pkg' ||
+      lower === 'cmd' ||
+      lower === 'components' ||
+      lower === 'features' ||
+      lower === 'api' ||
+      lower === 'ui'
+    ) {
+      return <FolderCode size={14} style={{ color: '#38bdf8', flexShrink: 0 }} />;
+    }
+    if (
+      lower === 'node_modules' ||
+      lower === 'vendor' ||
+      lower === '.venv' ||
+      lower === 'venv' ||
+      lower === 'build' ||
+      lower === 'dist' ||
+      lower === 'target'
+    ) {
+      return <FolderCog size={14} style={{ color: '#22c55e', flexShrink: 0 }} />;
     }
     if (item.expanded) {
       return <FolderOpen size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />;

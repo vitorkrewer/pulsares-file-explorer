@@ -25,6 +25,7 @@
   "tree": {
     "title": "Carpetas",
     "followActiveTab": "Seguir pestaña activa",
+    "collapseAll": "Cerrar todas las carpetas abiertas",
     "refresh": "Actualizar árbol (F5)",
     "loading": "Cargando...",
     "empty": "Sin subcarpetas",

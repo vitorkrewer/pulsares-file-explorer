@@ -44,6 +44,7 @@ interface FolderTreeState {
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
   toggleFollowActiveTab: () => void;
+  collapseAll: () => void;
   setFocusedPath: (path: string | null) => void;
   loadRoots: () => Promise<void>;
   refreshSidebarMeta: () => Promise<void>;
@@ -92,6 +93,17 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
 
   toggleFollowActiveTab: () => {
     set((s) => ({ followActiveTab: !s.followActiveTab }));
+    triggerSessionSave();
+  },
+
+  collapseAll: () => {
+    set((state) => {
+      const next: Record<string, NodeCacheEntry> = {};
+      for (const [k, v] of Object.entries(state.nodesByPath)) {
+        next[k] = { ...v, expanded: false };
+      }
+      return { nodesByPath: next };
+    });
     triggerSessionSave();
   },
 

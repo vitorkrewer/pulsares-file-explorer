@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Crosshair,
+  ChevronsDownUp,
   RotateCw,
   Star,
   HardDrive,
@@ -28,6 +29,7 @@ export const Sidebar: React.FC = () => {
     recent,
     setSidebarWidth,
     toggleFollowActiveTab,
+    collapseAll,
     loadRoots,
     refreshSidebarMeta,
     toggleFavorite,
@@ -128,6 +130,15 @@ export const Sidebar: React.FC = () => {
             aria-label={t('tree.followActiveTab')}
           >
             <Crosshair size={13} />
+          </button>
+          <button
+            type="button"
+            style={styles.iconBtn}
+            onClick={collapseAll}
+            title={t('tree.collapseAll')}
+            aria-label={t('tree.collapseAll')}
+          >
+            <ChevronsDownUp size={13} />
           </button>
           <button
             type="button"
