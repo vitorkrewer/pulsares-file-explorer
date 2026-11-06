@@ -3,12 +3,14 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -28,16 +30,18 @@ import (
 )
 
 type App struct {
-	ctx      context.Context
-	fs       vfs.FileSystem
-	listing  *listing.Manager
-	tree     *tree.Service
-	ops      *ops.Manager
-	terminal *terminal.Service
-	thumbs   *thumbs.Service
-	search   *search.Service
-	watch    *watch.Service
-	storage  *storage.DB
+	ctx       context.Context
+	fs        vfs.FileSystem
+	listing   *listing.Manager
+	tree      *tree.Service
+	ops       *ops.Manager
+	terminal  *terminal.Service
+	thumbs    *thumbs.Service
+	search    *search.Service
+	watch     *watch.Service
+	storage   *storage.DB
+	studioMu  sync.Mutex
+	studioCmd *exec.Cmd
 }
 
 type InitialState struct {
@@ -85,6 +89,13 @@ func (a *App) Startup(ctx context.Context) {
 	}
 	if a.thumbs == nil {
 		a.thumbs = thumbs.New("", 64*1024*1024)
+	}
+
+	for _, arg := range os.Args[1:] {
+		if arg == "--studio" {
+			go a.watchStudioIPC(ctx)
+			break
+		}
 	}
 }
 
@@ -521,17 +532,121 @@ func (a *App) RunStudioCommand(cwd string, command string) (StudioRunResult, err
 	}, nil
 }
 
+type studioIPCMessage struct {
+	TargetPath   string `json:"targetPath"`
+	WorkspaceDir string `json:"workspaceDir"`
+	Timestamp    int64  `json:"timestamp"`
+}
+
+func studioIPCFilePath() string {
+	return filepath.Join(os.TempDir(), "pulsares_studio_ipc.json")
+}
+
+func (a *App) watchStudioIPC(ctx context.Context) {
+	ipcFile := studioIPCFilePath()
+	var lastTS int64
+	if raw, err := os.ReadFile(ipcFile); err == nil {
+		var msg studioIPCMessage
+		if json.Unmarshal(raw, &msg) == nil {
+			lastTS = msg.Timestamp
+		}
+	}
+
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			raw, err := os.ReadFile(ipcFile)
+			if err != nil {
+				continue
+			}
+			var msg studioIPCMessage
+			if err := json.Unmarshal(raw, &msg); err != nil {
+				continue
+			}
+			if msg.Timestamp > lastTS {
+				lastTS = msg.Timestamp
+				runtime.WindowUnminimise(a.ctx)
+				runtime.WindowShow(a.ctx)
+				runtime.EventsEmit(a.ctx, "studio:open-file", msg)
+			}
+		}
+	}
+}
+
 func (a *App) OpenStudioWindow(targetPath string) error {
+	cleanTarget := strings.TrimSpace(targetPath)
+	workspaceDir := ""
+	if cleanTarget != "" {
+		cleanTarget = filepath.Clean(cleanTarget)
+		if info, err := os.Stat(cleanTarget); err == nil && info.IsDir() {
+			workspaceDir = cleanTarget
+			cleanTarget = ""
+		} else {
+			workspaceDir = filepath.Dir(cleanTarget)
+		}
+	}
+
+	msg := studioIPCMessage{
+		TargetPath:   cleanTarget,
+		WorkspaceDir: workspaceDir,
+		Timestamp:    time.Now().UnixNano(),
+	}
+	if payload, err := json.Marshal(msg); err == nil {
+		_ = os.WriteFile(studioIPCFilePath(), payload, 0o600)
+	}
+
+	a.studioMu.Lock()
+	defer a.studioMu.Unlock()
+
+	if a.studioCmd != nil && a.studioCmd.Process != nil {
+		return nil
+	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
 	args := []string{"--studio"}
-	if strings.TrimSpace(targetPath) != "" {
-		args = append(args, targetPath)
+	if cleanTarget != "" {
+		args = append(args, cleanTarget)
 	}
 	cmd := exec.Command(exe, args...)
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	a.studioCmd = cmd
+	go func(c *exec.Cmd) {
+		_ = c.Wait()
+		a.studioMu.Lock()
+		if a.studioCmd == c {
+			a.studioCmd = nil
+		}
+		a.studioMu.Unlock()
+	}(cmd)
+	return nil
+}
+
+func (a *App) WindowMinimize() {
+	if a.ctx != nil {
+		runtime.WindowMinimise(a.ctx)
+	}
+}
+
+func (a *App) WindowToggleMaximize() {
+	if a.ctx != nil {
+		runtime.WindowToggleMaximise(a.ctx)
+	}
+}
+
+func (a *App) WindowClose() {
+	if a.ctx != nil {
+		runtime.Quit(a.ctx)
+	}
 }
 
 func (a *App) SaveSession(data string) error {

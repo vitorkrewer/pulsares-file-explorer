@@ -401,6 +401,7 @@ interface EditorState {
   isOpen: boolean;
   isMinimized: boolean;
   isMaximized: boolean;
+  isDedicatedStudio: boolean;
   preferSeparateWindow: boolean;
   workspaceDir: string;
   tabs: EditorTab[];
@@ -509,6 +510,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   isOpen: isStandaloneStudioWindow(),
   isMinimized: false,
   isMaximized: isStandaloneStudioWindow(),
+  isDedicatedStudio: isStandaloneStudioWindow(),
   preferSeparateWindow: true,
   workspaceDir: '',
   tabs: [],
@@ -531,12 +533,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   hydrateStudioFromStorage: async (initialTarget?: string, defaultDir?: string) => {
     const saved = loadPersistedTabs();
     const dir = defaultDir || saved.workspaceDir || '';
+    set({
+      isDedicatedStudio: true,
+      isOpen: true,
+      isMaximized: true,
+    });
     if (saved.tabs.length > 0) {
       set({
         tabs: saved.tabs,
         activeTabId: saved.activeTabId || saved.tabs[0].id,
         workspaceDir: dir,
-        isOpen: true,
       });
     } else if (dir) {
       set({ workspaceDir: dir });
@@ -562,7 +568,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     if (initialTarget) {
       await get().openFileInEditor(initialTarget, true);
-    } else if (get().tabs.length === 0 && isStandaloneStudioWindow()) {
+    } else if (get().tabs.length === 0) {
       get().openNewUntitledTab(dir, 'typescript', true);
     }
   },
@@ -614,15 +620,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       persistTabsToStorage(get().tabs, activeTab.id, parentDir);
     }
 
-    // Se estamos na janela do Explorador e preferSeparateWindow está ativo, abre/foca a janela separada do Studio
-    if (!forceLocalModal && !isStandaloneStudioWindow() && get().preferSeparateWindow) {
-      const openedPopup = spawnOrFocusSeparateStudioWindow(path, parentDir);
-      if (openedPopup) {
+    // Se estamos na janela do Explorador e preferSeparateWindow está ativo, abre/foca a janela nativa frameless do Studio primeiro (sem barra de URL wails.localhost)
+    if (
+      !forceLocalModal &&
+      !get().isDedicatedStudio &&
+      !isStandaloneStudioWindow() &&
+      get().preferSeparateWindow
+    ) {
+      const openedNative = await openStudioWindowNative(path);
+      if (openedNative) {
         set({ isOpen: false });
         return;
       }
-      const openedNative = await openStudioWindowNative(path);
-      if (openedNative) {
+      const openedPopup = spawnOrFocusSeparateStudioWindow(path, parentDir);
+      if (openedPopup) {
         set({ isOpen: false });
         return;
       }
@@ -673,11 +684,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
     persistTabsToStorage(nextTabs, id, dir);
 
-    if (!forceLocalModal && !isStandaloneStudioWindow() && get().preferSeparateWindow) {
-      if (spawnOrFocusSeparateStudioWindow('', dir)) {
-        set({ isOpen: false });
-        return;
-      }
+    if (
+      !forceLocalModal &&
+      !get().isDedicatedStudio &&
+      !isStandaloneStudioWindow() &&
+      get().preferSeparateWindow
+    ) {
+      void openStudioWindowNative(dir).then((openedNative) => {
+        if (openedNative) {
+          set({ isOpen: false });
+          return;
+        }
+        if (spawnOrFocusSeparateStudioWindow('', dir)) {
+          set({ isOpen: false });
+          return;
+        }
+        set({ isOpen: true, isMinimized: false });
+      });
+      return;
     }
 
     set({ isOpen: true, isMinimized: false });
@@ -687,12 +711,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { tabs, activeTabId, workspaceDir } = get();
     persistTabsToStorage(tabs, activeTabId, workspaceDir);
     const active = tabs.find((t) => t.id === activeTabId) || tabs[0];
-    if (spawnOrFocusSeparateStudioWindow(active?.path || '', workspaceDir)) {
+    const ok = await openStudioWindowNative(active?.path || workspaceDir || '');
+    if (ok) {
       set({ isOpen: false, preferSeparateWindow: true });
       return;
     }
-    const ok = await openStudioWindowNative(active?.path || '');
-    if (ok) {
+    if (spawnOrFocusSeparateStudioWindow(active?.path || '', workspaceDir)) {
       set({ isOpen: false, preferSeparateWindow: true });
     }
   },
@@ -708,7 +732,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         tabs: remaining,
         activeTabId: nextActive,
-        isOpen: isStandaloneStudioWindow() ? true : remaining.length > 0 ? s.isOpen : false,
+        isOpen:
+          s.isDedicatedStudio || isStandaloneStudioWindow()
+            ? true
+            : remaining.length > 0
+            ? s.isOpen
+            : false,
       };
     });
   },

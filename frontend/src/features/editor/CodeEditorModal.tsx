@@ -35,6 +35,7 @@ import {
   ArrowUpDown,
   Regex,
   ChevronRight,
+  Square,
 } from 'lucide-react';
 import {
   useEditorStore,
@@ -45,7 +46,15 @@ import {
   isStandaloneStudioWindow,
 } from './store';
 import { useBrowserStore } from '../browser/store';
-import { Entry, listDirectorySnapshot } from '../../lib/wails';
+import {
+  Entry,
+  listDirectorySnapshot,
+  subscribeEvent,
+  StudioOpenFileEvent,
+  windowMinimize,
+  windowToggleMaximize,
+  windowClose,
+} from '../../lib/wails';
 
 interface SnippetItem {
   label: string;
@@ -446,6 +455,9 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
   const [workspaceEntries, setWorkspaceEntries] = useState<Entry[]>([]);
   const [workspaceFilter, setWorkspaceFilter] = useState('');
   const [regexTestPattern, setRegexTestPattern] = useState('');
+  const [studioMinHovered, setStudioMinHovered] = useState(false);
+  const [studioMaxHovered, setStudioMaxHovered] = useState(false);
+  const [studioCloseHovered, setStudioCloseHovered] = useState(false);
 
   const effectiveWorkspace = workspaceDir || currentPath || '/';
 
@@ -465,8 +477,19 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
     });
   }, [isOpen, isDedicatedWindow, sidebarTab, effectiveWorkspace]);
 
-  // Escuta eventos entre janelas (Explorer <-> Pulsares Studio Window)
+  // Escuta eventos entre janelas (Explorer <-> Pulsares Studio Window via Wails IPC, BroadcastChannel e localStorage)
   useEffect(() => {
+    const unsubWailsIPC = subscribeEvent<StudioOpenFileEvent>('studio:open-file', (ev) => {
+      if (!isDedicatedWindow || !ev) return;
+      if (ev.workspaceDir) {
+        setWorkspaceDir(ev.workspaceDir);
+      }
+      if (ev.targetPath) {
+        void openFileInEditor(ev.targetPath, true);
+      }
+      window.focus();
+    });
+
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'pulsares.studio.openQueue.v1' && e.newValue && isDedicatedWindow) {
         try {
@@ -512,6 +535,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
 
     window.addEventListener('storage', onStorage);
     return () => {
+      unsubWailsIPC();
       window.removeEventListener('storage', onStorage);
       if (ch) ch.close();
     };
@@ -978,7 +1002,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
 
   return (
     <div role="dialog" aria-label="Pulsares Studio Editor" style={windowStyle}>
-      {/* Barra superior de ferramentas e controle da janela do Studio */}
+      {/* Titlebar Própria do Pulsares Studio Editor (Frameless Window + Controles Nativos) */}
       <div
         onMouseDown={(e) => {
           if (isDedicatedWindow || isMaximized) return;
@@ -990,31 +1014,74 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
             origY: pos.y,
           };
         }}
-        onDoubleClick={() => {
-          if (!isDedicatedWindow) toggleMaximized();
+        onDoubleClick={(e) => {
+          if ((e.target as HTMLElement).closest('button, select, input')) return;
+          if (isDedicatedWindow) {
+            void windowToggleMaximize();
+          } else {
+            toggleMaximized();
+          }
         }}
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '6px 12px',
-          backgroundColor: 'var(--bg-subtle)',
+          height: '38px',
+          paddingLeft: '12px',
+          paddingRight: 0,
+          backgroundColor: 'var(--bg-app)',
           borderBottom: '1px solid var(--border-subtle)',
           cursor: isDedicatedWindow || isMaximized ? 'default' : 'move',
           userSelect: 'none',
           gap: '8px',
-        }}
+          ...(isDedicatedWindow ? { '--wails-draggable': 'drag' } : {}),
+        } as React.CSSProperties}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <FileCode2 size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-          <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--text-primary)' }}>
-            Pulsares Studio Editor
+        {/* Identidade visual do Pulsares Studio */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            minWidth: 0,
+            flex: 1,
+          }}
+        >
+          <div
+            style={{
+              width: '22px',
+              height: '22px',
+              borderRadius: '6px',
+              background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              boxShadow: '0 2px 6px rgba(124, 58, 237, 0.35)',
+            }}
+          >
+            <FileCode2 size={13} color="#ffffff" />
+          </div>
+          <span
+            style={{
+              fontWeight: 700,
+              fontSize: '12px',
+              letterSpacing: '0.02em',
+              color: 'var(--text-primary)',
+              flexShrink: 0,
+            }}
+          >
+            Pulsares Studio
           </span>
           {activeTab?.path && (
             <span
               style={{
                 fontSize: '11px',
                 color: 'var(--text-muted)',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                backgroundColor: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
                 maxWidth: '340px',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -1027,7 +1094,16 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+        {/* Ferramentas de Desenvolvedor da Titlebar */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            flexShrink: 0,
+            '--wails-draggable': 'no-drag',
+          } as React.CSSProperties}
+        >
           <button
             type="button"
             onClick={() =>
@@ -1189,33 +1265,88 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                 <ExternalLink size={13} />
                 <span>Janela Separada</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setMinimized(true)}
-                title="Minimizar para barra flutuante"
-                style={windowCtrlBtnStyle}
-              >
-                <Minus size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={toggleMaximized}
-                title={isMaximized ? 'Restaurar tamanho' : 'Maximizar'}
-                style={windowCtrlBtnStyle}
-              >
-                {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditorOpen(false)}
-                title="Fechar editor"
-                style={{ ...windowCtrlBtnStyle, color: 'var(--status-danger)' }}
-              >
-                <X size={13} />
-              </button>
             </>
           )}
+        </div>
+
+        {/* Controles da Janela da Titlebar Própria (Minimizar, Maximizar/Restaurar, Fechar) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'stretch',
+            height: '100%',
+            flexShrink: 0,
+            marginLeft: '6px',
+            '--wails-draggable': 'no-drag',
+          } as React.CSSProperties}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (isDedicatedWindow) {
+                void windowMinimize();
+              } else {
+                setMinimized(true);
+              }
+            }}
+            onMouseEnter={() => setStudioMinHovered(true)}
+            onMouseLeave={() => setStudioMinHovered(false)}
+            title="Minimizar"
+            aria-label="Minimizar"
+            style={{
+              ...studioTitlebarWinBtnStyle,
+              backgroundColor: studioMinHovered ? 'var(--bg-hover)' : 'transparent',
+            }}
+          >
+            <Minus size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (isDedicatedWindow) {
+                void windowToggleMaximize();
+              } else {
+                toggleMaximized();
+              }
+            }}
+            onMouseEnter={() => setStudioMaxHovered(true)}
+            onMouseLeave={() => setStudioMaxHovered(false)}
+            title="Maximizar / Restaurar"
+            aria-label="Maximizar"
+            style={{
+              ...studioTitlebarWinBtnStyle,
+              backgroundColor: studioMaxHovered ? 'var(--bg-hover)' : 'transparent',
+            }}
+          >
+            {isDedicatedWindow ? (
+              <Square size={12} />
+            ) : isMaximized ? (
+              <Minimize2 size={13} />
+            ) : (
+              <Maximize2 size={13} />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (isDedicatedWindow) {
+                void windowClose();
+              } else {
+                setEditorOpen(false);
+              }
+            }}
+            onMouseEnter={() => setStudioCloseHovered(true)}
+            onMouseLeave={() => setStudioCloseHovered(false)}
+            title="Fechar"
+            aria-label="Fechar"
+            style={{
+              ...studioTitlebarWinBtnStyle,
+              backgroundColor: studioCloseHovered ? '#dc2626' : 'transparent',
+              color: studioCloseHovered ? '#ffffff' : 'var(--text-secondary)',
+            }}
+          >
+            <X size={15} />
+          </button>
         </div>
       </div>
 
@@ -2553,6 +2684,19 @@ const headerBtnStyle: React.CSSProperties = {
   color: 'var(--text-primary)',
   fontSize: '11px',
   cursor: 'pointer',
+};
+
+const studioTitlebarWinBtnStyle: React.CSSProperties = {
+  width: '42px',
+  height: '100%',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: 'var(--text-secondary)',
+  cursor: 'pointer',
+  borderRadius: 0,
+  border: 'none',
+  transition: 'background-color 0.12s, color 0.12s',
 };
 
 const windowCtrlBtnStyle: React.CSSProperties = {

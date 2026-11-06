@@ -334,6 +334,12 @@ export interface StudioRunResult {
   durationMs: number;
 }
 
+export interface StudioOpenFileEvent {
+  targetPath: string;
+  workspaceDir: string;
+  timestamp: number;
+}
+
 // Declaração de objetos injetados pelo Wails runtime
 declare global {
   interface Window {
@@ -391,6 +397,9 @@ declare global {
           WriteTextFile: (path: string, content: string) => Promise<void>;
           RunStudioCommand: (cwd: string, command: string) => Promise<StudioRunResult>;
           OpenStudioWindow: (targetPath: string) => Promise<void>;
+          WindowMinimize: () => Promise<void>;
+          WindowToggleMaximize: () => Promise<void>;
+          WindowClose: () => Promise<void>;
           SaveSession: (data: string) => Promise<void>;
           LoadSession: () => Promise<string>;
           OpenPath: (path: string) => Promise<void>;
@@ -428,6 +437,9 @@ declare global {
     runtime?: {
       EventsOn: (eventName: string, callback: (data: unknown) => void) => () => void;
       EventsOff: (eventName: string) => void;
+      WindowMinimise?: () => void;
+      WindowToggleMaximise?: () => void;
+      Quit?: () => void;
     };
   }
 }
@@ -953,6 +965,43 @@ export async function openStudioWindowNative(targetPath: string): Promise<boolea
     }
   }
   return false;
+}
+
+export async function windowMinimize(): Promise<void> {
+  if (typeof window !== 'undefined' && typeof window.runtime?.WindowMinimise === 'function') {
+    window.runtime.WindowMinimise();
+    return;
+  }
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.WindowMinimize === 'function') {
+    await window.go!.app.App.WindowMinimize();
+  }
+}
+
+export async function windowToggleMaximize(): Promise<void> {
+  if (typeof window !== 'undefined' && typeof window.runtime?.WindowToggleMaximise === 'function') {
+    window.runtime.WindowToggleMaximise();
+    return;
+  }
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.WindowToggleMaximize === 'function') {
+    await window.go!.app.App.WindowToggleMaximize();
+  }
+}
+
+export async function windowClose(): Promise<void> {
+  if (typeof window !== 'undefined' && typeof window.runtime?.Quit === 'function') {
+    window.runtime.Quit();
+    return;
+  }
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.WindowClose === 'function') {
+    await window.go!.app.App.WindowClose();
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    window.close();
+  }
 }
 
 export async function getDrives(): Promise<DriveInfo[]> {
