@@ -36,12 +36,19 @@ import {
   Regex,
   ChevronRight,
   Square,
+  WrapText,
+  Table2,
+  Trash2,
 } from 'lucide-react';
 import {
   useEditorStore,
   computeDiagnostics,
   extractCodeSymbols,
   computeLineDiff,
+  detectCsvDelimiter,
+  parseCsvLine,
+  parseCsvTable,
+  serializeCsvTable,
   EditorTab,
   isStandaloneStudioWindow,
 } from './store';
@@ -151,6 +158,44 @@ const LANGUAGE_SNIPPETS: Record<string, SnippetItem[]> = {
       detail: 'Estrutura JSON inicial',
       insertText: '{\n  "name": "projeto",\n  "version": "1.0.0",\n  "private": true\n}',
     },
+    {
+      label: 'arrayObj',
+      detail: 'Lista de registros JSON',
+      insertText: '[\n  {\n    "id": 1,\n    "nome": "Item A",\n    "ativo": true\n  }\n]',
+    },
+  ],
+  csv: [
+    {
+      label: 'header',
+      detail: 'Cabeçalho CSV padrão',
+      insertText: 'id,nome,email,status,criado_em\n1,Exemplo,exemplo@dominio.com,ativo,2026-01-01',
+    },
+    {
+      label: 'row',
+      detail: 'Nova linha CSV',
+      insertText: '2,Novo Registro,contato@dominio.com,pendente,2026-01-02',
+    },
+  ],
+  sql: [
+    {
+      label: 'select',
+      detail: 'Consulta SELECT com filtro e ordenação',
+      insertText: 'SELECT id, nome, criado_em\nFROM usuarios\nWHERE ativo = 1\nORDER BY criado_em DESC\nLIMIT 50;',
+    },
+    {
+      label: 'createTable',
+      detail: 'Criação de tabela SQL',
+      insertText:
+        'CREATE TABLE IF NOT EXISTS registros (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  nome TEXT NOT NULL,\n  criado_em DATETIME DEFAULT CURRENT_TIMESTAMP\n);',
+    },
+  ],
+  html: [
+    {
+      label: 'html5',
+      detail: 'Estrutura base HTML5',
+      insertText:
+        '<!DOCTYPE html>\n<html lang="pt-BR">\n<head>\n  <meta charset="UTF-8" />\n  <title>Documento</title>\n</head>\n<body>\n  <h1>Olá Mundo</h1>\n</body>\n</html>',
+    },
   ],
 };
 
@@ -176,6 +221,8 @@ function commentPrefixForLanguage(lang: string): string {
 
 function renderTabFileIcon(language: string) {
   switch (language) {
+    case 'csv':
+      return <Table2 size={13} style={{ color: '#10b981', flexShrink: 0 }} />;
     case 'json':
     case 'yaml':
     case 'toml':
@@ -192,8 +239,62 @@ function renderTabFileIcon(language: string) {
   }
 }
 
+const CSV_RAINBOW_COLORS = [
+  '#38bdf8',
+  '#f59e0b',
+  '#34d399',
+  '#c084fc',
+  '#fb7185',
+  '#a3e635',
+  '#60a5fa',
+  '#fbbf24',
+];
+
 function renderHighlightedLine(line: string, language: string): React.ReactNode {
   if (!line) return '\u00A0';
+
+  if (language === 'csv') {
+    const delim = detectCsvDelimiter(line);
+    const cells = parseCsvLine(line, delim);
+    if (cells.length <= 1) return line;
+    // Renderiza Rainbow CSV preservando o texto exato da linha para manter alinhamento com o textarea
+    const segments: React.ReactNode[] = [];
+    let colIdx = 0;
+    let currentToken = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+        currentToken += ch;
+      } else if (ch === delim && !inQuotes) {
+        const color = CSV_RAINBOW_COLORS[colIdx % CSV_RAINBOW_COLORS.length];
+        segments.push(
+          <span key={`c-${i}`} style={{ color }}>
+            {currentToken}
+          </span>
+        );
+        segments.push(
+          <span key={`d-${i}`} style={{ color: 'var(--text-muted)', fontWeight: 700 }}>
+            {ch}
+          </span>
+        );
+        currentToken = '';
+        colIdx++;
+      } else {
+        currentToken += ch;
+      }
+    }
+    if (currentToken) {
+      const color = CSV_RAINBOW_COLORS[colIdx % CSV_RAINBOW_COLORS.length];
+      segments.push(
+        <span key="c-end" style={{ color }}>
+          {currentToken}
+        </span>
+      );
+    }
+    return segments;
+  }
 
   const trimmed = line.trimStart();
   if (
@@ -458,11 +559,105 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
   const [studioMinHovered, setStudioMinHovered] = useState(false);
   const [studioMaxHovered, setStudioMaxHovered] = useState(false);
   const [studioCloseHovered, setStudioCloseHovered] = useState(false);
+  const [csvFilterQuery, setCsvFilterQuery] = useState('');
+  const [csvSortCol, setCsvSortCol] = useState<number | null>(null);
+  const [csvSortAsc, setCsvSortAsc] = useState(true);
+  const [jsonFilterQuery, setJsonFilterQuery] = useState('');
 
   const effectiveWorkspace = workspaceDir || currentPath || '/';
 
   const activeTab: EditorTab | null =
     tabs.find((t) => t.id === activeTabId) || tabs[0] || null;
+
+  const parsedCsv = useMemo(() => {
+    if (!activeTab || activeTab.language !== 'csv') return null;
+    return parseCsvTable(activeTab.content);
+  }, [activeTab]);
+
+  const parsedJsonPreview = useMemo(() => {
+    if (!activeTab || activeTab.language !== 'json') return null;
+    const raw = activeTab.content.trim();
+    if (!raw) return { ok: true as const, value: null, error: null };
+    try {
+      const value = JSON.parse(raw);
+      return { ok: true as const, value, error: null };
+    } catch (err) {
+      return {
+        ok: false as const,
+        value: null,
+        error: err instanceof Error ? err.message : 'JSON inválido',
+      };
+    }
+  }, [activeTab]);
+
+  // Atalhos globais do Pulsares Studio Editor (funcionam mesmo quando o foco não está no textarea)
+  useEffect(() => {
+    if (!isOpen && !isDedicatedWindow) return;
+    if (isMinimized && !isDedicatedWindow) return;
+
+    const onGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+
+      // Alt+Z: Alternar Quebra Automática de Linha (Word Wrap)
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        toggleWordWrap();
+        return;
+      }
+
+      // Shift+Alt+F: Formatar documento na linguagem ativa
+      if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        formatActiveTab();
+        return;
+      }
+
+      // Ctrl+S / Ctrl+Shift+S: Salvar aba ativa ou todas
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (!activeTab) return;
+        void (async () => {
+          if (e.shiftKey) {
+            await saveAllTabs(effectiveWorkspace);
+          } else {
+            await saveTab(activeTab.id, effectiveWorkspace);
+          }
+          if (!isDedicatedWindow) void refresh();
+        })();
+        return;
+      }
+
+      // Ctrl+F: Localizar e Substituir
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setFindBarOpen(!findBarOpen);
+        return;
+      }
+
+      // Ctrl+N: Nova aba
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        openNewUntitledTab(effectiveWorkspace, activeTab?.language || 'typescript', true);
+      }
+    };
+
+    window.addEventListener('keydown', onGlobalKeyDown);
+    return () => window.removeEventListener('keydown', onGlobalKeyDown);
+  }, [
+    isOpen,
+    isDedicatedWindow,
+    isMinimized,
+    activeTab,
+    effectiveWorkspace,
+    findBarOpen,
+    toggleWordWrap,
+    formatActiveTab,
+    saveTab,
+    saveAllTabs,
+    refresh,
+    setFindBarOpen,
+    openNewUntitledTab,
+  ]);
 
   // Carrega arquivos da pasta do projeto quando a aba lateral 'files' estiver aberta
   useEffect(() => {
@@ -811,9 +1006,60 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
       return;
     }
 
+    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      toggleWordWrap();
+      return;
+    }
+
     if (e.shiftKey && e.altKey && e.key.toLowerCase() === 'f') {
       e.preventDefault();
       formatActiveTab();
+      return;
+    }
+
+    // Alt+ArrowUp / Alt+ArrowDown: mover a linha atual para cima ou para baixo
+    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const curIdx = activeTab.cursorLine - 1;
+      const sep = activeTab.lineEnding === 'CRLF' ? '\r\n' : '\n';
+      const arr = [...lines];
+      if (e.key === 'ArrowUp' && curIdx > 0) {
+        const tmp = arr[curIdx - 1];
+        arr[curIdx - 1] = arr[curIdx];
+        arr[curIdx] = tmp;
+        updateTabContent(activeTab.id, arr.join(sep));
+        requestAnimationFrame(() => jumpToLine(curIdx));
+      } else if (e.key === 'ArrowDown' && curIdx < arr.length - 1) {
+        const tmp = arr[curIdx + 1];
+        arr[curIdx + 1] = arr[curIdx];
+        arr[curIdx] = tmp;
+        updateTabContent(activeTab.id, arr.join(sep));
+        requestAnimationFrame(() => jumpToLine(curIdx + 2));
+      }
+      return;
+    }
+
+    // Shift+Alt+ArrowDown: duplicar a linha atual abaixo
+    if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowDown') {
+      e.preventDefault();
+      const curIdx = Math.max(0, Math.min(lines.length - 1, activeTab.cursorLine - 1));
+      const sep = activeTab.lineEnding === 'CRLF' ? '\r\n' : '\n';
+      const arr = [...lines];
+      arr.splice(curIdx + 1, 0, arr[curIdx]);
+      updateTabContent(activeTab.id, arr.join(sep));
+      requestAnimationFrame(() => jumpToLine(curIdx + 2));
+      return;
+    }
+
+    // Ctrl+Shift+K: excluir a linha atual
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      const curIdx = Math.max(0, Math.min(lines.length - 1, activeTab.cursorLine - 1));
+      const sep = activeTab.lineEnding === 'CRLF' ? '\r\n' : '\n';
+      const arr = lines.length > 1 ? lines.filter((_, idx) => idx !== curIdx) : [''];
+      updateTabContent(activeTab.id, arr.join(sep));
+      requestAnimationFrame(() => jumpToLine(Math.min(arr.length, curIdx + 1)));
       return;
     }
 
@@ -1170,11 +1416,26 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
           <button
             type="button"
             onClick={formatActiveTab}
-            title="Formatar código (Shift+Alt+F)"
+            title={`Formatar código e estrutura (${(activeTab?.language || 'texto').toUpperCase()}) — Shift+Alt+F`}
             style={headerBtnStyle}
           >
-            <Sparkles size={13} />
+            <Sparkles size={13} style={{ color: 'var(--accent)' }} />
             <span>Formatar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleWordWrap}
+            title="Alternar quebra automática de linha (Alt+Z)"
+            style={{
+              ...headerBtnStyle,
+              borderColor: wordWrap ? 'var(--accent-primary)' : 'var(--border-subtle)',
+              backgroundColor: wordWrap ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+              color: wordWrap ? 'var(--accent-text)' : 'var(--text-primary)',
+            }}
+          >
+            <WrapText size={13} />
+            <span>Quebra</span>
           </button>
 
           <button
@@ -1219,14 +1480,22 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
           <button
             type="button"
             onClick={toggleSplitPreview}
-            title="Alternar prévia lado a lado (Markdown / HTML / JSON)"
+            title="Alternar painel interativo lado a lado (Tabela CSV / Inspetor JSON / Markdown / HTML)"
             style={{
               ...headerBtnStyle,
               borderColor: showSplitPreview ? 'var(--accent-primary)' : 'var(--border-subtle)',
+              backgroundColor: showSplitPreview ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+              color: showSplitPreview ? 'var(--accent-text)' : 'var(--text-primary)',
             }}
           >
-            <Columns2 size={13} />
-            <span>Prévia</span>
+            {activeTab?.language === 'csv' ? <Table2 size={13} /> : <Columns2 size={13} />}
+            <span>
+              {activeTab?.language === 'csv'
+                ? 'Tabela CSV'
+                : activeTab?.language === 'json'
+                ? 'Inspetor JSON'
+                : 'Prévia'}
+            </span>
           </button>
 
           <button
@@ -1804,6 +2073,37 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                   </div>
 
                   <div style={toolSectionLabelStyle}>
+                    <Table2 size={12} />
+                    <span>CSV & Tabelas de Dados</span>
+                  </div>
+                  <div style={toolGridStyle}>
+                    <button
+                      type="button"
+                      onClick={() => transformActiveTab('csvToJson')}
+                      style={toolBtnStyle}
+                      title="Converter conteúdo CSV atual para array JSON"
+                    >
+                      CSV → JSON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => transformActiveTab('jsonToCsv')}
+                      style={toolBtnStyle}
+                      title="Converter array/objeto JSON atual para CSV"
+                    >
+                      JSON → CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => transformActiveTab('csvAlign')}
+                      style={{ ...toolBtnStyle, gridColumn: 'span 2' }}
+                      title="Alinhar colunas CSV com espaçamento fixo"
+                    >
+                      Alinhar Colunas CSV
+                    </button>
+                  </div>
+
+                  <div style={toolSectionLabelStyle}>
                     <Hash size={12} />
                     <span>Codificação & Tokens</span>
                   </div>
@@ -2121,8 +2421,10 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                         fontSize: `${fontSize}px`,
                         lineHeight: `${lineHeightPx}px`,
                         whiteSpace: wordWrap ? 'pre-wrap' : 'pre',
+                        overflowWrap: wordWrap ? 'anywhere' : 'normal',
                         wordBreak: wordWrap ? 'break-word' : 'normal',
-                        overflow: 'hidden',
+                        overflowY: 'scroll',
+                        overflowX: wordWrap ? 'hidden' : 'auto',
                         pointerEvents: 'none',
                         color: 'var(--text-primary)',
                       }}
@@ -2172,8 +2474,10 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                         fontSize: `${fontSize}px`,
                         lineHeight: `${lineHeightPx}px`,
                         whiteSpace: wordWrap ? 'pre-wrap' : 'pre',
+                        overflowWrap: wordWrap ? 'anywhere' : 'normal',
                         wordBreak: wordWrap ? 'break-word' : 'normal',
-                        overflow: 'auto',
+                        overflowY: 'scroll',
+                        overflowX: wordWrap ? 'hidden' : 'auto',
                         backgroundColor: 'transparent',
                         color: 'transparent',
                         caretColor: 'var(--accent-primary)',
@@ -2310,32 +2614,582 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                     </div>
                   )}
 
-                  {/* Painel de Split Preview ao vivo (Markdown / HTML / JSON) */}
+                  {/* Painel de Split Preview ao vivo (Tabela CSV / Inspetor JSON / Markdown / HTML) */}
                   {showSplitPreview && (
                     <div
                       style={{
-                        width: '44%',
+                        width: activeTab.language === 'csv' || activeTab.language === 'json' ? '50%' : '44%',
                         borderLeft: '1px solid var(--border-subtle)',
                         backgroundColor: 'var(--bg-surface)',
-                        padding: '14px 18px',
-                        overflowY: 'auto',
+                        padding: '12px 14px',
+                        overflow: 'auto',
                         userSelect: 'text',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
                       }}
                     >
                       <div
                         style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
                           fontSize: '11px',
                           fontWeight: 700,
                           textTransform: 'uppercase',
                           color: 'var(--text-muted)',
-                          marginBottom: '10px',
                           borderBottom: '1px solid var(--border-subtle)',
-                          paddingBottom: '4px',
+                          paddingBottom: '6px',
+                          gap: '8px',
+                          flexShrink: 0,
                         }}
                       >
-                        Prévia em Tempo Real ({activeTab.language.toUpperCase()})
+                        <span>
+                          {activeTab.language === 'csv'
+                            ? 'Editor de Tabela CSV Interativa'
+                            : activeTab.language === 'json'
+                            ? 'Inspetor & Tabela JSON'
+                            : `Prévia em Tempo Real (${activeTab.language.toUpperCase()})`}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {activeTab.language === 'csv' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => transformActiveTab('csvAlign')}
+                                style={headerBtnStyle}
+                                title="Alinhar colunas no texto CSV"
+                              >
+                                Alinhar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => transformActiveTab('csvToJson')}
+                                style={headerBtnStyle}
+                                title="Converter CSV para JSON"
+                              >
+                                CSV → JSON
+                              </button>
+                            </>
+                          )}
+                          {activeTab.language === 'json' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={formatActiveTab}
+                                style={headerBtnStyle}
+                                title="Formatar JSON (Shift+Alt+F)"
+                              >
+                                Formatar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => transformActiveTab('jsonMinify')}
+                                style={headerBtnStyle}
+                                title="Compactar JSON em linha única"
+                              >
+                                Minificar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => transformActiveTab('jsonToCsv')}
+                                style={headerBtnStyle}
+                                title="Converter JSON para Tabela CSV"
+                              >
+                                JSON → CSV
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      {activeTab.language === 'markdown' ? (
+
+                      {activeTab.language === 'csv' && parsedCsv ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minHeight: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <input
+                              type="text"
+                              value={csvFilterQuery}
+                              onChange={(e) => setCsvFilterQuery(e.target.value)}
+                              placeholder="Filtrar linhas na tabela..."
+                              style={{ ...findInputStyle, flex: 1, minWidth: '130px' }}
+                            />
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {parsedCsv.rows.length} reg. × {parsedCsv.maxCols} col. (sep:{' '}
+                              {parsedCsv.delimiter === '\t' ? 'TAB' : `"${parsedCsv.delimiter}"`})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cols = Math.max(1, parsedCsv.maxCols || 3);
+                                const nextHeaders =
+                                  parsedCsv.headers.length > 0
+                                    ? parsedCsv.headers
+                                    : ['id', 'nome', 'valor'];
+                                const nextRows = [
+                                  ...parsedCsv.rows,
+                                  new Array<string>(cols).fill(''),
+                                ];
+                                updateTabContent(
+                                  activeTab.id,
+                                  serializeCsvTable(
+                                    nextHeaders,
+                                    nextRows,
+                                    parsedCsv.delimiter,
+                                    activeTab.lineEnding
+                                  )
+                                );
+                              }}
+                              style={headerBtnStyle}
+                              title="Adicionar nova linha ao CSV"
+                            >
+                              <Plus size={12} />
+                              <span>Linha</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextColNum = parsedCsv.maxCols + 1;
+                                const nextHeaders = [
+                                  ...parsedCsv.headers,
+                                  `coluna_${nextColNum}`,
+                                ];
+                                const nextRows = parsedCsv.rows.map((r) => {
+                                  const copy = [...r];
+                                  while (copy.length < parsedCsv.maxCols) copy.push('');
+                                  copy.push('');
+                                  return copy;
+                                });
+                                updateTabContent(
+                                  activeTab.id,
+                                  serializeCsvTable(
+                                    nextHeaders,
+                                    nextRows,
+                                    parsedCsv.delimiter,
+                                    activeTab.lineEnding
+                                  )
+                                );
+                              }}
+                              style={headerBtnStyle}
+                              title="Adicionar nova coluna ao CSV"
+                            >
+                              <Plus size={12} />
+                              <span>Coluna</span>
+                            </button>
+                          </div>
+
+                          <div
+                            style={{
+                              flex: 1,
+                              overflow: 'auto',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: 'var(--radius-sm)',
+                            }}
+                          >
+                            {parsedCsv.headers.length === 0 ? (
+                              <div style={{ padding: '16px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                Arquivo CSV vazio. Clique em "+ Linha" para iniciar uma tabela.
+                              </div>
+                            ) : (
+                              <table
+                                style={{
+                                  width: '100%',
+                                  borderCollapse: 'collapse',
+                                  fontSize: '12px',
+                                  fontFamily: 'var(--font-mono)',
+                                }}
+                              >
+                                <thead>
+                                  <tr style={{ backgroundColor: 'var(--bg-subtle)' }}>
+                                    <th
+                                      style={{
+                                        padding: '5px 8px',
+                                        borderBottom: '1px solid var(--border-subtle)',
+                                        borderRight: '1px solid var(--border-subtle)',
+                                        color: 'var(--text-muted)',
+                                        width: '36px',
+                                        textAlign: 'center',
+                                      }}
+                                    >
+                                      #
+                                    </th>
+                                    {Array.from({ length: parsedCsv.maxCols }, (_, colIdx) => {
+                                      const headerVal = parsedCsv.headers[colIdx] ?? '';
+                                      const isSorted = csvSortCol === colIdx;
+                                      const colColor =
+                                        CSV_RAINBOW_COLORS[colIdx % CSV_RAINBOW_COLORS.length];
+                                      return (
+                                        <th
+                                          key={colIdx}
+                                          style={{
+                                            padding: '4px 6px',
+                                            borderBottom: '1px solid var(--border-subtle)',
+                                            borderRight: '1px solid var(--border-subtle)',
+                                            textAlign: 'left',
+                                            minWidth: '105px',
+                                          }}
+                                        >
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <input
+                                              type="text"
+                                              value={headerVal}
+                                              onChange={(e) => {
+                                                const nextHeaders = [...parsedCsv.headers];
+                                                while (nextHeaders.length <= colIdx) {
+                                                  nextHeaders.push(`Col_${nextHeaders.length + 1}`);
+                                                }
+                                                nextHeaders[colIdx] = e.target.value;
+                                                updateTabContent(
+                                                  activeTab.id,
+                                                  serializeCsvTable(
+                                                    nextHeaders,
+                                                    parsedCsv.rows,
+                                                    parsedCsv.delimiter,
+                                                    activeTab.lineEnding
+                                                  )
+                                                );
+                                              }}
+                                              style={{
+                                                border: 'none',
+                                                background: 'transparent',
+                                                color: colColor,
+                                                fontWeight: 700,
+                                                fontSize: '11px',
+                                                fontFamily: 'var(--font-mono)',
+                                                width: '100%',
+                                                outline: 'none',
+                                              }}
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                if (csvSortCol === colIdx) {
+                                                  setCsvSortAsc(!csvSortAsc);
+                                                } else {
+                                                  setCsvSortCol(colIdx);
+                                                  setCsvSortAsc(true);
+                                                }
+                                              }}
+                                              title="Ordenar por esta coluna"
+                                              style={{
+                                                ...statusLinkBtnStyle,
+                                                color: isSorted
+                                                  ? 'var(--accent-primary)'
+                                                  : 'var(--text-muted)',
+                                              }}
+                                            >
+                                              {isSorted ? (csvSortAsc ? '▲' : '▼') : '↕'}
+                                            </button>
+                                          </div>
+                                        </th>
+                                      );
+                                    })}
+                                    <th
+                                      style={{
+                                        width: '28px',
+                                        borderBottom: '1px solid var(--border-subtle)',
+                                      }}
+                                    />
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {parsedCsv.rows
+                                    .map((row, idx) => ({ row, realRowIdx: idx }))
+                                    .filter(({ row }) =>
+                                      !csvFilterQuery.trim()
+                                        ? true
+                                        : row.some((c) =>
+                                            c
+                                              .toLowerCase()
+                                              .includes(csvFilterQuery.trim().toLowerCase())
+                                          )
+                                    )
+                                    .sort((a, b) => {
+                                      if (csvSortCol === null) return 0;
+                                      const va = a.row[csvSortCol] ?? '';
+                                      const vb = b.row[csvSortCol] ?? '';
+                                      const na = Number(va);
+                                      const nb = Number(vb);
+                                      const cmp =
+                                        !Number.isNaN(na) &&
+                                        !Number.isNaN(nb) &&
+                                        va.trim() !== '' &&
+                                        vb.trim() !== ''
+                                          ? na - nb
+                                          : va.localeCompare(vb);
+                                      return csvSortAsc ? cmp : -cmp;
+                                    })
+                                    .map(({ row, realRowIdx }) => (
+                                      <tr key={realRowIdx}>
+                                        <td
+                                          style={{
+                                            padding: '3px 6px',
+                                            borderBottom: '1px solid var(--border-subtle)',
+                                            borderRight: '1px solid var(--border-subtle)',
+                                            textAlign: 'center',
+                                            color: 'var(--text-muted)',
+                                            fontSize: '11px',
+                                          }}
+                                        >
+                                          {realRowIdx + 1}
+                                        </td>
+                                        {Array.from({ length: parsedCsv.maxCols }, (_, colIdx) => {
+                                          const cellVal = row[colIdx] ?? '';
+                                          return (
+                                            <td
+                                              key={colIdx}
+                                              style={{
+                                                padding: '2px 5px',
+                                                borderBottom: '1px solid var(--border-subtle)',
+                                                borderRight: '1px solid var(--border-subtle)',
+                                              }}
+                                            >
+                                              <input
+                                                type="text"
+                                                value={cellVal}
+                                                onChange={(e) => {
+                                                  const nextHeaders = [...parsedCsv.headers];
+                                                  while (nextHeaders.length <= colIdx) {
+                                                    nextHeaders.push(
+                                                      `Col_${nextHeaders.length + 1}`
+                                                    );
+                                                  }
+                                                  const nextRows = parsedCsv.rows.map((r, rIdx) => {
+                                                    if (rIdx !== realRowIdx) return r;
+                                                    const copy = [...r];
+                                                    while (copy.length <= colIdx) copy.push('');
+                                                    copy[colIdx] = e.target.value;
+                                                    return copy;
+                                                  });
+                                                  updateTabContent(
+                                                    activeTab.id,
+                                                    serializeCsvTable(
+                                                      nextHeaders,
+                                                      nextRows,
+                                                      parsedCsv.delimiter,
+                                                      activeTab.lineEnding
+                                                    )
+                                                  );
+                                                }}
+                                                style={{
+                                                  border: 'none',
+                                                  background: 'transparent',
+                                                  color: 'var(--text-primary)',
+                                                  fontSize: '12px',
+                                                  fontFamily: 'var(--font-mono)',
+                                                  width: '100%',
+                                                  outline: 'none',
+                                                }}
+                                              />
+                                            </td>
+                                          );
+                                        })}
+                                        <td
+                                          style={{
+                                            borderBottom: '1px solid var(--border-subtle)',
+                                            textAlign: 'center',
+                                          }}
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const nextRows = parsedCsv.rows.filter(
+                                                (_, rIdx) => rIdx !== realRowIdx
+                                              );
+                                              updateTabContent(
+                                                activeTab.id,
+                                                serializeCsvTable(
+                                                  parsedCsv.headers,
+                                                  nextRows,
+                                                  parsedCsv.delimiter,
+                                                  activeTab.lineEnding
+                                                )
+                                              );
+                                            }}
+                                            title="Remover linha"
+                                            style={{
+                                              ...statusLinkBtnStyle,
+                                              color: 'var(--status-danger)',
+                                            }}
+                                          >
+                                            <Trash2 size={11} />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        </div>
+                      ) : activeTab.language === 'json' && parsedJsonPreview ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minHeight: 0 }}>
+                          {!parsedJsonPreview.ok ? (
+                            <div
+                              style={{
+                                padding: '10px 12px',
+                                borderRadius: 'var(--radius-sm)',
+                                backgroundColor: 'rgba(220, 38, 38, 0.12)',
+                                border: '1px solid var(--status-danger)',
+                                color: 'var(--status-danger)',
+                                fontSize: '12px',
+                              }}
+                            >
+                              <strong>Erro de sintaxe JSON:</strong> {parsedJsonPreview.error}
+                            </div>
+                          ) : (
+                            <>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: '8px',
+                                  fontSize: '11px',
+                                }}
+                              >
+                                <span style={{ color: 'var(--status-success)', fontWeight: 600 }}>
+                                  ✓ JSON Válido (
+                                  {Array.isArray(parsedJsonPreview.value)
+                                    ? `Array com ${parsedJsonPreview.value.length} itens`
+                                    : parsedJsonPreview.value &&
+                                      typeof parsedJsonPreview.value === 'object'
+                                    ? `Objeto com ${Object.keys(parsedJsonPreview.value as Record<string, unknown>).length} chaves`
+                                    : typeof parsedJsonPreview.value}
+                                  )
+                                </span>
+                                <input
+                                  type="text"
+                                  value={jsonFilterQuery}
+                                  onChange={(e) => setJsonFilterQuery(e.target.value)}
+                                  placeholder="Filtrar chaves/valores..."
+                                  style={{ ...findInputStyle, width: '165px' }}
+                                />
+                              </div>
+
+                              {/* Se for um Array de Objetos, exibe tabela automática dos registros */}
+                              {Array.isArray(parsedJsonPreview.value) &&
+                                parsedJsonPreview.value.length > 0 &&
+                                typeof parsedJsonPreview.value[0] === 'object' &&
+                                parsedJsonPreview.value[0] !== null && (
+                                  <div
+                                    style={{
+                                      maxHeight: '240px',
+                                      overflow: 'auto',
+                                      border: '1px solid var(--border-subtle)',
+                                      borderRadius: 'var(--radius-sm)',
+                                    }}
+                                  >
+                                    {(() => {
+                                      const items = parsedJsonPreview.value as Record<
+                                        string,
+                                        unknown
+                                      >[];
+                                      const cols = Array.from(
+                                        items.reduce((acc, item) => {
+                                          if (item && typeof item === 'object') {
+                                            Object.keys(item).forEach((k) => acc.add(k));
+                                          }
+                                          return acc;
+                                        }, new Set<string>())
+                                      );
+                                      const filteredItems = items.filter((item) =>
+                                        !jsonFilterQuery.trim()
+                                          ? true
+                                          : JSON.stringify(item)
+                                              .toLowerCase()
+                                              .includes(jsonFilterQuery.trim().toLowerCase())
+                                      );
+                                      return (
+                                        <table
+                                          style={{
+                                            width: '100%',
+                                            borderCollapse: 'collapse',
+                                            fontSize: '11px',
+                                            fontFamily: 'var(--font-mono)',
+                                          }}
+                                        >
+                                          <thead>
+                                            <tr style={{ backgroundColor: 'var(--bg-subtle)' }}>
+                                              {cols.map((c) => (
+                                                <th
+                                                  key={c}
+                                                  style={{
+                                                    padding: '4px 8px',
+                                                    borderBottom: '1px solid var(--border-subtle)',
+                                                    borderRight: '1px solid var(--border-subtle)',
+                                                    textAlign: 'left',
+                                                    color: 'var(--accent)',
+                                                  }}
+                                                >
+                                                  {c}
+                                                </th>
+                                              ))}
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {filteredItems.slice(0, 100).map((rowObj, rIdx) => (
+                                              <tr key={rIdx}>
+                                                {cols.map((c) => {
+                                                  const v = rowObj?.[c];
+                                                  const text =
+                                                    v === null || v === undefined
+                                                      ? ''
+                                                      : typeof v === 'object'
+                                                      ? JSON.stringify(v)
+                                                      : String(v);
+                                                  return (
+                                                    <td
+                                                      key={c}
+                                                      style={{
+                                                        padding: '3px 8px',
+                                                        borderBottom:
+                                                          '1px solid var(--border-subtle)',
+                                                        borderRight:
+                                                          '1px solid var(--border-subtle)',
+                                                      }}
+                                                    >
+                                                      {text}
+                                                    </td>
+                                                  );
+                                                })}
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
+
+                              <pre
+                                style={{
+                                  flex: 1,
+                                  overflow: 'auto',
+                                  margin: 0,
+                                  padding: '10px',
+                                  backgroundColor: 'var(--bg-app)',
+                                  border: '1px solid var(--border-subtle)',
+                                  borderRadius: 'var(--radius-sm)',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: '12px',
+                                  whiteSpace: 'pre-wrap',
+                                }}
+                              >
+                                {JSON.stringify(parsedJsonPreview.value, null, 2)
+                                  .split('\n')
+                                  .filter((l) =>
+                                    !jsonFilterQuery.trim()
+                                      ? true
+                                      : l
+                                          .toLowerCase()
+                                          .includes(jsonFilterQuery.trim().toLowerCase())
+                                  )
+                                  .join('\n')}
+                              </pre>
+                            </>
+                          )}
+                        </div>
+                      ) : activeTab.language === 'markdown' ? (
                         <div>{renderMarkdownPreview(activeTab.content)}</div>
                       ) : activeTab.language === 'html' ? (
                         <iframe
@@ -2558,9 +3412,9 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
               type="button"
               onClick={toggleWordWrap}
               style={statusLinkBtnStyle}
-              title="Alternar quebra automática de linha"
+              title="Alternar quebra automática de linha (Alt+Z)"
             >
-              Wrap: {wordWrap ? 'ON' : 'OFF'}
+              Wrap (Alt+Z): {wordWrap ? 'ON' : 'OFF'}
             </button>
             <button
               type="button"
@@ -2594,22 +3448,29 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
               }}
             >
               <option value="plaintext">Plain Text (.txt)</option>
+              <option value="csv">CSV / TSV (.csv)</option>
+              <option value="json">JSON / JSONL (.json)</option>
               <option value="markdown">Markdown (.md)</option>
               <option value="typescript">TypeScript (.ts/.tsx)</option>
               <option value="javascript">JavaScript (.js/.jsx)</option>
               <option value="go">Go (.go)</option>
               <option value="python">Python (.py)</option>
-              <option value="json">JSON (.json)</option>
-              <option value="yaml">YAML (.yml)</option>
+              <option value="sql">SQL (.sql)</option>
               <option value="html">HTML (.html)</option>
               <option value="css">CSS (.css)</option>
-              <option value="sql">SQL (.sql)</option>
+              <option value="yaml">YAML (.yml)</option>
+              <option value="toml">TOML (.toml)</option>
+              <option value="xml">XML (.xml)</option>
+              <option value="ini">INI / .env</option>
               <option value="shell">Shell (.sh)</option>
               <option value="powershell">PowerShell (.ps1)</option>
               <option value="rust">Rust (.rs)</option>
               <option value="cpp">C/C++ (.cpp)</option>
-              <option value="xml">XML (.xml)</option>
-              <option value="ini">INI / .env</option>
+              <option value="c">C (.c)</option>
+              <option value="csharp">C# (.cs)</option>
+              <option value="java">Java (.java)</option>
+              <option value="php">PHP (.php)</option>
+              <option value="dockerfile">Dockerfile</option>
             </select>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>

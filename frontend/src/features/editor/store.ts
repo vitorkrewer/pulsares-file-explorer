@@ -56,6 +56,9 @@ export type DevTransformKind =
   | 'jsonMinify'
   | 'jsonEscape'
   | 'jsonUnescape'
+  | 'csvToJson'
+  | 'jsonToCsv'
+  | 'csvAlign'
   | 'base64Encode'
   | 'base64Decode'
   | 'urlEncode'
@@ -65,11 +68,13 @@ export type DevTransformKind =
 const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   txt: 'plaintext',
   log: 'plaintext',
-  csv: 'plaintext',
+  csv: 'csv',
+  tsv: 'csv',
   md: 'markdown',
   markdown: 'markdown',
   json: 'json',
   jsonc: 'json',
+  jsonl: 'json',
   js: 'javascript',
   mjs: 'javascript',
   cjs: 'javascript',
@@ -147,6 +152,175 @@ export function isEditableTextFile(nameOrPath: string, extension?: string): bool
   return false;
 }
 
+export function detectCsvDelimiter(content: string): string {
+  const firstLine = (content.replace(/\r\n/g, '\n').split('\n').find((l) => l.trim().length > 0) || '');
+  const candidates = [',', ';', '\t', '|'];
+  let best = ',';
+  let bestCount = 0;
+  for (const cand of candidates) {
+    let count = 0;
+    let inQuotes = false;
+    for (let i = 0; i < firstLine.length; i++) {
+      const ch = firstLine[i];
+      if (ch === '"') inQuotes = !inQuotes;
+      else if (!inQuotes && ch === cand) count++;
+    }
+    if (count > bestCount) {
+      bestCount = count;
+      best = cand;
+    }
+  }
+  return best;
+}
+
+export function parseCsvLine(line: string, delimiter: string): string[] {
+  const cells: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === delimiter) {
+        cells.push(cur);
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+  }
+  cells.push(cur);
+  return cells;
+}
+
+export function parseCsvTable(content: string): {
+  delimiter: string;
+  headers: string[];
+  rows: string[][];
+  maxCols: number;
+} {
+  const delimiter = detectCsvDelimiter(content);
+  const nonEmptyLines = content
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter((l) => l.trim().length > 0);
+  if (nonEmptyLines.length === 0) {
+    return { delimiter, headers: [], rows: [], maxCols: 0 };
+  }
+  const headers = parseCsvLine(nonEmptyLines[0], delimiter).map((h, i) => h.trim() || `Col_${i + 1}`);
+  const rows = nonEmptyLines.slice(1).map((line) => parseCsvLine(line, delimiter));
+  const maxCols = rows.reduce((m, r) => Math.max(m, r.length), headers.length);
+  return { delimiter, headers, rows, maxCols };
+}
+
+export function serializeCsvCell(val: string, delimiter: string): string {
+  const s = val ?? '';
+  if (s.includes('"') || s.includes(delimiter) || s.includes('\n') || s.includes('\r')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+export function serializeCsvTable(
+  headers: string[],
+  rows: string[][],
+  delimiter = ',',
+  lineEnding: 'LF' | 'CRLF' = 'LF'
+): string {
+  const sep = lineEnding === 'CRLF' ? '\r\n' : '\n';
+  const lines = [
+    headers.map((h) => serializeCsvCell(h, delimiter)).join(delimiter),
+    ...rows.map((r) =>
+      headers.map((_, idx) => serializeCsvCell(r[idx] ?? '', delimiter)).join(delimiter)
+    ),
+  ];
+  return lines.join(sep);
+}
+
+export function csvToJsonString(content: string, indent = 2): string {
+  const { headers, rows } = parseCsvTable(content);
+  const items = rows.map((row) => {
+    const obj: Record<string, string | number | boolean | null> = {};
+    headers.forEach((h, idx) => {
+      const raw = (row[idx] ?? '').trim();
+      if (raw === '' || raw.toLowerCase() === 'null') {
+        obj[h] = null;
+      } else if (raw.toLowerCase() === 'true') {
+        obj[h] = true;
+      } else if (raw.toLowerCase() === 'false') {
+        obj[h] = false;
+      } else if (/^-?\d+(?:\.\d+)?$/.test(raw)) {
+        obj[h] = Number(raw);
+      } else {
+        obj[h] = row[idx] ?? '';
+      }
+    });
+    return obj;
+  });
+  return JSON.stringify(items, null, indent);
+}
+
+export function jsonToCsvString(content: string, lineEnding: 'LF' | 'CRLF' = 'LF'): string {
+  const parsed = JSON.parse(content);
+  const arr = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === 'object'
+    ? [parsed]
+    : [];
+  if (arr.length === 0) return '';
+  const keySet = new Set<string>();
+  arr.forEach((item) => {
+    if (item && typeof item === 'object') {
+      Object.keys(item as Record<string, unknown>).forEach((k) => keySet.add(k));
+    }
+  });
+  const headers = Array.from(keySet);
+  const rows = arr.map((item) => {
+    const rec = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+    return headers.map((h) => {
+      const v = rec[h];
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return String(v);
+    });
+  });
+  return serializeCsvTable(headers, rows, ',', lineEnding);
+}
+
+export function alignCsvColumns(content: string, lineEnding: 'LF' | 'CRLF' = 'LF'): string {
+  const { delimiter, headers, rows } = parseCsvTable(content);
+  if (headers.length === 0) return content;
+  const allRows = [headers, ...rows];
+  const widths = headers.map((_, colIdx) =>
+    Math.max(
+      ...allRows.map((r) => serializeCsvCell((r[colIdx] ?? '').trim(), delimiter).length)
+    )
+  );
+  const sep = lineEnding === 'CRLF' ? '\r\n' : '\n';
+  return allRows
+    .map((r) =>
+      headers
+        .map((_, colIdx) => {
+          const cell = serializeCsvCell((r[colIdx] ?? '').trim(), delimiter);
+          return colIdx === headers.length - 1 ? cell : cell.padEnd(widths[colIdx], ' ');
+        })
+        .join(` ${delimiter} `)
+    )
+    .join(sep);
+}
+
 export function computeDiagnostics(content: string, language: string): EditorDiagnostic[] {
   const diags: EditorDiagnostic[] = [];
   if (language === 'json' && content.trim().length > 0) {
@@ -164,7 +338,26 @@ export function computeDiagnostics(content: string, language: string): EditorDia
     }
   }
 
-  if (['javascript', 'typescript', 'go', 'rust', 'c', 'cpp', 'java', 'csharp'].includes(language)) {
+  if (language === 'csv' && content.trim().length > 0) {
+    const delimiter = detectCsvDelimiter(content);
+    const rawLines = content.replace(/\r\n/g, '\n').split('\n');
+    let expectedCols = 0;
+    rawLines.forEach((ln, idx) => {
+      if (!ln.trim()) return;
+      const cols = parseCsvLine(ln, delimiter).length;
+      if (expectedCols === 0) {
+        expectedCols = cols;
+      } else if (cols !== expectedCols) {
+        diags.push({
+          line: idx + 1,
+          message: `Linha CSV com ${cols} coluna(s), esperado ${expectedCols} coluna(s) do cabeçalho`,
+          severity: 'warning',
+        });
+      }
+    });
+  }
+
+  if (['javascript', 'typescript', 'go', 'rust', 'c', 'cpp', 'java', 'csharp', 'css', 'php'].includes(language)) {
     const lines = content.split('\n');
     let braceBalance = 0;
     let lastOpenLine = 1;
@@ -202,6 +395,14 @@ export function computeDiagnostics(content: string, language: string): EditorDia
 export function extractCodeSymbols(content: string, language: string): CodeSymbol[] {
   const lines = content.replace(/\r\n/g, '\n').split('\n');
   const symbols: CodeSymbol[] = [];
+
+  if (language === 'csv') {
+    const { headers } = parseCsvTable(content);
+    headers.forEach((h, i) => {
+      symbols.push({ name: `Col ${i + 1}: ${h}`, kind: 'key', line: 1 });
+    });
+    return symbols;
+  }
 
   lines.forEach((raw, idx) => {
     const lineNum = idx + 1;
@@ -272,9 +473,19 @@ export function extractCodeSymbols(content: string, language: string): CodeSymbo
         return;
       }
     } else if (language === 'json') {
-      const keyMatch = raw.match(/^\s{2}"([^"]+)"\s*:/);
+      const keyMatch = raw.match(/^\s{2,4}"([^"]+)"\s*:/);
       if (keyMatch) {
         symbols.push({ name: keyMatch[1], kind: 'key', line: lineNum });
+      }
+    } else if (language === 'sql') {
+      const sqlMatch = trimmed.match(/^(?:CREATE\s+(?:TEMP\s+)?(?:TABLE|VIEW|INDEX)\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z0-9_."`]+))/i);
+      if (sqlMatch) {
+        symbols.push({ name: sqlMatch[1], kind: 'struct', line: lineNum });
+      }
+    } else if (language === 'yaml' || language === 'toml' || language === 'ini') {
+      const secMatch = trimmed.match(/^\[([^\]]+)\]$/) || raw.match(/^([A-Za-z0-9_.-]+)\s*[:=]/);
+      if (secMatch) {
+        symbols.push({ name: secMatch[1], kind: 'key', line: lineNum });
       }
     }
   });
@@ -605,7 +816,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           tabs: nextTabs,
           activeTabId: id,
           runnerCommand: defaultCommandForTab(activeTab!),
-          showSplitPreview: lang === 'markdown' ? true : s.showSplitPreview,
+          showSplitPreview:
+            lang === 'markdown' || lang === 'csv' ? true : s.showSplitPreview,
         }));
         persistTabsToStorage(nextTabs, id, parentDir);
       } catch (err) {
@@ -653,6 +865,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ? 'md'
         : language === 'json'
         ? 'json'
+        : language === 'csv'
+        ? 'csv'
+        : language === 'sql'
+        ? 'sql'
+        : language === 'html'
+        ? 'html'
+        : language === 'css'
+        ? 'css'
+        : language === 'yaml'
+        ? 'yml'
         : language === 'typescript'
         ? 'ts'
         : language === 'javascript'
@@ -663,12 +885,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ? 'py'
         : 'txt';
     const id = `untitled-${Date.now()}-${num}`;
+    const defaultContent =
+      language === 'csv'
+        ? 'id,nome,categoria,status\n1,Item Exemplo,Geral,Ativo\n'
+        : language === 'json'
+        ? '{\n  "id": 1,\n  "nome": "Exemplo"\n}\n'
+        : '';
     const newTab: EditorTab = {
       id,
       path: '',
       name: `sem-titulo-${num}.${ext}`,
       language,
-      content: '',
+      content: defaultContent,
       savedContent: '',
       lineEnding: 'LF',
       encoding: 'UTF-8',
@@ -676,12 +904,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       cursorCol: 1,
     };
     const nextTabs = [...get().tabs, newTab];
-    set({
+    set((s) => ({
       workspaceDir: dir,
       tabs: nextTabs,
       activeTabId: id,
       runnerCommand: defaultCommandForTab(newTab),
-    });
+      showSplitPreview:
+        language === 'markdown' || language === 'csv' ? true : s.showSplitPreview,
+    }));
     persistTabsToStorage(nextTabs, id, dir);
 
     if (
@@ -872,20 +1102,219 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const tab = tabs.find((t) => t.id === activeTabId);
     if (!tab) return;
 
+    const sep = tab.lineEnding === 'CRLF' ? '\r\n' : '\n';
     const indentUnit = ' '.repeat(tabSize);
     let formatted = tab.content;
+    let statusMsg = `Código formatado (${tab.language.toUpperCase()})`;
+
+    const stripStringsAndComments = (line: string): string =>
+      line
+        .replace(/\/\/.*$/, '')
+        .replace(/\/\*.*?\*\//g, '')
+        .replace(/"(?:\\.|[^"\\])*"/g, '""')
+        .replace(/'(?:\\.|[^'\\])*'/g, "''")
+        .replace(/`(?:\\.|[^`\\])*`/g, '``');
 
     if (tab.language === 'json') {
+      const trimmed = tab.content.trim();
+      if (!trimmed) return;
       try {
-        const parsed = JSON.parse(tab.content);
-        formatted = JSON.stringify(parsed, null, tabSize);
-      } catch {
-        // mantém se inválido
+        // Suporte a JSON padrão e remoção tolerante de vírgulas finais simples
+        const cleaned = trimmed.replace(/,\s*([}\]])/g, '$1');
+        const parsed = JSON.parse(cleaned);
+        formatted = JSON.stringify(parsed, null, tabSize).replace(/\n/g, sep);
+        statusMsg = 'JSON formatado e validado com sucesso';
+      } catch (err) {
+        // Tenta JSON Lines (.jsonl) se houver múltiplas linhas
+        const rawLines = trimmed.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        if (rawLines.length > 1) {
+          try {
+            const parsedLines = rawLines.map((l) => JSON.stringify(JSON.parse(l.trim())));
+            formatted = parsedLines.join(sep);
+            statusMsg = 'JSON Lines (.jsonl) normalizado com sucesso';
+          } catch {
+            set({
+              statusMessage: `Erro ao formatar JSON: ${err instanceof Error ? err.message : 'Sintaxe inválida'}`,
+            });
+            return;
+          }
+        } else {
+          set({
+            statusMessage: `Erro ao formatar JSON: ${err instanceof Error ? err.message : 'Sintaxe inválida'}`,
+          });
+          return;
+        }
       }
+    } else if (tab.language === 'csv') {
+      const table = parseCsvTable(tab.content);
+      if (table.headers.length > 0) {
+        const maxCols = table.maxCols;
+        const normalizedHeaders = [...table.headers];
+        while (normalizedHeaders.length < maxCols) {
+          normalizedHeaders.push(`Col_${normalizedHeaders.length + 1}`);
+        }
+        const normalizedRows = table.rows.map((r) => {
+          const copy = r.map((c) => c.trim());
+          while (copy.length < maxCols) copy.push('');
+          return copy;
+        });
+        formatted = serializeCsvTable(
+          normalizedHeaders,
+          normalizedRows,
+          table.delimiter,
+          tab.lineEnding
+        );
+        statusMsg = `CSV formatado (${normalizedRows.length} registros × ${maxCols} colunas)`;
+      }
+    } else if (tab.language === 'html' || tab.language === 'xml') {
+      const voidTags = new Set([
+        'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+        'link', 'meta', 'param', 'source', 'track', 'wbr',
+      ]);
+      const normalized = tab.content
+        .replace(/\r\n/g, '\n')
+        .replace(/>\s+</g, '>\n<');
+      const rawLines = normalized.split('\n');
+      let level = 0;
+      const out: string[] = [];
+      for (const raw of rawLines) {
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        const isClosing = /^<\/[a-zA-Z0-9_:-]+/.test(trimmed);
+        if (isClosing) {
+          level = Math.max(0, level - 1);
+        }
+        out.push(indentUnit.repeat(level) + trimmed);
+        const openMatch = trimmed.match(/^<([a-zA-Z0-9_:-]+)(?:\s[^>]*)?>$/);
+        const hasInlineClose = /<\/[a-zA-Z0-9_:-]+>\s*$/.test(trimmed);
+        const isSelfClosing = /\/>$/.test(trimmed) || /^<![a-zA-Z-]/.test(trimmed) || /^<\?/.test(trimmed);
+        if (openMatch && !hasInlineClose && !isSelfClosing) {
+          const tagName = openMatch[1].toLowerCase();
+          if (tab.language === 'xml' || !voidTags.has(tagName)) {
+            level += 1;
+          }
+        }
+      }
+      formatted = out.join(sep);
+      statusMsg = `${tab.language.toUpperCase()} indentado e estruturado com sucesso`;
+    } else if (tab.language === 'sql') {
+      const majorClauses = [
+        'SELECT', 'FROM', 'WHERE', 'INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN',
+        'FULL JOIN', 'JOIN', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT',
+        'OFFSET', 'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM',
+        'CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'UNION ALL', 'UNION',
+      ];
+      const upperKeywords = [
+        ...majorClauses,
+        'AS', 'ON', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'IN', 'EXISTS',
+        'BETWEEN', 'LIKE', 'ILIKE', 'ASC', 'DESC', 'DISTINCT', 'COUNT',
+        'SUM', 'AVG', 'MIN', 'MAX', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
+        'PRIMARY KEY', 'FOREIGN KEY', 'REFERENCES', 'DEFAULT', 'IF NOT EXISTS',
+      ];
+      let work = tab.content.replace(/\r\n/g, '\n');
+      for (const kw of upperKeywords) {
+        const pattern = new RegExp(`\\b${kw.replace(/\s+/g, '\\s+')}\\b`, 'gi');
+        work = work.replace(pattern, kw);
+      }
+      for (const clause of majorClauses) {
+        const pattern = new RegExp(`\\s+\\b(${clause})\\b`, 'g');
+        work = work.replace(pattern, `\n$1`);
+      }
+      work = work.replace(/\s+\b(AND|OR)\b\s+/g, `\n${indentUnit}$1 `);
+      formatted = work
+        .split('\n')
+        .map((l) => l.replace(/[ \t]+$/, ''))
+        .join(sep);
+      statusMsg = 'Consulta SQL formatada e padronizada';
+    } else if (tab.language === 'markdown') {
+      const rawLines = tab.content.replace(/\r\n/g, '\n').split('\n');
+      const out: string[] = [];
+      let i = 0;
+      while (i < rawLines.length) {
+        const line = rawLines[i];
+        // Alinha tabelas Markdown automaticamente
+        if (/^\s*\|.*\|\s*$/.test(line)) {
+          const tableLines: string[] = [];
+          while (i < rawLines.length && /^\s*\|.*\|\s*$/.test(rawLines[i])) {
+            tableLines.push(rawLines[i].trim());
+            i++;
+          }
+          const parsedRows = tableLines.map((tl) =>
+            tl
+              .replace(/^\||\|$/g, '')
+              .split('|')
+              .map((c) => c.trim())
+          );
+          const colCount = parsedRows.reduce((m, r) => Math.max(m, r.length), 0);
+          const colWidths = new Array<number>(colCount).fill(3);
+          parsedRows.forEach((r) => {
+            r.forEach((cell, idx) => {
+              if (!/^:?-+:?$/.test(cell)) {
+                colWidths[idx] = Math.max(colWidths[idx], cell.length);
+              }
+            });
+          });
+          parsedRows.forEach((r) => {
+            const cells = Array.from({ length: colCount }, (_, idx) => {
+              const val = r[idx] ?? '';
+              if (/^:?-+:?$/.test(val)) {
+                const left = val.startsWith(':') ? ':' : '-';
+                const right = val.endsWith(':') ? ':' : '-';
+                return left + '-'.repeat(Math.max(1, colWidths[idx] - 2)) + right;
+              }
+              return val.padEnd(colWidths[idx], ' ');
+            });
+            out.push(`| ${cells.join(' | ')} |`);
+          });
+          continue;
+        }
+        // Normaliza títulos (#Titulo -> # Titulo) sem afetar blocos de código
+        const normalizedHeading = line.replace(/^(#{1,6})([^\s#])/, '$1 $2').replace(/[ \t]+$/, '');
+        out.push(normalizedHeading);
+        i++;
+      }
+      formatted = out.join(sep);
+      statusMsg = 'Markdown e tabelas alinhados com sucesso';
+    } else if (['yaml', 'toml', 'ini'].includes(tab.language)) {
+      const rawLines = tab.content.replace(/\r\n/g, '\n').split('\n');
+      const out = rawLines.map((raw) => {
+        const trimmedRight = raw.replace(/[ \t]+$/, '');
+        if (!trimmedRight.trim() || trimmedRight.trim().startsWith('#') || trimmedRight.trim().startsWith(';')) {
+          return trimmedRight;
+        }
+        if (tab.language === 'ini' || tab.language === 'toml') {
+          return trimmedRight.replace(/^(\s*[A-Za-z0-9_.-]+)\s*=\s*(.+)$/, '$1 = $2');
+        }
+        return trimmedRight.replace(/^(\s*[A-Za-z0-9_.-]+):(?=\S)/, '$1: ');
+      });
+      formatted = out.join(sep);
+      statusMsg = `Configuração ${tab.language.toUpperCase()} formatada`;
+    } else if (tab.language === 'python') {
+      const rawLines = tab.content.replace(/\r\n/g, '\n').split('\n');
+      const out = rawLines.map((line) => {
+        const leadingTabs = line.match(/^\t+/);
+        const replacedTabs = leadingTabs
+          ? ' '.repeat(leadingTabs[0].length * 4) + line.slice(leadingTabs[0].length)
+          : line;
+        return replacedTabs.replace(/[ \t]+$/, '');
+      });
+      formatted = out.join(sep);
+      statusMsg = 'Código Python formatado (PEP 8 espaços)';
     } else if (
-      ['javascript', 'typescript', 'go', 'rust', 'c', 'cpp', 'java', 'csharp', 'css'].includes(
-        tab.language
-      )
+      [
+        'javascript',
+        'typescript',
+        'go',
+        'rust',
+        'c',
+        'cpp',
+        'java',
+        'csharp',
+        'css',
+        'php',
+        'powershell',
+        'shell',
+      ].includes(tab.language)
     ) {
       const rawLines = tab.content.replace(/\r\n/g, '\n').split('\n');
       let level = 0;
@@ -893,24 +1322,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       for (const raw of rawLines) {
         const trimmed = raw.trim();
         if (!trimmed) {
-          out.push('');
+          if (out.length === 0 || out[out.length - 1] !== '') {
+            out.push('');
+          }
           continue;
         }
-        if (/^[}\])]/.test(trimmed)) {
+        const clean = stripStringsAndComments(trimmed);
+        const startsWithClose = /^[}\])]/.test(clean);
+        if (startsWithClose) {
           level = Math.max(0, level - 1);
         }
         out.push(indentUnit.repeat(level) + trimmed);
-        const opens = (trimmed.match(/[{[(]/g) || []).length;
-        const closes = (trimmed.match(/[}\])]/g) || []).length;
-        const net = opens - closes + (/^[}\])]/.test(trimmed) ? 1 : 0);
+        const opens = (clean.match(/[{[(]/g) || []).length;
+        const closes = (clean.match(/[}\])]/g) || []).length;
+        const net = opens - closes + (startsWithClose ? 1 : 0);
         level = Math.max(0, level + net);
       }
-      formatted = out.join(tab.lineEnding === 'CRLF' ? '\r\n' : '\n');
+      formatted = out.join(sep);
+      statusMsg = `Código ${tab.language.toUpperCase()} indentado e formatado`;
     } else {
       formatted = tab.content
         .split(/\r?\n/)
         .map((line) => line.replace(/[ \t]+$/, ''))
-        .join(tab.lineEnding === 'CRLF' ? '\r\n' : '\n');
+        .join(sep);
     }
 
     set((s) => {
@@ -920,7 +1354,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       persistTabsToStorage(nextTabs, s.activeTabId, s.workspaceDir);
       return {
         tabs: nextTabs,
-        statusMessage: 'Código formatado com sucesso',
+        statusMessage: statusMsg,
       };
     });
   },
@@ -934,6 +1368,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const raw = tab.content;
     const lines = raw.replace(/\r\n/g, '\n').split('\n');
     let nextContent = raw;
+    let nextLanguage = tab.language;
+    let customStatus = 'Transformação aplicada';
 
     try {
       switch (kind) {
@@ -986,10 +1422,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             .join(sep);
           break;
         case 'jsonPretty':
-          nextContent = JSON.stringify(JSON.parse(raw), null, tabSize);
+          nextContent = JSON.stringify(JSON.parse(raw), null, tabSize).replace(/\n/g, sep);
+          customStatus = 'JSON formatado (Pretty Print)';
           break;
         case 'jsonMinify':
           nextContent = JSON.stringify(JSON.parse(raw));
+          customStatus = 'JSON minificado em linha única';
           break;
         case 'jsonEscape':
           nextContent = JSON.stringify(raw);
@@ -999,6 +1437,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           nextContent = String(parsed);
           break;
         }
+        case 'csvToJson':
+          nextContent = csvToJsonString(raw, tabSize).replace(/\n/g, sep);
+          nextLanguage = 'json';
+          customStatus = 'CSV convertido para JSON estruturado';
+          break;
+        case 'jsonToCsv':
+          nextContent = jsonToCsvString(raw, tab.lineEnding);
+          nextLanguage = 'csv';
+          customStatus = 'JSON convertido para Tabela CSV';
+          break;
+        case 'csvAlign':
+          nextContent = alignCsvColumns(raw, tab.lineEnding);
+          customStatus = 'Colunas CSV alinhadas visualmente';
+          break;
         case 'base64Encode': {
           const bytes = new TextEncoder().encode(raw);
           let bin = '';
@@ -1047,12 +1499,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     set((s) => {
       const nextTabs = s.tabs.map((t) =>
-        t.id === tab.id ? { ...t, content: nextContent } : t
+        t.id === tab.id ? { ...t, content: nextContent, language: nextLanguage } : t
       );
       persistTabsToStorage(nextTabs, s.activeTabId, s.workspaceDir);
       return {
         tabs: nextTabs,
-        statusMessage: 'Transformação aplicada',
+        statusMessage: customStatus,
       };
     });
   },
@@ -1105,7 +1557,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setPreferSeparateWindow: (preferSeparateWindow) => set({ preferSeparateWindow }),
   setFontSize: (size) => set({ fontSize: Math.max(10, Math.min(26, size)) }),
   setTabSize: (tabSize) => set({ tabSize }),
-  toggleWordWrap: () => set((s) => ({ wordWrap: !s.wordWrap })),
+  toggleWordWrap: () =>
+    set((s) => ({
+      wordWrap: !s.wordWrap,
+      statusMessage: !s.wordWrap
+        ? 'Quebra automática de linha (Alt+Z): ATIVADA'
+        : 'Quebra automática de linha (Alt+Z): DESATIVADA',
+    })),
   toggleMinimap: () => set((s) => ({ showMinimap: !s.showMinimap })),
   toggleSplitPreview: () => set((s) => ({ showSplitPreview: !s.showSplitPreview, showDiffView: false })),
   toggleDiffView: () => set((s) => ({ showDiffView: !s.showDiffView, showSplitPreview: false })),
