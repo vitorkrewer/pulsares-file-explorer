@@ -1,9 +1,11 @@
 package search
 
 import (
+	"archive/zip"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"pulsares-file-explorer/internal/storage"
@@ -76,4 +78,53 @@ func TestSearch_GlobRegexContentAndSQLiteIndex(t *testing.T) {
 		t.Fatalf("expected indexed match README.md, got %+v (err=%v)", indexedResults, err)
 	}
 }
+
+func TestSearch_ContentInOfficeODFAndSkipHeavyDirs(t *testing.T) {
+	tmp := t.TempDir()
+	svc := New(nil, nil)
+
+	// 1. Cria um documento Word (.docx) sintético
+	docxPath := filepath.Join(tmp, "contrato_anual.docx")
+	{
+		f, _ := os.Create(docxPath)
+		zw := zip.NewWriter(f)
+		w, _ := zw.Create("word/document.xml")
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><w:document><w:body><w:p><w:r><w:t>Cláusula de Confidencialidade Pulsares_99</w:t></w:r></w:p></w:body></w:document>`))
+		_ = zw.Close()
+		_ = f.Close()
+	}
+
+	// 2. Cria um documento LibreOffice Writer (.odt) sintético
+	odtPath := filepath.Join(tmp, "relatorio_linux.odt")
+	{
+		f, _ := os.Create(odtPath)
+		zw := zip.NewWriter(f)
+		w, _ := zw.Create("content.xml")
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><office:document-content><office:body><office:text><text:p>Assinatura Digital Pulsares_99 aprovada</text:p></office:text></office:body></office:document-content>`))
+		_ = zw.Close()
+		_ = f.Close()
+	}
+
+	// 3. Cria uma pasta node_modules que DEVE ser ignorada automaticamente na busca por conteúdo
+	nmDir := filepath.Join(tmp, "node_modules", "pkg")
+	_ = os.MkdirAll(nmDir, 0o755)
+	_ = os.WriteFile(filepath.Join(nmDir, "index.js"), []byte("const x = 'Pulsares_99';"), 0o644)
+
+	results, err := svc.SearchSync(context.Background(), Options{
+		RootPath:     tmp,
+		ContentQuery: "Pulsares_99",
+	})
+	if err != nil {
+		t.Fatalf("SearchSync failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected exactly 2 matches (.docx and .odt, skipping node_modules), got %d: %+v", len(results), results)
+	}
+	for _, r := range results {
+		if !strings.Contains(r.Snippet, "Pulsares_99") {
+			t.Fatalf("expected snippet to contain matched term, got %+v", r)
+		}
+	}
+}
+
 

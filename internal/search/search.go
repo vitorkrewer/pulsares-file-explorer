@@ -1,16 +1,15 @@
 package search
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"pulsares-file-explorer/internal/storage"
@@ -186,6 +185,11 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 	isGlob := !opts.UseRegex && (strings.ContainsAny(queryLower, "*?["))
 	contentLower := strings.ToLower(strings.TrimSpace(opts.ContentQuery))
 
+	cMatcher, err := newContentMatcher(opts.ContentQuery, opts.UseRegex)
+	if err != nil {
+		return err
+	}
+
 	matchesMeta := func(name string, isDir bool, size int64, modTime time.Time) bool {
 		if !opts.IncludeHidden && strings.HasPrefix(name, ".") {
 			return false
@@ -281,6 +285,12 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 		}
 	}
 
+	// Se houver busca dentro do conteúdo (ContentQuery), utiliza o motor concorrente Produtor-Consumidor
+	// multiplataforma com Worker Pool limitado, descarte rápido de pastas virtuais/pesadas e suporte a Office/ODF.
+	if cMatcher != nil {
+		return s.walkAndSearchContentConcurrent(ctx, root, opts, matchesMeta, cMatcher, onBatch)
+	}
+
 	batch := make([]ResultItem, 0, 64)
 	flush := func() {
 		if len(batch) > 0 {
@@ -289,7 +299,7 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 		}
 	}
 
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -319,20 +329,6 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 			return nil
 		}
 
-		snippet := ""
-		lineNum := 0
-		if contentLower != "" {
-			if isDir || info.Size() > 8*1024*1024 {
-				return nil
-			}
-			matched, snip, ln := matchFileContent(ctx, p, contentLower)
-			if !matched {
-				return nil
-			}
-			snippet = snip
-			lineNum = ln
-		}
-
 		rel, err := filepath.Rel(root, p)
 		if err != nil {
 			rel = name
@@ -343,14 +339,12 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 		}
 
 		batch = append(batch, ResultItem{
-			Path:       p,
-			RelPath:    rel,
-			Name:       name,
-			Kind:       kindStr,
-			Size:       info.Size(),
-			ModTime:    info.ModTime().Format(time.RFC3339),
-			Snippet:    snippet,
-			LineNumber: lineNum,
+			Path:    p,
+			RelPath: rel,
+			Name:    name,
+			Kind:    kindStr,
+			Size:    info.Size(),
+			ModTime: info.ModTime().Format(time.RFC3339),
 		})
 		if len(batch) >= 50 {
 			flush()
@@ -360,6 +354,164 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 
 	flush()
 	return err
+}
+
+type contentCandidate struct {
+	path    string
+	name    string
+	ext     string
+	size    int64
+	modTime time.Time
+}
+
+func (s *Service) walkAndSearchContentConcurrent(
+	ctx context.Context,
+	root string,
+	opts Options,
+	matchesMeta func(name string, isDir bool, size int64, modTime time.Time) bool,
+	cMatcher *contentMatcher,
+	onBatch func([]ResultItem),
+) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	workers := runtime.NumCPU()
+	if workers > 4 {
+		workers = 4
+	}
+	if workers < 2 {
+		workers = 2
+	}
+
+	const maxContentResults = 1000
+	var matchedCount int32
+
+	jobs := make(chan contentCandidate, 128)
+	resultsC := make(chan ResultItem, 64)
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for cand := range jobs {
+				if ctx.Err() != nil {
+					return
+				}
+				if atomic.LoadInt32(&matchedCount) >= maxContentResults {
+					cancel()
+					return
+				}
+				matched, snippet, lineNum := matchFileContentAdvanced(ctx, cand.path, cand.ext, cand.size, cMatcher)
+				if !matched {
+					continue
+				}
+				if atomic.AddInt32(&matchedCount, 1) > maxContentResults {
+					cancel()
+					return
+				}
+				rel, err := filepath.Rel(root, cand.path)
+				if err != nil {
+					rel = cand.name
+				}
+				select {
+				case resultsC <- ResultItem{
+					Path:       cand.path,
+					RelPath:    rel,
+					Name:       cand.name,
+					Kind:       "file",
+					Size:       cand.size,
+					ModTime:    cand.modTime.Format(time.RFC3339),
+					Snippet:    snippet,
+					LineNumber: lineNum,
+				}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	collectorDone := make(chan struct{})
+	go func() {
+		defer close(collectorDone)
+		batch := make([]ResultItem, 0, 32)
+		flush := func() {
+			if len(batch) > 0 {
+				onBatch(batch)
+				batch = make([]ResultItem, 0, 32)
+			}
+		}
+		for item := range resultsC {
+			batch = append(batch, item)
+			if len(batch) >= 25 {
+				flush()
+			}
+		}
+		flush()
+	}()
+
+	walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err != nil || p == root {
+			return nil
+		}
+
+		name := d.Name()
+		if d.IsDir() {
+			if !opts.IncludeHidden && strings.HasPrefix(name, ".") {
+				return filepath.SkipDir
+			}
+			if shouldSkipContentDir(p, name) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Em Linux/macOS/Windows, processa apenas arquivos regulares (ignora symlinks, FIFOs, sockets e devices)
+		if !d.Type().IsRegular() {
+			return nil
+		}
+
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(name), "."))
+		if isSkippedBinaryExt(ext) {
+			return nil
+		}
+
+		info, infoErr := d.Info()
+		if infoErr != nil || info.Size() <= 0 {
+			return nil
+		}
+
+		if !matchesMeta(name, false, info.Size(), info.ModTime()) {
+			return nil
+		}
+
+		select {
+		case jobs <- contentCandidate{
+			path:    p,
+			name:    name,
+			ext:     ext,
+			size:    info.Size(),
+			modTime: info.ModTime(),
+		}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		return nil
+	})
+
+	close(jobs)
+	wg.Wait()
+	close(resultsC)
+	<-collectorDone
+
+	if atomic.LoadInt32(&matchedCount) >= maxContentResults {
+		return nil
+	}
+	return walkErr
 }
 
 // IndexDirectory varre uma pasta escolhida pelo usuário e armazena suas entradas no índice SQLite.
@@ -408,45 +560,6 @@ func (s *Service) IndexDirectory(ctx context.Context, rootPath string) (int, err
 		return 0, err
 	}
 	return len(entries), nil
-}
-
-func matchFileContent(ctx context.Context, path string, needleLower string) (bool, string, int) {
-	f, err := os.Open(path)
-	if err != nil {
-		return false, "", 0
-	}
-	defer f.Close()
-
-	// Verifica primeiros 512 bytes para ignorar arquivos binários
-	head := make([]byte, 512)
-	n, _ := f.Read(head)
-	if n > 0 && bytes.IndexByte(head[:n], 0) >= 0 {
-		return false, "", 0
-	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return false, "", 0
-	}
-
-	scanner := bufio.NewScanner(f)
-	buf := make([]byte, 64*1024)
-	scanner.Buffer(buf, 256*1024)
-
-	lineNum := 0
-	for scanner.Scan() {
-		if ctx.Err() != nil {
-			return false, "", 0
-		}
-		lineNum++
-		line := scanner.Text()
-		if strings.Contains(strings.ToLower(line), needleLower) {
-			trimmed := strings.TrimSpace(line)
-			if len(trimmed) > 140 {
-				trimmed = trimmed[:140] + "…"
-			}
-			return true, trimmed, lineNum
-		}
-	}
-	return false, "", 0
 }
 
 func parseFlexibleTime(val string) time.Time {

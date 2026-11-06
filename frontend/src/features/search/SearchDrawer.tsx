@@ -39,6 +39,35 @@ const QUICK_TYPE_PRESETS: Array<{ label: string; ext: string; kind?: string }> =
   { label: 'Pastas', ext: '', kind: 'dir' },
 ];
 
+function renderHighlightedSnippet(snippet: string, term: string): React.ReactNode {
+  const cleanTerm = term.trim();
+  if (!cleanTerm) return snippet;
+  const lowerSnippet = snippet.toLowerCase();
+  const lowerTerm = cleanTerm.toLowerCase();
+  const idx = lowerSnippet.indexOf(lowerTerm);
+  if (idx < 0) return snippet;
+  const before = snippet.slice(0, idx);
+  const match = snippet.slice(idx, idx + cleanTerm.length);
+  const after = snippet.slice(idx + cleanTerm.length);
+  return (
+    <>
+      {before}
+      <mark
+        style={{
+          backgroundColor: 'rgba(245, 158, 11, 0.28)',
+          color: 'var(--text-primary)',
+          padding: '0 3px',
+          borderRadius: 3,
+          fontWeight: 700,
+        }}
+      >
+        {match}
+      </mark>
+      {after}
+    </>
+  );
+}
+
 export const SearchDrawer: React.FC = () => {
   const { t, i18n } = useTranslation('common');
   const { currentPath, showHidden, navigateTo, newTab } = useBrowserStore();
@@ -528,7 +557,21 @@ export const SearchDrawer: React.FC = () => {
                       <div style={styles.resultPath}>{r.relPath}</div>
                       {r.snippet && (
                         <div style={styles.snippetBox}>
-                          L{r.lineNumber}: {r.snippet}
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              marginRight: 6,
+                              padding: '0 4px',
+                              borderRadius: 3,
+                              backgroundColor: 'var(--bg-elevated)',
+                              color: 'var(--text-secondary)',
+                              fontWeight: 700,
+                              fontSize: 10,
+                            }}
+                          >
+                            L{r.lineNumber}
+                          </span>
+                          <span>{renderHighlightedSnippet(r.snippet, contentQuery)}</span>
                         </div>
                       )}
                     </div>
