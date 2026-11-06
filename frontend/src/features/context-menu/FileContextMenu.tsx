@@ -20,6 +20,7 @@ import {
   FilePlus,
   RefreshCw,
   CheckSquare,
+  Database,
 } from 'lucide-react';
 import {
   Entry,
@@ -35,6 +36,7 @@ import { useTerminalStore } from '../terminal/store';
 import { usePreviewStore } from '../preview/store';
 import { useProductivityStore } from '../productivity/store';
 import { useEditorStore, isEditableTextFile } from '../editor/store';
+import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 
 export interface ContextMenuTarget {
   x: number;
@@ -126,6 +128,10 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
   const isEditable =
     entry && entry.kind !== 'dir'
       ? isEditableTextFile(entry.name, entryExt)
+      : false;
+  const isDbFile =
+    entry && entry.kind !== 'dir'
+      ? isDatabaseFile(entry.name)
       : false;
   const isFavorite = entry ? favorites.some((f) => f.path === entry.location.path) : false;
   const targetDir = entry
@@ -228,6 +234,8 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
               runAndClose(() => {
                 if (isDir) {
                   navigateTo(entry.location.path);
+                } else if (isDbFile) {
+                  void useDBStudioStore.getState().openDatabase(entry.location.path);
                 } else if (isEditable) {
                   void openFileInEditor(entry.location.path);
                 } else {
@@ -243,6 +251,19 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
               label="Abrir em nova aba"
               shortcut="Ctrl+T"
               onClick={() => runAndClose(() => newTab(entry.location.path))}
+            />
+          )}
+
+          {!isDir && isDbFile && (
+            <MenuItem
+              icon={<Database size={14} />}
+              label="Abrir no Pulsares DB Studio"
+              badge="SQLite"
+              onClick={() =>
+                runAndClose(() => {
+                  void useDBStudioStore.getState().openDatabase(entry.location.path);
+                })
+              }
             />
           )}
 

@@ -24,6 +24,13 @@ import { useProductivityStore } from '../features/productivity/store';
 import { useEditorStore, isStandaloneStudioWindow } from '../features/editor/store';
 import { CodeEditorModal } from '../features/editor/CodeEditorModal';
 import {
+  useDBStudioStore,
+  isStandaloneDBStudioWindow,
+  setDedicatedDBStudioWindow,
+  isDatabaseFile,
+} from '../features/db-studio/store';
+import { DBStudioModal } from '../features/db-studio/DBStudioModal';
+import {
   FileContextMenu,
   ContextMenuTarget,
 } from '../features/context-menu/FileContextMenu';
@@ -95,6 +102,7 @@ export const App: React.FC = () => {
   const { togglePalette, openBatchRename, loadTags } = useProductivityStore();
   const [theme, setTheme] = useState<string>('dark');
   const [isStudioMode, setIsStudioMode] = useState<boolean>(() => isStandaloneStudioWindow());
+  const [isDBStudioMode, setIsDBStudioMode] = useState<boolean>(() => isStandaloneDBStudioWindow());
   const [contextMenuTarget, setContextMenuTarget] = useState<ContextMenuTarget | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -133,6 +141,15 @@ export const App: React.FC = () => {
 
       // 3. Reidratar sessão (abas + painel lateral + favoritos + unidades + recentes)
       const initialPath = state.homeDir || (state.drives.length > 0 ? state.drives[0].path : '/');
+      if (state.dbStudioMode || isStandaloneDBStudioWindow()) {
+        setDedicatedDBStudioWindow(true);
+        setIsDBStudioMode(true);
+        document.title = 'Pulsares DB Studio';
+        if (state.dbStudioTarget) {
+          void useDBStudioStore.getState().openDatabase(state.dbStudioTarget, { forceInline: true });
+        }
+        return;
+      }
       if (state.studioMode || isStandaloneStudioWindow()) {
         setIsStudioMode(true);
         document.title = 'Pulsares Studio Editor';
@@ -290,6 +307,8 @@ export const App: React.FC = () => {
           if (entry) {
             if (entry.kind === 'dir') {
               useBrowserStore.getState().navigateTo(entry.location.path);
+            } else if (isDatabaseFile(entry.name)) {
+              void useDBStudioStore.getState().openDatabase(entry.location.path);
             } else {
               void openPath(entry.location.path);
             }
@@ -320,7 +339,8 @@ export const App: React.FC = () => {
           useProductivityStore.getState().remoteOpen ||
           useOperationsStore.getState().promptKind !== null ||
           useOperationsStore.getState().propertiesData !== null ||
-          (useEditorStore.getState().isOpen && !useEditorStore.getState().isMinimized);
+          (useEditorStore.getState().isOpen && !useEditorStore.getState().isMinimized) ||
+          (useDBStudioStore.getState().isOpen && !useDBStudioStore.getState().isMinimized);
 
         if (
           !hasModalOpen &&
@@ -640,6 +660,14 @@ export const App: React.FC = () => {
     });
   };
 
+  if (isDBStudioMode) {
+    return (
+      <div style={styles.appRoot}>
+        <DBStudioModal standalone />
+      </div>
+    );
+  }
+
   if (isStudioMode) {
     return (
       <div style={styles.appRoot}>
@@ -774,6 +802,7 @@ export const App: React.FC = () => {
       <SearchDrawer />
       <ProductivityModals />
       <CodeEditorModal />
+      <DBStudioModal />
       <FileContextMenu
         target={contextMenuTarget}
         onClose={() => setContextMenuTarget(null)}

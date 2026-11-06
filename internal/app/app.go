@@ -3,8 +3,10 @@ package app
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	_ "modernc.org/sqlite"
 	"pulsares-file-explorer/internal/listing"
 	"pulsares-file-explorer/internal/ops"
 	"pulsares-file-explorer/internal/platform"
@@ -30,18 +33,19 @@ import (
 )
 
 type App struct {
-	ctx       context.Context
-	fs        vfs.FileSystem
-	listing   *listing.Manager
-	tree      *tree.Service
-	ops       *ops.Manager
-	terminal  *terminal.Service
-	thumbs    *thumbs.Service
-	search    *search.Service
-	watch     *watch.Service
-	storage   *storage.DB
-	studioMu  sync.Mutex
-	studioCmd *exec.Cmd
+	ctx         context.Context
+	fs          vfs.FileSystem
+	listing     *listing.Manager
+	tree        *tree.Service
+	ops         *ops.Manager
+	terminal    *terminal.Service
+	thumbs      *thumbs.Service
+	search      *search.Service
+	watch       *watch.Service
+	storage     *storage.DB
+	studioMu    sync.Mutex
+	studioCmd   *exec.Cmd
+	dbStudioCmd *exec.Cmd
 }
 
 type InitialState struct {
@@ -55,6 +59,8 @@ type InitialState struct {
 	SessionData    string                 `json:"sessionData,omitempty"`
 	StudioMode     bool                   `json:"studioMode,omitempty"`
 	StudioTarget   string                 `json:"studioTarget,omitempty"`
+	DBStudioMode   bool                   `json:"dbStudioMode,omitempty"`
+	DBStudioTarget string                 `json:"dbStudioTarget,omitempty"`
 }
 
 func NewApp() *App {
@@ -96,6 +102,10 @@ func (a *App) Startup(ctx context.Context) {
 			go a.watchStudioIPC(ctx)
 			break
 		}
+		if arg == "--dbstudio" {
+			go a.watchDBStudioIPC(ctx)
+			break
+		}
 	}
 }
 
@@ -135,11 +145,20 @@ func (a *App) GetInitialState() InitialState {
 
 	studioMode := false
 	studioTarget := ""
+	dbStudioMode := false
+	dbStudioTarget := ""
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--studio" {
 			studioMode = true
 			if i+1 < len(os.Args) {
 				studioTarget = os.Args[i+1]
+			}
+			break
+		}
+		if os.Args[i] == "--dbstudio" {
+			dbStudioMode = true
+			if i+1 < len(os.Args) {
+				dbStudioTarget = os.Args[i+1]
 			}
 			break
 		}
@@ -156,6 +175,8 @@ func (a *App) GetInitialState() InitialState {
 		SessionData:    sessionData,
 		StudioMode:     studioMode,
 		StudioTarget:   studioTarget,
+		DBStudioMode:   dbStudioMode,
+		DBStudioTarget: dbStudioTarget,
 	}
 }
 
@@ -805,4 +826,420 @@ func (a *App) SetSetting(key, val string) error {
 		return nil
 	}
 	return a.storage.SetSetting(key, val)
+}
+
+// ============================================================================
+// Pulsares DB Studio (Visualizador de Bancos SQLite e Executor de Consultas SQL)
+// ============================================================================
+
+type DBColumnInfo struct {
+	CID          int    `json:"cid"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	NotNull      bool   `json:"notNull"`
+	DefaultValue string `json:"defaultValue"`
+	PK           bool   `json:"pk"`
+}
+
+type DBObjectInfo struct {
+	Name     string         `json:"name"`
+	Type     string         `json:"type"` // "table" | "view" | "index" | "trigger"
+	RowCount int64          `json:"rowCount"`
+	SQL      string         `json:"sql"`
+	Columns  []DBColumnInfo `json:"columns"`
+}
+
+type DBSchemaInfo struct {
+	Path          string         `json:"path"`
+	Name          string         `json:"name"`
+	Size          int64          `json:"size"`
+	SQLiteVersion string         `json:"sqliteVersion"`
+	Tables        []DBObjectInfo `json:"tables"`
+	Views         []DBObjectInfo `json:"views"`
+	Indexes       []DBObjectInfo `json:"indexes"`
+}
+
+type DBQueryResult struct {
+	Columns      []string   `json:"columns"`
+	Rows         [][]string `json:"rows"`
+	TotalCount   int64      `json:"totalCount"`
+	RowsAffected int64      `json:"rowsAffected"`
+	DurationMs   int64      `json:"durationMs"`
+	IsSelect     bool       `json:"isSelect"`
+	Message      string     `json:"message"`
+}
+
+func openUserSQLite(dbPath string) (*sql.DB, string, error) {
+	clean := filepath.Clean(strings.TrimSpace(dbPath))
+	if clean == "" {
+		return nil, "", errors.New("caminho do banco de dados vazio")
+	}
+	info, err := os.Stat(clean)
+	if err != nil {
+		return nil, "", err
+	}
+	if info.IsDir() {
+		return nil, "", errors.New("o caminho informado é uma pasta, não um arquivo de banco")
+	}
+	db, err := sql.Open("sqlite", clean)
+	if err != nil {
+		return nil, "", err
+	}
+	return db, clean, nil
+}
+
+func quoteSQLIdent(ident string) string {
+	return `"` + strings.ReplaceAll(ident, `"`, `""`) + `"`
+}
+
+func fetchTableColumns(db *sql.DB, tableName string) []DBColumnInfo {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", quoteSQLIdent(tableName)))
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var cols []DBColumnInfo
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err == nil {
+			cols = append(cols, DBColumnInfo{
+				CID:          cid,
+				Name:         name,
+				Type:         ctype,
+				NotNull:      notnull != 0,
+				DefaultValue: dflt.String,
+				PK:           pk != 0,
+			})
+		}
+	}
+	return cols
+}
+
+func (a *App) DBInspectSchema(dbPath string) (DBSchemaInfo, error) {
+	db, clean, err := openUserSQLite(dbPath)
+	if err != nil {
+		return DBSchemaInfo{}, err
+	}
+	defer db.Close()
+
+	info, _ := os.Stat(clean)
+	var size int64
+	if info != nil {
+		size = info.Size()
+	}
+
+	var sqliteVer string
+	_ = db.QueryRow("SELECT sqlite_version()").Scan(&sqliteVer)
+
+	masterRows, err := db.Query(`
+		SELECT type, name, COALESCE(sql, '')
+		FROM sqlite_master
+		WHERE name NOT LIKE 'sqlite_%'
+		ORDER BY type, name
+	`)
+	if err != nil {
+		return DBSchemaInfo{}, err
+	}
+	defer masterRows.Close()
+
+	type rawMaster struct {
+		objType string
+		name    string
+		sqlDef  string
+	}
+	var rawList []rawMaster
+	for masterRows.Next() {
+		var m rawMaster
+		if err := masterRows.Scan(&m.objType, &m.name, &m.sqlDef); err == nil {
+			rawList = append(rawList, m)
+		}
+	}
+	_ = masterRows.Close()
+
+	schema := DBSchemaInfo{
+		Path:          clean,
+		Name:          filepath.Base(clean),
+		Size:          size,
+		SQLiteVersion: sqliteVer,
+		Tables:        []DBObjectInfo{},
+		Views:         []DBObjectInfo{},
+		Indexes:       []DBObjectInfo{},
+	}
+
+	for _, item := range rawList {
+		obj := DBObjectInfo{
+			Name: item.name,
+			Type: item.objType,
+			SQL:  item.sqlDef,
+		}
+		if item.objType == "table" || item.objType == "view" {
+			obj.Columns = fetchTableColumns(db, item.name)
+			var cnt int64
+			if err := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", quoteSQLIdent(item.name))).Scan(&cnt); err == nil {
+				obj.RowCount = cnt
+			}
+			if item.objType == "table" {
+				schema.Tables = append(schema.Tables, obj)
+			} else {
+				schema.Views = append(schema.Views, obj)
+			}
+		} else if item.objType == "index" {
+			schema.Indexes = append(schema.Indexes, obj)
+		}
+	}
+
+	return schema, nil
+}
+
+func scanRowsToStrings(rows *sql.Rows, maxRows int) ([]string, [][]string, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, nil, err
+	}
+	if maxRows <= 0 {
+		maxRows = 500
+	}
+
+	outRows := [][]string{}
+	rawVals := make([]interface{}, len(cols))
+	scanPtrs := make([]interface{}, len(cols))
+	for i := range rawVals {
+		scanPtrs[i] = &rawVals[i]
+	}
+
+	for rows.Next() {
+		if len(outRows) >= maxRows {
+			break
+		}
+		if err := rows.Scan(scanPtrs...); err != nil {
+			return cols, outRows, err
+		}
+		rowStr := make([]string, len(cols))
+		for i, v := range rawVals {
+			switch val := v.(type) {
+			case nil:
+				rowStr[i] = "NULL"
+			case []byte:
+				rowStr[i] = string(val)
+			default:
+				rowStr[i] = fmt.Sprintf("%v", val)
+			}
+		}
+		outRows = append(outRows, rowStr)
+	}
+	return cols, outRows, nil
+}
+
+func (a *App) DBQueryTable(dbPath string, tableName string, limit int, offset int, filterText string, sortCol string, sortDir string) (DBQueryResult, error) {
+	start := time.Now()
+	db, _, err := openUserSQLite(dbPath)
+	if err != nil {
+		return DBQueryResult{}, err
+	}
+	defer db.Close()
+
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	colsMeta := fetchTableColumns(db, tableName)
+	quotedTable := quoteSQLIdent(tableName)
+
+	whereClause := ""
+	var args []interface{}
+	trimmedFilter := strings.TrimSpace(filterText)
+	if trimmedFilter != "" && len(colsMeta) > 0 {
+		var parts []string
+		for _, c := range colsMeta {
+			parts = append(parts, fmt.Sprintf("CAST(%s AS TEXT) LIKE ?", quoteSQLIdent(c.Name)))
+			args = append(args, "%"+trimmedFilter+"%")
+		}
+		whereClause = " WHERE " + strings.Join(parts, " OR ")
+	}
+
+	var totalCount int64
+	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s%s", quotedTable, whereClause)
+	_ = db.QueryRow(countSQL, args...).Scan(&totalCount)
+
+	orderClause := ""
+	cleanSortCol := strings.TrimSpace(sortCol)
+	if cleanSortCol != "" {
+		dir := "ASC"
+		if strings.EqualFold(sortDir, "desc") {
+			dir = "DESC"
+		}
+		orderClause = fmt.Sprintf(" ORDER BY %s %s", quoteSQLIdent(cleanSortCol), dir)
+	}
+
+	querySQL := fmt.Sprintf("SELECT * FROM %s%s%s LIMIT %d OFFSET %d", quotedTable, whereClause, orderClause, limit, offset)
+	rows, err := db.Query(querySQL, args...)
+	if err != nil {
+		return DBQueryResult{}, err
+	}
+	defer rows.Close()
+
+	cols, dataRows, err := scanRowsToStrings(rows, limit)
+	if err != nil {
+		return DBQueryResult{}, err
+	}
+
+	return DBQueryResult{
+		Columns:    cols,
+		Rows:       dataRows,
+		TotalCount: totalCount,
+		DurationMs: time.Since(start).Milliseconds(),
+		IsSelect:   true,
+		Message:    fmt.Sprintf("%d registro(s) carregado(s) de %d", len(dataRows), totalCount),
+	}, nil
+}
+
+func (a *App) DBExecuteSQL(dbPath string, query string) (DBQueryResult, error) {
+	start := time.Now()
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return DBQueryResult{}, errors.New("consulta SQL vazia")
+	}
+
+	db, _, err := openUserSQLite(dbPath)
+	if err != nil {
+		return DBQueryResult{}, err
+	}
+	defer db.Close()
+
+	upper := strings.ToUpper(trimmed)
+	isQuery := strings.HasPrefix(upper, "SELECT") ||
+		strings.HasPrefix(upper, "PRAGMA") ||
+		strings.HasPrefix(upper, "WITH") ||
+		strings.HasPrefix(upper, "EXPLAIN")
+
+	if isQuery {
+		rows, err := db.Query(trimmed)
+		if err != nil {
+			return DBQueryResult{}, err
+		}
+		defer rows.Close()
+
+		cols, dataRows, err := scanRowsToStrings(rows, 500)
+		if err != nil {
+			return DBQueryResult{}, err
+		}
+		return DBQueryResult{
+			Columns:    cols,
+			Rows:       dataRows,
+			TotalCount: int64(len(dataRows)),
+			DurationMs: time.Since(start).Milliseconds(),
+			IsSelect:   true,
+			Message:    fmt.Sprintf("%d linha(s) retornada(s) em %d ms", len(dataRows), time.Since(start).Milliseconds()),
+		}, nil
+	}
+
+	res, err := db.Exec(trimmed)
+	if err != nil {
+		return DBQueryResult{}, err
+	}
+	affected, _ := res.RowsAffected()
+	dur := time.Since(start).Milliseconds()
+	return DBQueryResult{
+		Columns:      []string{"Resultado", "Linhas Afetadas", "Tempo (ms)"},
+		Rows:         [][]string{{"Comando executado com sucesso", fmt.Sprintf("%d", affected), fmt.Sprintf("%d", dur)}},
+		TotalCount:   1,
+		RowsAffected: affected,
+		DurationMs:   dur,
+		IsSelect:     false,
+		Message:      fmt.Sprintf("Comando executado com sucesso (%d linha(s) afetada(s) em %d ms)", affected, dur),
+	}, nil
+}
+
+func dbStudioIPCFilePath() string {
+	return filepath.Join(os.TempDir(), "pulsares_dbstudio_ipc.json")
+}
+
+func (a *App) watchDBStudioIPC(ctx context.Context) {
+	ipcFile := dbStudioIPCFilePath()
+	var lastTS int64
+	if raw, err := os.ReadFile(ipcFile); err == nil {
+		var msg studioIPCMessage
+		if json.Unmarshal(raw, &msg) == nil {
+			lastTS = msg.Timestamp
+		}
+	}
+
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			raw, err := os.ReadFile(ipcFile)
+			if err != nil {
+				continue
+			}
+			var msg studioIPCMessage
+			if err := json.Unmarshal(raw, &msg); err != nil {
+				continue
+			}
+			if msg.Timestamp > lastTS {
+				lastTS = msg.Timestamp
+				runtime.WindowUnminimise(a.ctx)
+				runtime.WindowShow(a.ctx)
+				runtime.EventsEmit(a.ctx, "dbstudio:open-file", msg)
+			}
+		}
+	}
+}
+
+func (a *App) OpenDBStudioWindow(targetPath string) error {
+	cleanTarget := strings.TrimSpace(targetPath)
+	workspaceDir := ""
+	if cleanTarget != "" {
+		cleanTarget = filepath.Clean(cleanTarget)
+		workspaceDir = filepath.Dir(cleanTarget)
+	}
+
+	msg := studioIPCMessage{
+		TargetPath:   cleanTarget,
+		WorkspaceDir: workspaceDir,
+		Timestamp:    time.Now().UnixNano(),
+	}
+	if payload, err := json.Marshal(msg); err == nil {
+		_ = os.WriteFile(dbStudioIPCFilePath(), payload, 0o600)
+	}
+
+	a.studioMu.Lock()
+	defer a.studioMu.Unlock()
+
+	if a.dbStudioCmd != nil && a.dbStudioCmd.Process != nil {
+		return nil
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	args := []string{"--dbstudio"}
+	if cleanTarget != "" {
+		args = append(args, cleanTarget)
+	}
+	cmd := exec.Command(exe, args...)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	a.dbStudioCmd = cmd
+	go func(c *exec.Cmd) {
+		_ = c.Wait()
+		a.studioMu.Lock()
+		if a.dbStudioCmd == c {
+			a.dbStudioCmd = nil
+		}
+		a.studioMu.Unlock()
+	}(cmd)
+	return nil
 }

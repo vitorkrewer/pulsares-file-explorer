@@ -82,6 +82,7 @@ export type PreviewKind =
   | 'text'
   | 'media'
   | 'pdf'
+  | 'database'
   | 'binary'
   | 'folder';
 
@@ -157,6 +158,8 @@ export interface InitialState {
   sessionData?: string;
   studioMode?: boolean;
   studioTarget?: string;
+  dbStudioMode?: boolean;
+  dbStudioTarget?: string;
 }
 
 export interface ListingBatchEvent {
@@ -340,6 +343,49 @@ export interface StudioOpenFileEvent {
   timestamp: number;
 }
 
+export interface DBColumnInfo {
+  cid: number;
+  name: string;
+  type: string;
+  notNull: boolean;
+  defaultValue: string;
+  pk: boolean;
+}
+
+export interface DBObjectInfo {
+  name: string;
+  type: 'table' | 'view' | 'index';
+  tableName: string;
+  rowCount: number;
+  sql: string;
+  columns: DBColumnInfo[];
+}
+
+export interface DBSchemaInfo {
+  path: string;
+  name: string;
+  size: number;
+  sqliteVer: string;
+  tables: DBObjectInfo[];
+  views: DBObjectInfo[];
+  indexes: DBObjectInfo[];
+}
+
+export interface DBQueryResult {
+  columns: string[];
+  rows: string[][];
+  totalRows: number;
+  rowsAffected: number;
+  durationMs: number;
+  isSelect: boolean;
+  message?: string;
+}
+
+export interface DBStudioOpenFileEvent {
+  targetPath: string;
+  timestamp: number;
+}
+
 // Declaração de objetos injetados pelo Wails runtime
 declare global {
   interface Window {
@@ -397,6 +443,18 @@ declare global {
           WriteTextFile: (path: string, content: string) => Promise<void>;
           RunStudioCommand: (cwd: string, command: string) => Promise<StudioRunResult>;
           OpenStudioWindow: (targetPath: string) => Promise<void>;
+          DBInspectSchema: (dbPath: string) => Promise<DBSchemaInfo>;
+          DBQueryTable: (
+            dbPath: string,
+            tableName: string,
+            limit: number,
+            offset: number,
+            filterText: string,
+            sortCol: string,
+            sortDir: string
+          ) => Promise<DBQueryResult>;
+          DBExecuteSQL: (dbPath: string, query: string) => Promise<DBQueryResult>;
+          OpenDBStudioWindow: (targetPath: string) => Promise<void>;
           WindowMinimize: () => Promise<void>;
           WindowToggleMaximize: () => Promise<void>;
           WindowClose: () => Promise<void>;
@@ -959,6 +1017,74 @@ export async function openStudioWindowNative(targetPath: string): Promise<boolea
   if (isWailsAvailable() && typeof appObj?.OpenStudioWindow === 'function') {
     try {
       await window.go!.app.App.OpenStudioWindow(targetPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export async function dbInspectSchema(dbPath: string): Promise<DBSchemaInfo> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.DBInspectSchema === 'function') {
+    return window.go!.app.App.DBInspectSchema(dbPath);
+  }
+  return {
+    path: dbPath,
+    name: dbPath.split(/[/\\]/).pop() || dbPath,
+    size: 0,
+    sqliteVer: '3.x',
+    tables: [],
+    views: [],
+    indexes: [],
+  };
+}
+
+export async function dbQueryTable(
+  dbPath: string,
+  tableName: string,
+  limit = 100,
+  offset = 0,
+  filterText = '',
+  sortCol = '',
+  sortDir = 'ASC'
+): Promise<DBQueryResult> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.DBQueryTable === 'function') {
+    return window.go!.app.App.DBQueryTable(dbPath, tableName, limit, offset, filterText, sortCol, sortDir);
+  }
+  return {
+    columns: [],
+    rows: [],
+    totalRows: 0,
+    rowsAffected: 0,
+    durationMs: 0,
+    isSelect: true,
+  };
+}
+
+export async function dbExecuteSQL(dbPath: string, query: string): Promise<DBQueryResult> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.DBExecuteSQL === 'function') {
+    return window.go!.app.App.DBExecuteSQL(dbPath, query);
+  }
+  return {
+    columns: [],
+    rows: [],
+    totalRows: 0,
+    rowsAffected: 0,
+    durationMs: 0,
+    isSelect: false,
+    message: 'Wails indisponível no modo navegador.',
+  };
+}
+
+export async function openDBStudioWindowNative(targetPath: string): Promise<boolean> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.OpenDBStudioWindow === 'function') {
+    try {
+      await window.go!.app.App.OpenDBStudioWindow(targetPath);
       return true;
     } catch {
       return false;

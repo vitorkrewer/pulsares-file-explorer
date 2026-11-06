@@ -13,6 +13,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,6 +33,7 @@ const (
 	PreviewText     PreviewKind = "text"
 	PreviewMedia    PreviewKind = "media"
 	PreviewPDF      PreviewKind = "pdf"
+	PreviewDatabase PreviewKind = "database"
 	PreviewBinary   PreviewKind = "binary"
 	PreviewFolder   PreviewKind = "folder"
 )
@@ -248,23 +250,35 @@ func (s *Service) ReadPreview(path string, maxTextBytes int) (PreviewData, error
 	if ext == "pdf" {
 		data.Kind = PreviewPDF
 		data.MimeType = "application/pdf"
-		if info.Size() <= 8*1024*1024 {
+		if info.Size() <= 4*1024*1024 {
 			if raw, err := os.ReadFile(path); err == nil {
 				data.DataURI = "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(raw)
 			}
+		} else {
+			data.DataURI = "/__localmedia?path=" + url.QueryEscape(path)
 		}
 		return data, nil
 	}
 
-	// Áudio e Vídeo
+	// Áudio e Vídeo (Streaming HTTP Range Request ilimitado para arquivos grandes + base64 rápido para arquivos pequenos em testes)
 	if isMediaExt(ext) {
 		data.Kind = PreviewMedia
 		data.MimeType = mediaMime(ext)
-		if info.Size() <= 15*1024*1024 {
+		if info.Size() <= 2*1024*1024 {
 			if raw, err := os.ReadFile(path); err == nil {
 				data.DataURI = fmt.Sprintf("data:%s;base64,%s", data.MimeType, base64.StdEncoding.EncodeToString(raw))
 			}
 		}
+		if data.DataURI == "" {
+			data.DataURI = "/__localmedia?path=" + url.QueryEscape(path)
+		}
+		return data, nil
+	}
+
+	// Bancos de Dados SQLite (.db, .sqlite, .sqlite3, .db3)
+	if isDatabaseExt(ext) {
+		data.Kind = PreviewDatabase
+		data.MimeType = "application/vnd.sqlite3"
 		return data, nil
 	}
 
@@ -366,7 +380,16 @@ func imageMime(ext string) string {
 
 func isMediaExt(ext string) bool {
 	switch ext {
-	case "mp3", "wav", "ogg", "flac", "m4a", "mp4", "webm", "mov":
+	case "mp3", "wav", "ogg", "flac", "m4a", "aac", "opus", "mp4", "webm", "mov", "mkv", "avi", "m4v":
+		return true
+	default:
+		return false
+	}
+}
+
+func isDatabaseExt(ext string) bool {
+	switch ext {
+	case "db", "sqlite", "sqlite3", "db3", "s3db":
 		return true
 	default:
 		return false
@@ -379,16 +402,20 @@ func mediaMime(ext string) string {
 		return "audio/mpeg"
 	case "wav":
 		return "audio/wav"
-	case "ogg":
+	case "ogg", "opus":
 		return "audio/ogg"
 	case "flac":
 		return "audio/flac"
-	case "m4a":
+	case "m4a", "aac":
 		return "audio/mp4"
 	case "webm":
 		return "video/webm"
 	case "mov":
 		return "video/quicktime"
+	case "mkv":
+		return "video/x-matroska"
+	case "avi":
+		return "video/x-msvideo"
 	default:
 		return "video/mp4"
 	}

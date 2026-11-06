@@ -30,6 +30,7 @@ import {
   Info,
   Command,
   FileCode2,
+  Database,
   X,
 } from 'lucide-react';
 import { useOperationsStore } from './store';
@@ -41,6 +42,7 @@ import { usePreviewStore, GroupByOption, GridThumbSize } from '../preview/store'
 import { useSearchStore } from '../search/store';
 import { useProductivityStore } from '../productivity/store';
 import { useEditorStore } from '../editor/store';
+import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { openPath } from '../../lib/wails';
 
 export const OperationsToolbar: React.FC = () => {
@@ -252,6 +254,30 @@ export const OperationsToolbar: React.FC = () => {
           aria-label="Pulsares Studio Editor (Ctrl+E)"
         >
           <FileCode2 size={14} />
+        </button>
+
+        <button
+          type="button"
+          style={styles.btn}
+          onClick={() => {
+            const entries = useBrowserStore.getState().entries;
+            const firstSelected = Array.from(selectedPaths)[0];
+            const selectedEntry = entries.find((e) => e.location.path === firstSelected);
+            if (selectedEntry && selectedEntry.kind !== 'dir' && isDatabaseFile(selectedEntry.name)) {
+              void useDBStudioStore.getState().openDatabase(selectedEntry.location.path);
+              return;
+            }
+            const firstDbInFolder = entries.find((e) => e.kind !== 'dir' && isDatabaseFile(e.name));
+            if (firstDbInFolder) {
+              void useDBStudioStore.getState().openDatabase(firstDbInFolder.location.path);
+              return;
+            }
+            void useDBStudioStore.getState().openDatabase('', { forceInline: true });
+          }}
+          title="Pulsares DB Studio (Visualizador e Console SQLite)"
+          aria-label="Pulsares DB Studio"
+        >
+          <Database size={14} />
         </button>
 
         {layoutMode !== 'single' && (

@@ -1,9 +1,22 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, FileCode2 } from 'lucide-react';
+import {
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  X,
+  ExternalLink,
+  FileCode2,
+  Database,
+  Music,
+  Film,
+  Repeat,
+  PictureInPicture2,
+} from 'lucide-react';
 import { usePreviewStore } from './store';
 import { useBrowserStore } from '../browser/store';
 import { useEditorStore } from '../editor/store';
+import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { formatBytes, formatDate } from '../../i18n/format';
 import { openPath, PreviewData } from '../../lib/wails';
 
@@ -46,6 +59,210 @@ function renderSimpleMarkdown(md: string): React.ReactNode {
   });
 }
 
+const MediaPlayerSection: React.FC<{ data: PreviewData }> = ({ data }) => {
+  const isAudio = data.mimeType.startsWith('audio/');
+  const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
+  const [speed, setSpeed] = useState(1);
+  const [loop, setLoop] = useState(false);
+
+  const mediaSrc =
+    data.dataUri || `/__localmedia?path=${encodeURIComponent(data.path)}`;
+
+  const handleSpeedChange = (newSpeed: number) => {
+    setSpeed(newSpeed);
+    if (mediaRef.current) {
+      mediaRef.current.playbackRate = newSpeed;
+    }
+  };
+
+  const handleToggleLoop = () => {
+    const next = !loop;
+    setLoop(next);
+    if (mediaRef.current) {
+      mediaRef.current.loop = next;
+    }
+  };
+
+  const handlePiP = async () => {
+    const videoEl = mediaRef.current as HTMLVideoElement | null;
+    if (!videoEl || isAudio) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else if (typeof videoEl.requestPictureInPicture === 'function') {
+        await videoEl.requestPictureInPicture();
+      }
+    } catch {
+      // Ignora caso o navegador não suporte PiP
+    }
+  };
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 14,
+        gap: 12,
+      }}
+    >
+      {isAudio ? (
+        <div
+          style={{
+            width: '100%',
+            padding: '22px 16px',
+            borderRadius: 10,
+            background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.14) 0%, rgba(124, 58, 237, 0.14) 100%)',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 14,
+              background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 6px 18px rgba(37, 99, 235, 0.35)',
+            }}
+          >
+            <Music size={24} color="#fff" />
+          </div>
+          <div
+            style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              textAlign: 'center',
+              wordBreak: 'break-word',
+              color: 'var(--text-primary)',
+            }}
+          >
+            {data.name}
+          </div>
+          <audio
+            ref={(el) => {
+              mediaRef.current = el;
+            }}
+            controls
+            preload="metadata"
+            src={mediaSrc}
+            style={{ width: '100%', marginTop: 4 }}
+          />
+        </div>
+      ) : (
+        <div
+          style={{
+            width: '100%',
+            borderRadius: 8,
+            overflow: 'hidden',
+            background: '#000',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <video
+            ref={(el) => {
+              mediaRef.current = el;
+            }}
+            controls
+            preload="metadata"
+            src={mediaSrc}
+            style={{ width: '100%', maxHeight: 380, display: 'block' }}
+          />
+        </div>
+      )}
+
+      {/* Barra de controles avançados de reprodução */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          flexWrap: 'wrap',
+          width: '100%',
+        }}
+      >
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {isAudio ? <Music size={12} /> : <Film size={12} />} Velocidade:
+        </span>
+        {[0.5, 1, 1.25, 1.5, 2].map((rate) => (
+          <button
+            key={rate}
+            type="button"
+            onClick={() => handleSpeedChange(rate)}
+            style={{
+              padding: '2px 6px',
+              fontSize: 10.5,
+              borderRadius: 4,
+              border: '1px solid var(--border-subtle)',
+              background: speed === rate ? 'var(--accent-primary)' : 'var(--bg-elevated)',
+              color: speed === rate ? '#fff' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontWeight: speed === rate ? 700 : 500,
+            }}
+          >
+            {rate}x
+          </button>
+        ))}
+
+        <button
+          type="button"
+          onClick={handleToggleLoop}
+          title="Repetir mídia em loop"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '2px 7px',
+            fontSize: 10.5,
+            borderRadius: 4,
+            border: '1px solid var(--border-subtle)',
+            background: loop ? 'var(--accent-primary)' : 'var(--bg-elevated)',
+            color: loop ? '#fff' : 'var(--text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          <Repeat size={11} /> Loop
+        </button>
+
+        {!isAudio && (
+          <button
+            type="button"
+            onClick={() => void handlePiP()}
+            title="Picture-in-Picture (Janela flutuante de vídeo)"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 7px',
+              fontSize: 10.5,
+              borderRadius: 4,
+              border: '1px solid var(--border-subtle)',
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            <PictureInPicture2 size={11} /> PiP
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const PreviewBody: React.FC<{
   data: PreviewData;
   imageZoom: number;
@@ -53,6 +270,7 @@ const PreviewBody: React.FC<{
   language: string;
 }> = ({ data, imageZoom, setImageZoom, language }) => {
   const { t } = useTranslation('common');
+  const isDb = data.kind === 'database' || isDatabaseFile(data.path);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -82,6 +300,30 @@ const PreviewBody: React.FC<{
             >
               <FileCode2 size={12} />
               <span>Editar</span>
+            </button>
+          )}
+          {isDb && (
+            <button
+              type="button"
+              onClick={() => void useDBStudioStore.getState().openDatabase(data.path)}
+              title="Abrir no Pulsares DB Studio"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 4,
+                border: '1px solid #10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                color: '#10b981',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <Database size={12} />
+              <span>DB Studio</span>
             </button>
           )}
         </div>
@@ -158,13 +400,62 @@ const PreviewBody: React.FC<{
           </div>
         )}
 
-        {data.kind === 'media' && data.dataUri && (
-          <div style={styles.mediaBox}>
-            {data.mimeType.startsWith('audio/') ? (
-              <audio controls src={data.dataUri} style={{ width: '100%' }} />
-            ) : (
-              <video controls src={data.dataUri} style={{ maxWidth: '100%', maxHeight: 340 }} />
-            )}
+        {data.kind === 'media' && <MediaPlayerSection data={data} />}
+
+        {isDb && (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20,
+              gap: 12,
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, #059669 0%, #0284c7 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 6px 18px rgba(5, 150, 105, 0.35)',
+              }}
+            >
+              <Database size={22} color="#fff" />
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--text-primary)' }}>
+              Banco de Dados SQLite
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', maxWidth: 240, lineHeight: 1.45 }}>
+              Inspecione tabelas, views, índices, filtre registros e execute consultas SQL no Pulsares DB Studio.
+            </div>
+            <button
+              type="button"
+              onClick={() => void useDBStudioStore.getState().openDatabase(data.path)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 14px',
+                borderRadius: 6,
+                border: 'none',
+                background: 'linear-gradient(135deg, #059669 0%, #0284c7 100%)',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
+              }}
+            >
+              <Database size={14} />
+              <span>Abrir no Pulsares DB Studio</span>
+            </button>
           </div>
         )}
 
@@ -182,7 +473,7 @@ const PreviewBody: React.FC<{
           </div>
         )}
 
-        {(data.kind === 'binary' || data.kind === 'folder') && (
+        {!isDb && (data.kind === 'binary' || data.kind === 'folder') && (
           <div style={styles.placeholderBox}>
             <p style={{ margin: 0 }}>{t('preview.noPreview')}</p>
             <button
