@@ -445,6 +445,7 @@ export const TerminalPanel: React.FC = () => {
     toggleSplitWithTab,
     renameTab,
     requestCloseTab,
+    closeAllSessions,
     cancelCloseTab,
     changeDirectoryInSession,
     clearOutput,
@@ -456,10 +457,13 @@ export const TerminalPanel: React.FC = () => {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const isResizingRef = useRef(false);
+  const initCalledRef = useRef(false);
 
   useEffect(() => {
-    void initTerminalStore(currentPath || '/');
-  }, [currentPath, initTerminalStore]);
+    if (initCalledRef.current) return;
+    initCalledRef.current = true;
+    void initTerminalStore(useBrowserStore.getState().currentPath || '/');
+  }, [initTerminalStore]);
 
   useEffect(() => {
     const unsubData = subscribeEvent<TerminalDataEvent>('terminal:data', (ev) => {
@@ -860,22 +864,42 @@ export const TerminalPanel: React.FC = () => {
             }}
           >
             <span>Sessões ({sessions.length})</span>
-            <button
-              type="button"
-              onClick={() => void createSession(currentPath || '/', defaultProfileId)}
-              title={t('terminal.newTab')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '2px',
-                borderRadius: '4px',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-              }}
-            >
-              <Plus size={13} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {sessions.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => void closeAllSessions()}
+                  title="Encerrar todas as sessões de terminal"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '2px',
+                    borderRadius: '4px',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void createSession(currentPath || '/', defaultProfileId)}
+                title={t('terminal.newTab')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '2px',
+                  borderRadius: '4px',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus size={13} />
+              </button>
+            </div>
           </div>
 
           <div

@@ -109,6 +109,7 @@ interface TerminalStoreState {
   toggleSplitWithTab: (tabId?: string) => void;
   renameTab: (tabId: string, newTitle: string) => void;
   requestCloseTab: (tabId: string, force?: boolean) => Promise<void>;
+  closeAllSessions: () => Promise<void>;
   cancelCloseTab: () => void;
   sendInput: (tabId: string, data: string) => Promise<void>;
   setInputDraft: (tabId: string, draft: string) => void;
@@ -120,7 +121,10 @@ interface TerminalStoreState {
   handleBackendExit: (backendId: string, exitCode: number) => void;
 }
 
+export const MAX_TERMINAL_SESSIONS = 10;
 const persisted = loadPersistedMeta();
+let initPromise: Promise<void> | null = null;
+let initialSessionCreating = false;
 
 export const useTerminalStore = create<TerminalStoreState>((set, get) => {
   const persistSnapshot = () => {
@@ -132,11 +136,15 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
       followOsc7: st.followOsc7,
       fontSize: st.fontSize,
       scrollbackLines: st.scrollbackLines,
-      tabs: st.sessions.map((s) => ({
-        title: s.title,
-        profileId: s.profileId,
-        cwd: s.cwd,
-      })),
+      // Persiste apenas a sessão ativa para nunca abrir múltiplos terminais na inicialização
+      tabs: st.sessions
+        .filter((s) => s.id === st.activeTabId)
+        .slice(0, 1)
+        .map((s) => ({
+          title: s.title,
+          profileId: s.profileId,
+          cwd: s.cwd,
+        })),
     });
   };
 
@@ -159,31 +167,54 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
 
     initTerminalStore: async (initialCwd: string) => {
       if (get().initialized) return;
-      const detected = await terminalProfiles();
-      const defId =
-        persisted.defaultProfileId && detected.some((p) => p.id === persisted.defaultProfileId)
-          ? persisted.defaultProfileId
-          : detected[0]?.id || 'pwsh';
-
-      set({
-        profiles: detected,
-        defaultProfileId: defId,
-        initialized: true,
-      });
-
-      // Se havia abas persistidas e o painel estava visível, restaura metadados abrindo sessões limpas
-      if (persisted.tabs && persisted.tabs.length > 0 && persisted.visible) {
-        for (const savedTab of persisted.tabs.slice(0, 6)) {
-          await get().createSession(savedTab.cwd || initialCwd, savedTab.profileId || defId, savedTab.title);
-        }
+      if (initPromise) {
+        await initPromise;
+        return;
       }
+
+      set({ initialized: true });
+      initPromise = (async () => {
+        const detected = await terminalProfiles();
+        const defId =
+          persisted.defaultProfileId && detected.some((p) => p.id === persisted.defaultProfileId)
+            ? persisted.defaultProfileId
+            : detected[0]?.id || 'pwsh';
+
+        set({
+          profiles: detected,
+          defaultProfileId: defId,
+          initialized: true,
+        });
+
+        // Se o painel estava visível, cria apenas 1 sessão limpa (sem multiplicar abas)
+        if (persisted.visible && get().sessions.length === 0 && !initialSessionCreating) {
+          initialSessionCreating = true;
+          try {
+            const firstSaved = persisted.tabs?.[0];
+            await get().createSession(
+              firstSaved?.cwd || initialCwd || '/',
+              firstSaved?.profileId || defId,
+              firstSaved?.title
+            );
+          } finally {
+            initialSessionCreating = false;
+          }
+        }
+      })();
+
+      await initPromise;
     },
 
     togglePanel: async (cwdForNew?: string) => {
       const nextVisible = !get().visible;
       set({ visible: nextVisible });
-      if (nextVisible && get().sessions.length === 0) {
-        await get().createSession(cwdForNew || '/');
+      if (nextVisible && get().sessions.length === 0 && !initialSessionCreating) {
+        initialSessionCreating = true;
+        try {
+          await get().createSession(cwdForNew || '/');
+        } finally {
+          initialSessionCreating = false;
+        }
       }
       persistSnapshot();
     },
@@ -223,10 +254,18 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
     setSearchQuery: (query) => set({ searchQuery: query }),
 
     createSession: async (cwd: string, profileId?: string, customTitle?: string) => {
-      if (!get().initialized) {
-        await get().initTerminalStore(cwd);
+      if (!get().initialized && initPromise) {
+        await initPromise;
+      } else if (!get().initialized) {
+        const detected = await terminalProfiles();
+        const defId = detected[0]?.id || 'pwsh';
+        set({ profiles: detected, defaultProfileId: defId, initialized: true });
       }
       const st = get();
+      if (st.sessions.length >= MAX_TERMINAL_SESSIONS) {
+        const existingId = st.activeTabId || st.sessions[st.sessions.length - 1]?.id || '';
+        return existingId;
+      }
       const chosenId = profileId || st.defaultProfileId || st.profiles[0]?.id || 'pwsh';
       const profile = st.profiles.find((p) => p.id === chosenId) || st.profiles[0];
       const backendId = await terminalStart(chosenId, cwd, 110, 28);
@@ -304,6 +343,25 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
           confirmCloseTabId: null,
           visible: remaining.length > 0 ? prev.visible : false,
         };
+      });
+      persistSnapshot();
+    },
+
+    closeAllSessions: async () => {
+      const currentSessions = [...get().sessions];
+      for (const s of currentSessions) {
+        try {
+          await terminalKill(s.backendId);
+        } catch {
+          // Ignora erro ao encerrar processo já finalizado
+        }
+      }
+      set({
+        sessions: [],
+        activeTabId: null,
+        splitTabId: null,
+        confirmCloseTabId: null,
+        visible: false,
       });
       persistSnapshot();
     },
