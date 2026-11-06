@@ -125,6 +125,19 @@ func TestSearch_ContentInOfficeODFAndSkipHeavyDirs(t *testing.T) {
 			t.Fatalf("expected snippet to contain matched term, got %+v", r)
 		}
 	}
+
+	// 4. Verifica que o primeiro lote é despachado imediatamente sem precisar acumular 25/50 itens
+	var batches [][]ResultItem
+	err = svc.walkAndFilter(context.Background(), Options{
+		RootPath: tmp,
+		Query:    "contrato",
+	}, func(b []ResultItem) {
+		batches = append(batches, b)
+	})
+	if err != nil || len(batches) == 0 || len(batches[0]) != 1 {
+		t.Fatalf("expected immediate first-match flush of 1 item, got batches=%+v err=%v", batches, err)
+	}
 }
+
 
 

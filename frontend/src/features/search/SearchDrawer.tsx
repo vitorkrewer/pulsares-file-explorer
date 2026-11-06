@@ -281,6 +281,9 @@ export const SearchDrawer: React.FC = () => {
                     onClick={() => {
                       setExtensionsText(preset.ext);
                       if (preset.kind !== undefined) setKindFilter(preset.kind);
+                      setTimeout(() => {
+                        void useSearchStore.getState().runSearch(currentPath || '/', showHidden);
+                      }, 10);
                     }}
                     style={{
                       padding: '2px 8px',

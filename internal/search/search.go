@@ -252,6 +252,7 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 	if opts.UseIndex && s.storage != nil && !opts.UseRegex && !isGlob && contentLower == "" {
 		if indexed, err := s.storage.QueryIndexedEntries(root, opts.Query, 1000); err == nil && len(indexed) > 0 {
 			batch := make([]ResultItem, 0, 64)
+			emittedFromIndex := 0
 			for _, ie := range indexed {
 				if ctx.Err() != nil {
 					return ctx.Err()
@@ -273,15 +274,19 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 					Size:    ie.Size,
 					ModTime: ie.ModTime,
 				})
-				if len(batch) >= 50 {
+				if len(batch) >= 25 {
+					emittedFromIndex += len(batch)
 					onBatch(batch)
 					batch = make([]ResultItem, 0, 64)
 				}
 			}
 			if len(batch) > 0 {
+				emittedFromIndex += len(batch)
 				onBatch(batch)
 			}
-			return nil
+			if emittedFromIndex > 0 {
+				return nil
+			}
 		}
 	}
 
@@ -292,16 +297,24 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 	}
 
 	batch := make([]ResultItem, 0, 64)
+	totalFlushed := 0
+	lastFlush := time.Now()
 	flush := func() {
 		if len(batch) > 0 {
+			totalFlushed += len(batch)
 			onBatch(batch)
 			batch = make([]ResultItem, 0, 64)
+			lastFlush = time.Now()
 		}
 	}
 
 	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		// Emite resultados pendentes periodicamente mesmo quando a varredura atravessa milhares de arquivos que não batem
+		if len(batch) > 0 && time.Since(lastFlush) >= 50*time.Millisecond {
+			flush()
 		}
 		if walkErr != nil {
 			return nil // Ignora pastas sem permissão sem abortar toda a busca
@@ -311,8 +324,15 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 		}
 
 		name := d.Name()
-		if !opts.IncludeHidden && strings.HasPrefix(name, ".") && d.IsDir() {
-			return filepath.SkipDir
+		isDir := d.IsDir()
+		if isDir {
+			if !opts.IncludeHidden && strings.HasPrefix(name, ".") {
+				return filepath.SkipDir
+			}
+			// Ignora pastas virtuais do sistema e caches pesados (node_modules, .git, $RECYCLE.BIN, /proc, /sys)
+			if shouldSkipContentDir(p, name) {
+				return filepath.SkipDir
+			}
 		}
 		// Não segue symlinks para diretórios para evitar ciclos infinitos
 		if d.Type()&os.ModeSymlink != 0 {
@@ -324,7 +344,6 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 			return nil
 		}
 
-		isDir := d.IsDir()
 		if !matchesMeta(name, isDir, info.Size(), info.ModTime()) {
 			return nil
 		}
@@ -346,7 +365,8 @@ func (s *Service) walkAndFilter(ctx context.Context, opts Options, onBatch func(
 			Size:    info.Size(),
 			ModTime: info.ModTime().Format(time.RFC3339),
 		})
-		if len(batch) >= 50 {
+		// Despacha imediatamente o primeiro resultado encontrado e depois a cada 20 itens ou 50ms
+		if totalFlushed == 0 || len(batch) >= 20 || time.Since(lastFlush) >= 50*time.Millisecond {
 			flush()
 		}
 		return nil
@@ -436,19 +456,33 @@ func (s *Service) walkAndSearchContentConcurrent(
 	go func() {
 		defer close(collectorDone)
 		batch := make([]ResultItem, 0, 32)
+		totalFlushed := 0
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+
 		flush := func() {
 			if len(batch) > 0 {
+				totalFlushed += len(batch)
 				onBatch(batch)
 				batch = make([]ResultItem, 0, 32)
 			}
 		}
-		for item := range resultsC {
-			batch = append(batch, item)
-			if len(batch) >= 25 {
+
+		for {
+			select {
+			case item, ok := <-resultsC:
+				if !ok {
+					flush()
+					return
+				}
+				batch = append(batch, item)
+				if totalFlushed == 0 || len(batch) >= 15 {
+					flush()
+				}
+			case <-ticker.C:
 				flush()
 			}
 		}
-		flush()
 	}()
 
 	walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {

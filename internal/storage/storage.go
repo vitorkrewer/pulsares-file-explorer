@@ -73,6 +73,9 @@ type RemoteProfile struct {
 	Port       int    `json:"port"`
 	Username   string `json:"username"`
 	RemotePath string `json:"remotePath"`
+	AuthType   string `json:"authType"`   // "key" | "agent" | "password"
+	KeyPath    string `json:"keyPath"`    // Caminho da chave privada SSH (ex.: ~/.ssh/id_ed25519)
+	HostKeyFP  string `json:"hostKeyFp"`  // Fingerprint SHA-256 confiável (TOFU / known_hosts)
 	CreatedAt  string `json:"createdAt"`
 }
 
@@ -193,11 +196,19 @@ func (db *DB) migrate() error {
 		port INTEGER NOT NULL DEFAULT 22,
 		username TEXT NOT NULL DEFAULT '',
 		remote_path TEXT NOT NULL DEFAULT '/',
+		auth_type TEXT NOT NULL DEFAULT 'key',
+		key_path TEXT NOT NULL DEFAULT '',
+		host_key_fp TEXT NOT NULL DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	`
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+	_, _ = db.Exec("ALTER TABLE remote_profiles ADD COLUMN auth_type TEXT NOT NULL DEFAULT 'key'")
+	_, _ = db.Exec("ALTER TABLE remote_profiles ADD COLUMN key_path TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE remote_profiles ADD COLUMN host_key_fp TEXT NOT NULL DEFAULT ''")
+	return nil
 }
 
 func (db *DB) GetSetting(key string) (string, error) {
@@ -579,18 +590,55 @@ func (db *DB) SaveRemoteProfile(p RemoteProfile) (int64, error) {
 	if remotePath == "" {
 		remotePath = "/"
 	}
+	authType := strings.ToLower(strings.TrimSpace(p.AuthType))
+	if authType == "" {
+		authType = "key"
+	}
+	keyPath := strings.TrimSpace(p.KeyPath)
+	hostKeyFP := strings.TrimSpace(p.HostKeyFP)
+
+	if p.ID > 0 {
+		_, err := db.Exec(`
+			UPDATE remote_profiles
+			SET name = ?, protocol = ?, host = ?, port = ?, username = ?, remote_path = ?, auth_type = ?, key_path = ?, host_key_fp = ?
+			WHERE id = ?
+		`, strings.TrimSpace(p.Name), strings.ToLower(strings.TrimSpace(p.Protocol)), strings.TrimSpace(p.Host), port, strings.TrimSpace(p.Username), remotePath, authType, keyPath, hostKeyFP, p.ID)
+		return p.ID, err
+	}
+
 	res, err := db.Exec(`
-		INSERT INTO remote_profiles (name, protocol, host, port, username, remote_path)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, strings.TrimSpace(p.Name), strings.ToLower(strings.TrimSpace(p.Protocol)), strings.TrimSpace(p.Host), port, strings.TrimSpace(p.Username), remotePath)
+		INSERT INTO remote_profiles (name, protocol, host, port, username, remote_path, auth_type, key_path, host_key_fp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, strings.TrimSpace(p.Name), strings.ToLower(strings.TrimSpace(p.Protocol)), strings.TrimSpace(p.Host), port, strings.TrimSpace(p.Username), remotePath, authType, keyPath, hostKeyFP)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
+func (db *DB) GetRemoteProfile(id int64) (*RemoteProfile, error) {
+	var p RemoteProfile
+	err := db.QueryRow(`
+		SELECT id, name, protocol, host, port, username, remote_path, auth_type, key_path, host_key_fp, created_at
+		FROM remote_profiles
+		WHERE id = ?
+	`, id).Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.Username, &p.RemotePath, &p.AuthType, &p.KeyPath, &p.HostKeyFP, &p.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (db *DB) UpdateRemoteProfileHostKey(id int64, hostKeyFP string) error {
+	_, err := db.Exec("UPDATE remote_profiles SET host_key_fp = ? WHERE id = ?", strings.TrimSpace(hostKeyFP), id)
+	return err
+}
+
 func (db *DB) ListRemoteProfiles() ([]RemoteProfile, error) {
-	rows, err := db.Query("SELECT id, name, protocol, host, port, username, remote_path, created_at FROM remote_profiles ORDER BY name ASC")
+	rows, err := db.Query("SELECT id, name, protocol, host, port, username, remote_path, auth_type, key_path, host_key_fp, created_at FROM remote_profiles ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -599,7 +647,7 @@ func (db *DB) ListRemoteProfiles() ([]RemoteProfile, error) {
 	var out []RemoteProfile
 	for rows.Next() {
 		var p RemoteProfile
-		if err := rows.Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.Username, &p.RemotePath, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.Username, &p.RemotePath, &p.AuthType, &p.KeyPath, &p.HostKeyFP, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
