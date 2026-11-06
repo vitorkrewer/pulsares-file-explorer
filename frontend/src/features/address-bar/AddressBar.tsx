@@ -12,9 +12,13 @@ import {
   Globe,
   PanelLeft,
   Folder,
+  Copy,
+  Check,
+  Server,
 } from 'lucide-react';
 import { useBrowserStore } from '../browser/store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
+import { useProductivityStore } from '../productivity/store';
 import { saveSetting, expandPath, autocompletePath } from '../../lib/wails';
 
 interface AddressBarProps {
@@ -38,11 +42,13 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
     navigateTo,
   } = useBrowserStore();
   const { visible: sidebarVisible, toggleSidebar } = useFolderTreeStore();
+  const { remoteProfiles } = useProductivityStore();
 
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(currentPath);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState<number>(-1);
+  const [copiedPath, setCopiedPath] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -129,10 +135,25 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
     saveSetting('theme', next);
   };
 
-  // Breadcrumbs
+  // Breadcrumbs (Local + SFTP)
   const normalized = currentPath.replace(/\\/g, '/');
-  const isWindows = /^[a-zA-Z]:/.test(normalized);
-  const parts = normalized.split('/').filter(Boolean);
+  const sftpMatch = normalized.match(/^sftp:\/\/(\d+)(\/.*)?$/i);
+  const isSFTP = Boolean(sftpMatch);
+  const sftpProfileId = sftpMatch ? Number(sftpMatch[1]) : 0;
+  const sftpProfile = isSFTP ? remoteProfiles.find((p) => p.id === sftpProfileId) : undefined;
+  const sftpRemoteSub = sftpMatch ? (sftpMatch[2] || '/') : '';
+  const isWindows = !isSFTP && /^[a-zA-Z]:/.test(normalized);
+  const parts = isSFTP
+    ? sftpRemoteSub.split('/').filter(Boolean)
+    : normalized.split('/').filter(Boolean);
+
+  const handleCopyPath = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentPath) return;
+    void navigator.clipboard?.writeText(currentPath);
+    setCopiedPath(true);
+    setTimeout(() => setCopiedPath(false), 1600);
+  };
 
   return (
     <div style={styles.container}>
@@ -193,12 +214,43 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
             />
           ) : (
             <div style={styles.breadcrumbs} onClick={() => setIsEditing(true)}>
+              {isSFTP && (
+                <>
+                  <span
+                    style={{
+                      ...styles.crumb,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      color: 'var(--accent)',
+                      fontWeight: 600,
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigateTo(`sftp://${sftpProfileId}/`);
+                    }}
+                  >
+                    <Server size={12} />
+                    <span>
+                      {sftpProfile
+                        ? `${sftpProfile.name} (${sftpProfile.host})`
+                        : `SFTP #${sftpProfileId}`}
+                    </span>
+                  </span>
+                  <span style={styles.separator}>›</span>
+                  {parts.length === 0 && (
+                    <span style={{ ...styles.crumb, color: 'var(--text-secondary)' }}>/</span>
+                  )}
+                </>
+              )}
               {parts.map((part, index) => {
-                const fullTillNow = isWindows
-                  ? index === 0
-                    ? `${part}\\`
-                    : parts.slice(0, index + 1).join('\\')
-                  : '/' + parts.slice(0, index + 1).join('/');
+                const fullTillNow = isSFTP
+                  ? `sftp://${sftpProfileId}/` + parts.slice(0, index + 1).join('/')
+                  : isWindows
+                    ? index === 0
+                      ? `${part}\\`
+                      : parts.slice(0, index + 1).join('\\')
+                    : '/' + parts.slice(0, index + 1).join('/');
 
                 return (
                   <React.Fragment key={fullTillNow}>
@@ -217,6 +269,21 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
               })}
             </div>
           )}
+
+          {/* Ícone discreto no final da barra de endereço para copiar o caminho atual */}
+          <button
+            type="button"
+            style={{
+              ...styles.copyPathBtn,
+              color: copiedPath ? '#10b981' : 'var(--text-muted)',
+            }}
+            onClick={handleCopyPath}
+            onMouseDown={(e) => e.preventDefault()}
+            title={copiedPath ? t('nav.pathCopied') : t('nav.copyPath')}
+            aria-label={t('nav.copyPath')}
+          >
+            {copiedPath ? <Check size={13} /> : <Copy size={13} />}
+          </button>
         </div>
 
         {isEditing && suggestions.length > 0 && (
@@ -351,10 +418,27 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
   },
   addressInput: {
+    flex: 1,
     width: '100%',
     height: '100%',
     fontSize: 12,
     color: 'var(--text-primary)',
+    border: 'none',
+    outline: 'none',
+    backgroundColor: 'transparent',
+  },
+  copyPathBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    flexShrink: 0,
+    marginLeft: 4,
+    cursor: 'pointer',
+    opacity: 0.78,
+    transition: 'opacity 0.15s, color 0.15s, background-color 0.15s',
   },
   suggestionsPopup: {
     position: 'absolute',

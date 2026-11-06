@@ -242,13 +242,16 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
       return;
     }
 
-    const isWin = /^[a-zA-Z]:/.test(targetPath);
+    const isSftp = targetPath.startsWith('sftp://');
+    const isWin = !isSftp && /^[a-zA-Z]:/.test(targetPath);
     const sep = isWin ? '\\' : '/';
     const rel = targetPath.slice(rootPath.length).replace(/^[\\/]+/, '');
     const parts = rel.split(/[\\/]+/).filter(Boolean);
 
     let currPath = rootPath.replace(/[\\/]+$/, '');
-    if (isWin && /^[a-zA-Z]:$/.test(currPath)) {
+    if (isSftp) {
+      currPath = rootPath.endsWith('/') ? rootPath : `${rootPath}/`;
+    } else if (isWin && /^[a-zA-Z]:$/.test(currPath)) {
       currPath += '\\';
     } else if (!isWin && currPath === '') {
       currPath = '/';

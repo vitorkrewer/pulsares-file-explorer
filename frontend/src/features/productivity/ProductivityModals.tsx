@@ -8,6 +8,14 @@ import {
   Keyboard,
   Archive,
   Server,
+  ShieldCheck,
+  ShieldAlert,
+  KeyRound,
+  Lock,
+  TerminalSquare,
+  Plug,
+  Unplug,
+  FolderOpen,
   Trash2,
   X,
   CheckCircle2,
@@ -68,10 +76,20 @@ export const ProductivityModals: React.FC = () => {
     extractCurrentArchive,
     remoteOpen,
     remoteProfiles,
+    activeSftpIds,
+    localSshKeys,
+    sftpConnecting,
+    sftpError,
+    sftpTrustPrompt,
     openRemoteModal,
     closeRemoteModal,
     addRemoteProfile,
     removeRemoteProfile,
+    connectSFTP,
+    confirmSftpTrustAndConnect,
+    cancelSftpTrustPrompt,
+    disconnectSFTP,
+    openSshTerminalSession,
   } = useProductivityStore();
 
   const [archiveNameInput, setArchiveNameInput] = useState('arquivo');
@@ -82,8 +100,14 @@ export const ProductivityModals: React.FC = () => {
   const [remotePort, setRemotePort] = useState(22);
   const [remoteUser, setRemoteUser] = useState('');
   const [remotePath, setRemotePath] = useState('/');
+  const [remoteAuthType, setRemoteAuthType] = useState<'key' | 'agent' | 'password'>('key');
+  const [remoteKeyPath, setRemoteKeyPath] = useState('');
+  const [remotePassword, setRemotePassword] = useState('');
+  const [remotePassphrase, setRemotePassphrase] = useState('');
+  const [inlinePromptProfileId, setInlinePromptProfileId] = useState<number | null>(null);
+  const [inlineSecret, setInlineSecret] = useState('');
 
-  const { currentPath, refresh } = useBrowserStore();
+  const { currentPath, refresh, navigateTo } = useBrowserStore();
   const { openPrompt, openProperties, undo, redo } = useOperationsStore();
   const { layoutMode, setLayoutMode } = useDualPaneStore();
   const { togglePanel: toggleTerminal } = useTerminalStore();
@@ -715,10 +739,10 @@ export const ProductivityModals: React.FC = () => {
         </div>
       )}
 
-      {/* 7. Modal de Conexões Remotas (SFTP / WebDAV) */}
+      {/* 7. Modal de Conexões Remotas Seguras (SSH / SFTP / WebDAV) */}
       {remoteOpen && (
         <div style={styles.backdrop} onClick={closeRemoteModal}>
-          <div style={{ ...styles.modal, width: 600 }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ ...styles.modal, width: 680 }} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <span style={styles.titleRow}>
                 <Server size={15} style={{ color: 'var(--accent)' }} />
@@ -729,10 +753,97 @@ export const ProductivityModals: React.FC = () => {
               </button>
             </div>
 
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 10px',
+                borderRadius: 6,
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.28)',
+                fontSize: 11,
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <ShieldCheck size={14} style={{ color: '#10b981', flexShrink: 0 }} />
+              <span>
+                Segurança SSH/SFTP ativa: verificação de chave pública do servidor (TOFU SHA-256) e credenciais mantidas apenas em memória volátil (nunca gravadas em texto puro no disco).
+              </span>
+            </div>
+
+            {sftpError && <div style={styles.errorBanner}>{sftpError}</div>}
+
+            {/* Alerta de Verificação TOFU / Divergência de Chave do Host */}
+            {sftpTrustPrompt && (
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 6,
+                  border: sftpTrustPrompt.hostKeyMismatch
+                    ? '1px solid #ef4444'
+                    : '1px solid #f59e0b',
+                  backgroundColor: sftpTrustPrompt.hostKeyMismatch
+                    ? 'rgba(239, 68, 68, 0.12)'
+                    : 'rgba(245, 158, 11, 0.12)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                  <ShieldAlert
+                    size={15}
+                    style={{
+                      color: sftpTrustPrompt.hostKeyMismatch ? '#ef4444' : '#f59e0b',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>
+                    {sftpTrustPrompt.hostKeyMismatch
+                      ? 'ALERTA DE SEGURANÇA: A chave pública do servidor mudou!'
+                      : 'Verificar Identidade do Servidor SSH (Primeiro Acesso - TOFU)'}
+                  </span>
+                </div>
+                <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  {sftpTrustPrompt.hostKeyMismatch
+                    ? 'A impressão digital apresentada pelo servidor difere da chave confiável salva neste perfil. Isso pode indicar interceptação de rede (MITM) ou reinstalação do servidor.'
+                    : 'Confirme a impressão digital (fingerprint) SHA-256 da chave pública do servidor antes de estabelecer a conexão criptografada:'}
+                </div>
+                <code style={styles.codeBlock}>
+                  Algoritmo: {sftpTrustPrompt.hostKeyType || 'SSH'} • Fingerprint:{' '}
+                  {sftpTrustPrompt.hostKeyFp}
+                </code>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button
+                    type="button"
+                    style={styles.secondaryBtn}
+                    onClick={cancelSftpTrustPrompt}
+                  >
+                    {t('ops.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      ...styles.primaryBtn,
+                      backgroundColor: sftpTrustPrompt.hostKeyMismatch ? '#ef4444' : '#10b981',
+                    }}
+                    disabled={sftpConnecting}
+                    onClick={() => void confirmSftpTrustAndConnect()}
+                  >
+                    {sftpTrustPrompt.hostKeyMismatch
+                      ? 'Atualizar Chave e Conectar'
+                      : 'Confiar na Chave (Pin SHA-256) e Conectar'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div style={styles.gridForm}>
               <input
                 type="text"
-                placeholder={t('ops.namePlaceholder')}
+                placeholder="Nome (ex: Servidor Intranet / Produção)"
                 value={remoteName}
                 onChange={(e) => setRemoteName(e.target.value)}
                 style={styles.input}
@@ -746,7 +857,7 @@ export const ProductivityModals: React.FC = () => {
                 }}
                 style={styles.input}
               >
-                <option value="sftp">SFTP / SSH</option>
+                <option value="sftp">SFTP / SSH (Porta 22)</option>
                 <option value="webdav">WebDAV (HTTPS)</option>
               </select>
               <input
@@ -776,14 +887,83 @@ export const ProductivityModals: React.FC = () => {
                 onChange={(e) => setRemotePath(e.target.value)}
                 style={styles.input}
               />
+
+              {remoteProtocol === 'sftp' && (
+                <>
+                  <select
+                    value={remoteAuthType}
+                    onChange={(e) =>
+                      setRemoteAuthType(e.target.value as 'key' | 'agent' | 'password')
+                    }
+                    style={styles.input}
+                  >
+                    <option value="key">Autenticação: Chave Privada SSH (~/.ssh)</option>
+                    <option value="agent">Autenticação: SSH Agent do Sistema</option>
+                    <option value="password">Autenticação: Senha (apenas em RAM)</option>
+                  </select>
+
+                  {remoteAuthType === 'key' && (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {localSshKeys.length > 0 && (
+                        <select
+                          value={remoteKeyPath || localSshKeys[0]?.path || ''}
+                          onChange={(e) => setRemoteKeyPath(e.target.value)}
+                          style={{ ...styles.input, flex: 1 }}
+                          title="Chaves detectadas em ~/.ssh"
+                        >
+                          {localSshKeys.map((k) => (
+                            <option key={k.path} value={k.path}>
+                              🔑 {k.name} ({k.path})
+                            </option>
+                          ))}
+                          <option value="">Outro caminho...</option>
+                        </select>
+                      )}
+                      {(localSshKeys.length === 0 || remoteKeyPath === '') && (
+                        <input
+                          type="text"
+                          placeholder="Caminho da chave (ex: ~/.ssh/id_ed25519)"
+                          value={remoteKeyPath}
+                          onChange={(e) => setRemoteKeyPath(e.target.value)}
+                          style={{ ...styles.input, flex: 1 }}
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {remoteAuthType === 'key' && (
+                    <input
+                      type="password"
+                      placeholder="Passphrase da chave (opcional, apenas RAM)"
+                      value={remotePassphrase}
+                      onChange={(e) => setRemotePassphrase(e.target.value)}
+                      style={{ ...styles.input, gridColumn: 'span 2' }}
+                    />
+                  )}
+
+                  {remoteAuthType === 'password' && (
+                    <input
+                      type="password"
+                      placeholder="Senha SSH (mantida apenas em memória na sessão)"
+                      value={remotePassword}
+                      onChange={(e) => setRemotePassword(e.target.value)}
+                      style={styles.input}
+                    />
+                  )}
+                </>
+              )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button
                 type="button"
-                style={styles.primaryBtn}
+                style={styles.secondaryBtn}
                 onClick={() => {
                   if (!remoteName.trim() || !remoteHost.trim()) return;
+                  const chosenKey =
+                    remoteAuthType === 'key'
+                      ? remoteKeyPath.trim() || localSshKeys[0]?.path || ''
+                      : '';
                   void addRemoteProfile({
                     name: remoteName.trim(),
                     protocol: remoteProtocol,
@@ -791,39 +971,275 @@ export const ProductivityModals: React.FC = () => {
                     port: remotePort,
                     username: remoteUser.trim(),
                     remotePath: remotePath.trim() || '/',
+                    authType: remoteAuthType,
+                    keyPath: chosenKey,
                   });
                   setRemoteName('');
                   setRemoteHost('');
+                  setRemotePassword('');
+                  setRemotePassphrase('');
                 }}
               >
                 {t('remote.saveProfile')}
               </button>
+
+              {remoteProtocol === 'sftp' && (
+                <button
+                  type="button"
+                  style={styles.primaryBtn}
+                  disabled={sftpConnecting || !remoteHost.trim() || !remoteUser.trim()}
+                  onClick={async () => {
+                    if (!remoteHost.trim() || !remoteUser.trim()) return;
+                    const chosenKey =
+                      remoteAuthType === 'key'
+                        ? remoteKeyPath.trim() || localSshKeys[0]?.path || ''
+                        : '';
+                    const profileName =
+                      remoteName.trim() || `${remoteUser.trim()}@${remoteHost.trim()}`;
+                    const savedId = await addRemoteProfile({
+                      name: profileName,
+                      protocol: 'sftp',
+                      host: remoteHost.trim(),
+                      port: remotePort || 22,
+                      username: remoteUser.trim(),
+                      remotePath: remotePath.trim() || '/',
+                      authType: remoteAuthType,
+                      keyPath: chosenKey,
+                    });
+                    await connectSFTP({
+                      profileId: savedId || 0,
+                      name: profileName,
+                      host: remoteHost.trim(),
+                      port: remotePort || 22,
+                      username: remoteUser.trim(),
+                      remotePath: remotePath.trim() || '/',
+                      authType: remoteAuthType,
+                      keyPath: chosenKey,
+                      passphrase:
+                        remoteAuthType === 'password' ? remotePassword : remotePassphrase,
+                      trustHost: false,
+                    });
+                    setRemotePassword('');
+                    setRemotePassphrase('');
+                  }}
+                >
+                  {sftpConnecting ? 'Conectando...' : 'Salvar e Conectar SFTP'}
+                </button>
+              )}
             </div>
 
             <div style={styles.tableBox}>
               {remoteProfiles.length === 0 ? (
                 <div style={styles.emptyMsg}>{t('remote.empty')}</div>
               ) : (
-                remoteProfiles.map((p) => (
-                  <div key={p.id} style={styles.previewRow}>
-                    <div style={{ flex: 1 }}>
-                      <strong>{p.name}</strong>{' '}
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        ({p.protocol.toUpperCase()} • {p.username ? `${p.username}@` : ''}
-                        {p.host}:{p.port}
-                        {p.remotePath})
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      style={styles.iconBtn}
-                      onClick={() => void removeRemoteProfile(p.id)}
-                      title={t('ops.trash')}
+                remoteProfiles.map((p) => {
+                  const isConnected = activeSftpIds.includes(p.id);
+                  const isPrompting = inlinePromptProfileId === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        padding: '6px 8px',
+                        borderBottom: '1px solid var(--border-subtle)',
+                      }}
                     >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: isConnected ? '#10b981' : 'var(--text-muted)',
+                            flexShrink: 0,
+                          }}
+                          title={isConnected ? 'Conectado' : 'Desconectado'}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: 12 }}>{p.name}</strong>
+                            <span style={styles.diffBadge}>
+                              {(p.authType || 'key').toUpperCase()}
+                            </span>
+                            {p.hostKeyFp && (
+                              <span
+                                style={{
+                                  ...styles.diffBadge,
+                                  color: '#10b981',
+                                  borderColor: 'rgba(16, 185, 129, 0.35)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                }}
+                                title={`Host Key SHA-256 verificada: ${p.hostKeyFp}`}
+                              >
+                                <Lock size={10} />
+                                SHA-256 Pin
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--text-muted)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {p.protocol.toUpperCase()} • {p.username ? `${p.username}@` : ''}
+                            {p.host}:{p.port}
+                            {p.remotePath}
+                            {p.keyPath ? ` • 🔑 ${p.keyPath}` : ''}
+                          </div>
+                        </div>
+
+                        {p.protocol === 'sftp' && (
+                          <>
+                            {isConnected ? (
+                              <>
+                                <button
+                                  type="button"
+                                  style={styles.secondaryBtn}
+                                  onClick={() => {
+                                    closeRemoteModal();
+                                    void navigateTo(`sftp://${p.id}${p.remotePath || '/'}`);
+                                  }}
+                                  title="Abrir diretório remoto no navegador"
+                                >
+                                  <FolderOpen size={12} style={{ marginRight: 4 }} />
+                                  Abrir
+                                </button>
+                                <button
+                                  type="button"
+                                  style={styles.secondaryBtn}
+                                  onClick={() => void disconnectSFTP(p.id)}
+                                  title="Encerrar sessão SFTP e limpar credenciais da memória"
+                                >
+                                  <Unplug size={12} />
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                style={styles.primaryBtn}
+                                disabled={sftpConnecting}
+                                onClick={() => {
+                                  if (p.authType === 'password') {
+                                    setInlinePromptProfileId(isPrompting ? null : p.id);
+                                    setInlineSecret('');
+                                    return;
+                                  }
+                                  void connectSFTP({
+                                    profileId: p.id,
+                                    name: p.name,
+                                    host: p.host,
+                                    port: p.port,
+                                    username: p.username,
+                                    remotePath: p.remotePath,
+                                    authType: p.authType || 'key',
+                                    keyPath: p.keyPath || localSshKeys[0]?.path || '',
+                                    passphrase: '',
+                                    trustHost: false,
+                                  });
+                                }}
+                                title="Conectar via SFTP seguro"
+                              >
+                                <Plug size={12} style={{ marginRight: 4 }} />
+                                Conectar
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              style={styles.secondaryBtn}
+                              onClick={() => {
+                                closeRemoteModal();
+                                void openSshTerminalSession(p);
+                              }}
+                              title="Abrir sessão interativa SSH no Terminal Integrado"
+                            >
+                              <TerminalSquare size={12} />
+                            </button>
+                          </>
+                        )}
+
+                        <button
+                          type="button"
+                          style={styles.iconBtn}
+                          onClick={() => void removeRemoteProfile(p.id)}
+                          title={t('ops.trash')}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+
+                      {/* Solicitação de senha/passphrase em memória para conectar a perfil salvo */}
+                      {isPrompting && (
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingTop: 4 }}>
+                          <KeyRound size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                          <input
+                            type="password"
+                            autoFocus
+                            placeholder="Digite a senha SSH (mantida apenas na RAM)..."
+                            value={inlineSecret}
+                            onChange={(e) => setInlineSecret(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const secret = inlineSecret;
+                                setInlineSecret('');
+                                setInlinePromptProfileId(null);
+                                void connectSFTP({
+                                  profileId: p.id,
+                                  name: p.name,
+                                  host: p.host,
+                                  port: p.port,
+                                  username: p.username,
+                                  remotePath: p.remotePath,
+                                  authType: p.authType || 'password',
+                                  keyPath: p.keyPath || '',
+                                  passphrase: secret,
+                                  trustHost: false,
+                                });
+                              } else if (e.key === 'Escape') {
+                                setInlinePromptProfileId(null);
+                                setInlineSecret('');
+                              }
+                            }}
+                            style={{ ...styles.input, flex: 1 }}
+                          />
+                          <button
+                            type="button"
+                            style={styles.primaryBtn}
+                            disabled={sftpConnecting}
+                            onClick={() => {
+                              const secret = inlineSecret;
+                              setInlineSecret('');
+                              setInlinePromptProfileId(null);
+                              void connectSFTP({
+                                profileId: p.id,
+                                name: p.name,
+                                host: p.host,
+                                port: p.port,
+                                username: p.username,
+                                remotePath: p.remotePath,
+                                authType: p.authType || 'password',
+                                keyPath: p.keyPath || '',
+                                passphrase: secret,
+                                trustHost: false,
+                              });
+                            }}
+                          >
+                            Autenticar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

@@ -9,7 +9,9 @@
     "toggleHidden": "Archivos ocultos",
     "toggleSidebar": "Alternar panel lateral (Ctrl+B)",
     "viewDetails": "Vista de detalles",
-    "addressPlaceholder": "Escriba una ruta o seleccione..."
+    "addressPlaceholder": "Escriba una ruta o seleccione...",
+    "copyPath": "Copiar ruta actual",
+    "pathCopied": "¡Ruta copiada!"
   },
   "tabs": {
     "newTab": "Nueva pestaña (Ctrl+T)",

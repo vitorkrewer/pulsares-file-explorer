@@ -29,12 +29,14 @@ import (
 	"pulsares-file-explorer/internal/vfs"
 	"pulsares-file-explorer/internal/vfs/archive"
 	"pulsares-file-explorer/internal/vfs/local"
+	"pulsares-file-explorer/internal/vfs/sftp"
 	"pulsares-file-explorer/internal/watch"
 )
 
 type App struct {
 	ctx         context.Context
 	fs          vfs.FileSystem
+	sftp        *sftp.Manager
 	listing     *listing.Manager
 	tree        *tree.Service
 	ops         *ops.Manager
@@ -65,9 +67,12 @@ type InitialState struct {
 
 func NewApp() *App {
 	localFS := local.New()
+	sftpMgr := sftp.NewManager(nil)
+	compFS := sftp.NewCompositeFS(localFS, sftpMgr)
 	return &App{
-		fs:       localFS,
-		tree:     tree.NewService(localFS),
+		fs:       compFS,
+		sftp:     sftpMgr,
+		tree:     tree.NewService(compFS),
 		terminal: terminal.New(nil),
 		thumbs:   thumbs.New("", 64*1024*1024),
 	}
@@ -84,6 +89,9 @@ func (a *App) Startup(ctx context.Context) {
 		runtime.EventsEmit(a.ctx, eventName, data)
 	}
 
+	a.sftp = sftp.NewManager(a.storage)
+	a.fs = sftp.NewCompositeFS(local.New(), a.sftp)
+	a.tree = tree.NewService(a.fs)
 	a.listing = listing.NewManager(a.fs, emitter)
 	a.ops = ops.NewManager(a.storage, emitter)
 	a.search = search.New(a.storage, emitter)
@@ -110,6 +118,9 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 func (a *App) Shutdown(ctx context.Context) {
+	if a.sftp != nil {
+		a.sftp.CloseAll()
+	}
 	if a.watch != nil {
 		a.watch.Close()
 	}
@@ -181,6 +192,20 @@ func (a *App) GetInitialState() InitialState {
 }
 
 func (a *App) ListDirectory(tabID string, requestID string, path string) {
+	if id, remote, ok := sftp.ParseSFTPPath(path); ok {
+		canonical := sftp.FormatSFTPPath(id, remote)
+		if a.storage != nil {
+			_ = a.storage.RecordVisit(canonical)
+		}
+		loc := vfs.Location{
+			Provider: "sftp",
+			Root:     fmt.Sprintf("sftp://%d", id),
+			Path:     canonical,
+		}
+		a.listing.Start(tabID, requestID, loc, 200)
+		return
+	}
+
 	resolved := platform.ExpandPath(path)
 	if a.storage != nil {
 		_ = a.storage.RecordVisit(resolved)
@@ -200,10 +225,19 @@ func (a *App) ListDirectorySnapshot(path string, showHidden bool) ([]vfs.Entry, 
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	resolved := platform.ExpandPath(path)
-	loc := vfs.Location{
-		Provider: "local",
-		Path:     resolved,
+	var loc vfs.Location
+	if id, remote, ok := sftp.ParseSFTPPath(path); ok {
+		loc = vfs.Location{
+			Provider: "sftp",
+			Root:     fmt.Sprintf("sftp://%d", id),
+			Path:     sftp.FormatSFTPPath(id, remote),
+		}
+	} else {
+		resolved := platform.ExpandPath(path)
+		loc = vfs.Location{
+			Provider: "local",
+			Path:     resolved,
+		}
 	}
 	batchCh, errCh := a.fs.ReadDir(ctx, loc, 500)
 	var all []vfs.Entry
@@ -222,6 +256,9 @@ func (a *App) ListDirectorySnapshot(path string, showHidden bool) ([]vfs.Entry, 
 }
 
 func (a *App) GetThumbnail(path string, maxDim int) (string, error) {
+	if _, _, ok := sftp.ParseSFTPPath(path); ok {
+		return "", errors.New("remote sftp thumbnail disabled for bandwidth safety")
+	}
 	if a.thumbs == nil {
 		a.thumbs = thumbs.New("", 64*1024*1024)
 	}
@@ -229,6 +266,46 @@ func (a *App) GetThumbnail(path string, maxDim int) (string, error) {
 }
 
 func (a *App) GetPreview(path string, maxTextBytes int) (thumbs.PreviewData, error) {
+	if id, remote, ok := sftp.ParseSFTPPath(path); ok && a.sftp != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		entry, err := a.sftp.Stat(ctx, id, remote)
+		if err != nil {
+			return thumbs.PreviewData{}, err
+		}
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(entry.Name), "."))
+		pd := thumbs.PreviewData{
+			Path:      path,
+			Name:      entry.Name,
+			Extension: ext,
+			Size:      entry.Size,
+			ModTime:   entry.ModTime.Format(time.RFC3339),
+		}
+		if entry.Kind == vfs.KindDir {
+			pd.Kind = thumbs.PreviewFolder
+			pd.MimeType = "inode/directory"
+			return pd, nil
+		}
+		limit := int64(maxTextBytes)
+		if limit <= 0 {
+			limit = 64 * 1024
+		}
+		raw, err := a.sftp.ReadBytes(ctx, id, remote, limit)
+		if err != nil {
+			return pd, err
+		}
+		pd.Kind = thumbs.PreviewText
+		if ext == "md" || ext == "markdown" {
+			pd.Kind = thumbs.PreviewMarkdown
+		}
+		pd.MimeType = "text/plain"
+		pd.TextContent = string(raw)
+		pd.Truncated = entry.Size > limit
+		pd.LineCount = strings.Count(pd.TextContent, "\n") + 1
+		return pd, nil
+	}
 	if a.thumbs == nil {
 		a.thumbs = thumbs.New("", 64*1024*1024)
 	}
@@ -275,10 +352,16 @@ func (a *App) RemoveIndexRoot(rootPath string) error {
 }
 
 func (a *App) ExpandPath(path string) string {
+	if id, remote, ok := sftp.ParseSFTPPath(path); ok {
+		return sftp.FormatSFTPPath(id, remote)
+	}
 	return platform.ExpandPath(path)
 }
 
 func (a *App) AutocompletePath(partial string, showHidden bool) []string {
+	if _, _, ok := sftp.ParseSFTPPath(partial); ok {
+		return nil
+	}
 	return platform.AutocompleteDirs(partial, showHidden, 12)
 }
 
@@ -291,7 +374,28 @@ func (a *App) TreeRoots() ([]tree.Node, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return a.tree.Roots(ctx)
+	roots, err := a.tree.Roots(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if a.storage != nil && a.sftp != nil {
+		activeIDs := a.sftp.ActiveProfileIDs()
+		for _, id := range activeIDs {
+			if prof, err := a.storage.GetRemoteProfile(id); err == nil && prof != nil {
+				uri := sftp.FormatSFTPPath(prof.ID, prof.RemotePath)
+				roots = append(roots, tree.Node{
+					Name: fmt.Sprintf("SSH: %s (%s)", prof.Name, prof.Host),
+					Location: vfs.Location{
+						Provider: "sftp",
+						Root:     fmt.Sprintf("sftp://%d", prof.ID),
+						Path:     uri,
+					},
+					HasChildren: tree.TriYes,
+				})
+			}
+		}
+	}
+	return roots, nil
 }
 
 func (a *App) TreeChildren(path string, showHidden bool) ([]tree.Node, error) {
@@ -299,14 +403,30 @@ func (a *App) TreeChildren(path string, showHidden bool) ([]tree.Node, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	loc := vfs.Location{
-		Provider: "local",
-		Path:     path,
+	var loc vfs.Location
+	if id, remote, ok := sftp.ParseSFTPPath(path); ok {
+		loc = vfs.Location{
+			Provider: "sftp",
+			Root:     fmt.Sprintf("sftp://%d", id),
+			Path:     sftp.FormatSFTPPath(id, remote),
+		}
+	} else {
+		loc = vfs.Location{
+			Provider: "local",
+			Path:     path,
+		}
 	}
 	return a.tree.Children(ctx, loc, showHidden)
 }
 
 func (a *App) CreateFolder(parentDir, name string) (string, error) {
+	if id, remote, ok := sftp.ParseSFTPPath(parentDir); ok && a.sftp != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		return a.sftp.CreateFolder(ctx, id, remote, name)
+	}
 	if a.ops == nil {
 		a.ops = ops.NewManager(a.storage, nil)
 	}
@@ -314,6 +434,13 @@ func (a *App) CreateFolder(parentDir, name string) (string, error) {
 }
 
 func (a *App) CreateFile(parentDir, name string) (string, error) {
+	if id, remote, ok := sftp.ParseSFTPPath(parentDir); ok && a.sftp != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		return a.sftp.CreateFile(ctx, id, remote, name)
+	}
 	if a.ops == nil {
 		a.ops = ops.NewManager(a.storage, nil)
 	}
@@ -321,6 +448,13 @@ func (a *App) CreateFile(parentDir, name string) (string, error) {
 }
 
 func (a *App) RenameItem(oldPath, newName string) (string, error) {
+	if id, remote, ok := sftp.ParseSFTPPath(oldPath); ok && a.sftp != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		return a.sftp.Rename(ctx, id, remote, newName)
+	}
 	if a.ops == nil {
 		a.ops = ops.NewManager(a.storage, nil)
 	}
@@ -328,6 +462,9 @@ func (a *App) RenameItem(oldPath, newName string) (string, error) {
 }
 
 func (a *App) EnqueueOperation(kind string, sources []string, destination string, policy string, verifyHash bool) string {
+	if a.sftp != nil && a.hasSFTPOperation(sources, destination) {
+		return a.runSFTPOperationAsync(kind, sources, destination)
+	}
 	if a.ops == nil {
 		a.ops = ops.NewManager(a.storage, nil)
 	}
@@ -471,6 +608,30 @@ type TextFilePayload struct {
 }
 
 func (a *App) ReadTextFile(path string) (TextFilePayload, error) {
+	if id, remote, ok := sftp.ParseSFTPPath(path); ok && a.sftp != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		data, err := a.sftp.ReadBytes(ctx, id, remote, 16*1024*1024)
+		if err != nil {
+			return TextFilePayload{}, err
+		}
+		content := string(data)
+		lineEnding := "LF"
+		if strings.Contains(content, "\r\n") {
+			lineEnding = "CRLF"
+		}
+		return TextFilePayload{
+			Path:       sftp.FormatSFTPPath(id, remote),
+			Name:       filepath.Base(remote),
+			Content:    content,
+			LineEnding: lineEnding,
+			Encoding:   "UTF-8",
+			Size:       int64(len(data)),
+		}, nil
+	}
+
 	clean := filepath.Clean(path)
 	data, err := os.ReadFile(clean)
 	if err != nil {
@@ -492,6 +653,14 @@ func (a *App) ReadTextFile(path string) (TextFilePayload, error) {
 }
 
 func (a *App) WriteTextFile(path string, content string) error {
+	if id, remote, ok := sftp.ParseSFTPPath(path); ok && a.sftp != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		return a.sftp.WriteBytes(ctx, id, remote, []byte(content))
+	}
+
 	clean := filepath.Clean(path)
 	mode := os.FileMode(0o644)
 	if info, err := os.Stat(clean); err == nil {
@@ -803,10 +972,161 @@ func (a *App) ListRemoteProfiles() []storage.RemoteProfile {
 }
 
 func (a *App) DeleteRemoteProfile(id int64) error {
+	if a.sftp != nil {
+		a.sftp.Disconnect(id)
+	}
 	if a.storage == nil {
 		return nil
 	}
 	return a.storage.DeleteRemoteProfile(id)
+}
+
+func (a *App) ConnectRemoteSFTP(req sftp.ConnectRequest) (sftp.ConnectResult, error) {
+	if a.sftp == nil {
+		a.sftp = sftp.NewManager(a.storage)
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.sftp.Connect(ctx, req)
+}
+
+func (a *App) DisconnectRemoteSFTP(profileID int64) {
+	if a.sftp != nil {
+		a.sftp.Disconnect(profileID)
+	}
+}
+
+func (a *App) ListActiveSFTPConnections() []int64 {
+	if a.sftp == nil {
+		return nil
+	}
+	return a.sftp.ActiveProfileIDs()
+}
+
+func (a *App) DetectLocalSSHKeys() []sftp.LocalSSHKey {
+	return sftp.DetectLocalSSHKeys()
+}
+
+func (a *App) hasSFTPOperation(sources []string, destination string) bool {
+	if _, _, ok := sftp.ParseSFTPPath(destination); ok {
+		return true
+	}
+	for _, s := range sources {
+		if _, _, ok := sftp.ParseSFTPPath(s); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) runSFTPOperationAsync(kind string, sources []string, destination string) string {
+	jobID := fmt.Sprintf("sftp-job-%d", time.Now().UnixNano())
+	snap := ops.JobSnapshot{
+		ID:          jobID,
+		Kind:        ops.JobKind(kind),
+		Sources:     sources,
+		Destination: destination,
+		Status:      ops.StatusRunning,
+		TotalItems:  len(sources),
+		CreatedAt:   time.Now(),
+	}
+	emit := func(st ops.JobSnapshot) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "ops:update", st)
+		}
+	}
+	emit(snap)
+
+	go func() {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		var firstErr error
+		for idx, src := range sources {
+			snap.CurrentItem = filepath.Base(strings.ReplaceAll(src, `\`, `/`))
+			emit(snap)
+
+			err := a.execSingleSFTPOp(ctx, kind, src, destination)
+			if err != nil && firstErr == nil {
+				firstErr = err
+			}
+			snap.DoneItems = idx + 1
+			emit(snap)
+		}
+		if firstErr != nil {
+			snap.Status = ops.StatusFailed
+			snap.Error = firstErr.Error()
+		} else {
+			snap.Status = ops.StatusCompleted
+		}
+		emit(snap)
+	}()
+
+	return jobID
+}
+
+func (a *App) execSingleSFTPOp(ctx context.Context, kind, src, dst string) error {
+	srcID, srcRemote, srcIsSFTP := sftp.ParseSFTPPath(src)
+	dstID, dstRemote, dstIsSFTP := sftp.ParseSFTPPath(dst)
+
+	if kind == "delete" || kind == "trash" {
+		if srcIsSFTP {
+			return a.sftp.RemoveRecursive(ctx, srcID, srcRemote)
+		}
+		return os.RemoveAll(src)
+	}
+
+	baseName := filepath.Base(strings.ReplaceAll(src, `\`, `/`))
+	if srcIsSFTP && !dstIsSFTP {
+		// Download SFTP -> Local
+		data, err := a.sftp.ReadBytes(ctx, srcID, srcRemote, 128*1024*1024)
+		if err != nil {
+			return err
+		}
+		targetLocal := filepath.Join(filepath.Clean(dst), baseName)
+		if err := os.WriteFile(targetLocal, data, 0o644); err != nil {
+			return err
+		}
+		if kind == "move" {
+			_ = a.sftp.RemoveRecursive(ctx, srcID, srcRemote)
+		}
+		return nil
+	}
+
+	if !srcIsSFTP && dstIsSFTP {
+		// Upload Local -> SFTP
+		data, err := os.ReadFile(filepath.Clean(src))
+		if err != nil {
+			return err
+		}
+		targetRemote := strings.TrimSuffix(dstRemote, "/") + "/" + baseName
+		if err := a.sftp.WriteBytes(ctx, dstID, targetRemote, data); err != nil {
+			return err
+		}
+		if kind == "move" {
+			_ = os.Remove(filepath.Clean(src))
+		}
+		return nil
+	}
+
+	if srcIsSFTP && dstIsSFTP {
+		data, err := a.sftp.ReadBytes(ctx, srcID, srcRemote, 128*1024*1024)
+		if err != nil {
+			return err
+		}
+		targetRemote := strings.TrimSuffix(dstRemote, "/") + "/" + baseName
+		if err := a.sftp.WriteBytes(ctx, dstID, targetRemote, data); err != nil {
+			return err
+		}
+		if kind == "move" {
+			_ = a.sftp.RemoveRecursive(ctx, srcID, srcRemote)
+		}
+		return nil
+	}
+	return nil
 }
 
 func (a *App) GetDrives() []platform.DriveInfo {

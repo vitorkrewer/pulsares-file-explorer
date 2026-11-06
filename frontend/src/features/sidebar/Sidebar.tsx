@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Crosshair,
@@ -10,11 +10,15 @@ import {
   ChevronDown,
   ChevronRight,
   Unplug,
+  Server,
+  TerminalSquare,
+  Plus,
   X,
 } from 'lucide-react';
 import { useFolderTreeStore } from './folder-tree/store';
 import { FolderTree } from './folder-tree/FolderTree';
 import { useBrowserStore, getTabLabel } from '../browser/store';
+import { useProductivityStore } from '../productivity/store';
 import { formatBytes } from '../../i18n/format';
 import { ejectDrive } from '../../lib/wails';
 
@@ -35,10 +39,23 @@ export const Sidebar: React.FC = () => {
     toggleFavorite,
   } = useFolderTreeStore();
   const { navigateTo, newTab, currentPath } = useBrowserStore();
+  const {
+    remoteProfiles,
+    activeSftpIds,
+    loadRemoteState,
+    openRemoteModal,
+    disconnectSFTP,
+    openSshTerminalSession,
+  } = useProductivityStore();
 
   const [favOpen, setFavOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(false);
   const [drivesOpen, setDrivesOpen] = useState(false);
+  const [sshOpen, setSshOpen] = useState(true);
+
+  useEffect(() => {
+    void loadRemoteState();
+  }, [loadRemoteState]);
 
   const draggingRef = useRef(false);
 
@@ -243,6 +260,100 @@ export const Sidebar: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 5. Seção: Conexões Seguras SSH / SFTP */}
+      <div style={styles.sectionHeader} onClick={() => setSshOpen(!sshOpen)}>
+        <div style={styles.sectionTitleRow}>
+          {sshOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          <Server
+            size={12}
+            style={{ color: activeSftpIds.length > 0 ? '#10b981' : 'var(--accent)' }}
+          />
+          <span style={styles.title}>SSH / SFTP</span>
+        </div>
+        <button
+          type="button"
+          style={styles.iconBtn}
+          onClick={(e) => {
+            e.stopPropagation();
+            void openRemoteModal();
+          }}
+          title={t('remote.title')}
+          aria-label={t('remote.title')}
+        >
+          <Plus size={12} />
+        </button>
+      </div>
+      {sshOpen && (
+        <div style={{ ...styles.sectionBody, maxHeight: 150, overflowY: 'auto' }}>
+          {remoteProfiles.length === 0 ? (
+            <div
+              style={{ ...styles.emptyHint, cursor: 'pointer', color: 'var(--accent)' }}
+              onClick={() => void openRemoteModal()}
+            >
+              + Nova conexão segura SSH / SFTP
+            </div>
+          ) : (
+            remoteProfiles.map((p) => {
+              const isConnected = activeSftpIds.includes(p.id);
+              const sftpPrefix = `sftp://${p.id}`;
+              const isCurrent = currentPath.startsWith(sftpPrefix);
+              return (
+                <div
+                  key={p.id}
+                  style={{
+                    ...styles.itemRow,
+                    ...(isCurrent ? styles.itemActive : {}),
+                  }}
+                  onClick={() => {
+                    if (isConnected) {
+                      void navigateTo(`${sftpPrefix}${p.remotePath || '/'}`);
+                    } else {
+                      void openRemoteModal();
+                    }
+                  }}
+                  title={`${p.username ? `${p.username}@` : ''}${p.host}:${p.port}${p.remotePath}`}
+                >
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      backgroundColor: isConnected ? '#10b981' : 'var(--text-muted)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={styles.itemText}>{p.name}</span>
+                  <button
+                    type="button"
+                    style={styles.removeBtn}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void openSshTerminalSession(p);
+                    }}
+                    title="Abrir Terminal SSH Interativo"
+                  >
+                    <TerminalSquare size={11} />
+                  </button>
+                  {isConnected && (
+                    <button
+                      type="button"
+                      style={styles.removeBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void disconnectSFTP(p.id);
+                      }}
+                      title="Desconectar SFTP"
+                    >
+                      <Unplug size={11} />
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 

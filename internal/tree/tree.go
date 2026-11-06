@@ -146,8 +146,8 @@ func (s *Service) Children(ctx context.Context, loc vfs.Location, showHidden boo
 			Hidden:      d.Attrs.Hidden,
 		}
 
-		// Symlinks/junctions não são sondados recursivamente por segurança contra ciclos
-		if isLink {
+		// Symlinks/junctions ou provedores remotos (SFTP) não são sondados recursivamente no disco local
+		if isLink || d.Location.Provider == "sftp" {
 			nodes[i].HasChildren = TriUnknown
 			continue
 		}

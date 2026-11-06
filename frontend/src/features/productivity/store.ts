@@ -7,6 +7,9 @@ import {
   ItemTag,
   ArchiveEntry,
   RemoteProfile,
+  SFTPConnectRequest,
+  SFTPConnectResult,
+  LocalSSHKey,
   previewBatchRename,
   executeBatchRename,
   compareDirectories,
@@ -20,9 +23,15 @@ import {
   listRemoteProfiles,
   saveRemoteProfile,
   deleteRemoteProfile,
+  connectRemoteSFTP,
+  disconnectRemoteSFTP,
+  listActiveSFTPConnections,
+  detectLocalSSHKeys,
 } from '../../lib/wails';
 import { useBrowserStore } from '../browser/store';
 import { useDualPaneStore } from '../panes/store';
+import { useFolderTreeStore } from '../sidebar/folder-tree/store';
+import { useTerminalStore } from '../terminal/store';
 
 export interface ShortcutBinding {
   id: string;
@@ -86,6 +95,12 @@ interface ProductivityState {
 
   remoteOpen: boolean;
   remoteProfiles: RemoteProfile[];
+  activeSftpIds: number[];
+  localSshKeys: LocalSSHKey[];
+  sftpConnecting: boolean;
+  sftpError: string | null;
+  sftpTrustPrompt: SFTPConnectResult | null;
+  pendingConnectReq: SFTPConnectRequest | null;
 
   togglePalette: () => void;
   closePalette: () => void;
@@ -120,8 +135,14 @@ interface ProductivityState {
 
   openRemoteModal: () => Promise<void>;
   closeRemoteModal: () => void;
-  addRemoteProfile: (profile: Omit<RemoteProfile, 'id'>) => Promise<void>;
+  loadRemoteState: () => Promise<void>;
+  addRemoteProfile: (profile: Omit<RemoteProfile, 'id'>) => Promise<number>;
   removeRemoteProfile: (id: number) => Promise<void>;
+  connectSFTP: (req: SFTPConnectRequest) => Promise<boolean>;
+  confirmSftpTrustAndConnect: () => Promise<boolean>;
+  cancelSftpTrustPrompt: () => void;
+  disconnectSFTP: (profileId: number) => Promise<void>;
+  openSshTerminalSession: (profile: RemoteProfile) => Promise<void>;
 }
 
 export const useProductivityStore = create<ProductivityState>((set, get) => ({
@@ -155,6 +176,12 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
 
   remoteOpen: false,
   remoteProfiles: [],
+  activeSftpIds: [],
+  localSshKeys: [],
+  sftpConnecting: false,
+  sftpError: null,
+  sftpTrustPrompt: null,
+  pendingConnectReq: null,
 
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
   closePalette: () => set({ paletteOpen: false }),
@@ -350,23 +377,131 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
   },
 
   openRemoteModal: async () => {
-    set({ remoteOpen: true });
-    const profiles = await listRemoteProfiles();
-    set({ remoteProfiles: profiles });
+    set({ remoteOpen: true, sftpError: null, sftpTrustPrompt: null });
+    await get().loadRemoteState();
   },
 
-  closeRemoteModal: () => set({ remoteOpen: false }),
+  closeRemoteModal: () =>
+    set({
+      remoteOpen: false,
+      sftpError: null,
+      sftpTrustPrompt: null,
+      pendingConnectReq: null,
+      sftpConnecting: false,
+    }),
+
+  loadRemoteState: async () => {
+    const [profiles, activeIds, keys] = await Promise.all([
+      listRemoteProfiles(),
+      listActiveSFTPConnections(),
+      detectLocalSSHKeys(),
+    ]);
+    set({
+      remoteProfiles: profiles || [],
+      activeSftpIds: activeIds || [],
+      localSshKeys: keys || [],
+    });
+  },
 
   addRemoteProfile: async (profile) => {
-    await saveRemoteProfile({ id: 0, ...profile });
+    const saved = await saveRemoteProfile({ id: 0, ...profile });
     const profiles = await listRemoteProfiles();
     set({ remoteProfiles: profiles });
+    return saved;
   },
 
   removeRemoteProfile: async (id) => {
+    if (get().activeSftpIds.includes(id)) {
+      await get().disconnectSFTP(id);
+    }
     await deleteRemoteProfile(id);
     const profiles = await listRemoteProfiles();
     set({ remoteProfiles: profiles });
+  },
+
+  connectSFTP: async (req) => {
+    set({ sftpConnecting: true, sftpError: null, sftpTrustPrompt: null, pendingConnectReq: req });
+    try {
+      const res = await connectRemoteSFTP(req);
+      if (!res) {
+        set({ sftpConnecting: false, sftpError: 'Não foi possível iniciar a conexão SFTP.' });
+        return false;
+      }
+      if (res.needsHostTrust || res.hostKeyMismatch) {
+        set({
+          sftpConnecting: false,
+          sftpTrustPrompt: res,
+          pendingConnectReq: req,
+        });
+        return false;
+      }
+      if (!res.connected && res.message) {
+        set({ sftpConnecting: false, sftpError: res.message });
+        return false;
+      }
+      if (res.connected) {
+        await get().loadRemoteState();
+        await useFolderTreeStore.getState().loadRoots();
+        set({
+          sftpConnecting: false,
+          sftpError: null,
+          sftpTrustPrompt: null,
+          pendingConnectReq: null,
+          remoteOpen: false,
+        });
+        const target = res.initialPath || `sftp://${res.profileId || req.profileId}/`;
+        await useBrowserStore.getState().navigateTo(target);
+        return true;
+      }
+      set({ sftpConnecting: false });
+      return false;
+    } catch (err) {
+      set({ sftpConnecting: false, sftpError: String(err) });
+      return false;
+    }
+  },
+
+  confirmSftpTrustAndConnect: async () => {
+    const { pendingConnectReq, sftpTrustPrompt } = get();
+    if (!pendingConnectReq || !sftpTrustPrompt) return false;
+    return get().connectSFTP({
+      ...pendingConnectReq,
+      trustHost: true,
+    });
+  },
+
+  cancelSftpTrustPrompt: () => {
+    set({ sftpTrustPrompt: null, pendingConnectReq: null });
+  },
+
+  disconnectSFTP: async (profileId) => {
+    await disconnectRemoteSFTP(profileId);
+    await get().loadRemoteState();
+    await useFolderTreeStore.getState().loadRoots();
+    const browser = useBrowserStore.getState();
+    if (browser.currentPath.startsWith(`sftp://${profileId}`)) {
+      const roots = useFolderTreeStore.getState().roots.filter((r) => !r.location.path.startsWith('sftp://'));
+      if (roots.length > 0) {
+        await browser.navigateTo(roots[0].location.path);
+      }
+    }
+  },
+
+  openSshTerminalSession: async (profile) => {
+    const termStore = useTerminalStore.getState();
+    const browser = useBrowserStore.getState();
+    const localCwd = browser.currentPath.startsWith('sftp://') ? '/' : browser.currentPath || '/';
+    const tabId = await termStore.createSession(localCwd, undefined, `SSH: ${profile.name}`);
+    const portArg = profile.port && profile.port !== 22 ? ` -p ${profile.port}` : '';
+    const keyArg =
+      profile.authType === 'key' && profile.keyPath
+        ? ` -i "${profile.keyPath.replace(/"/g, '\\"')}"`
+        : '';
+    const target = profile.username ? `${profile.username}@${profile.host}` : profile.host;
+    const sshCmd = `ssh${portArg}${keyArg} ${target}\r\n`;
+    setTimeout(() => {
+      void useTerminalStore.getState().sendInput(tabId, sshCmd);
+    }, 180);
   },
 }));
 

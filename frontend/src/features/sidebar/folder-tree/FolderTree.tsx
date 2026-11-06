@@ -11,6 +11,7 @@ import {
   FolderCog,
   Database,
   HardDrive,
+  Server,
   Link2,
   Loader2,
   Star,
@@ -197,6 +198,9 @@ export const FolderTree: React.FC = () => {
   };
 
   const renderNodeIcon = (item: FlatTreeNode) => {
+    if (item.depth === 1 && item.node.location.path.startsWith('sftp://')) {
+      return <Server size={14} style={{ color: '#10b981', flexShrink: 0 }} />;
+    }
     if (item.depth === 1 && /^[a-zA-Z]:\\?$/.test(item.node.location.path)) {
       return <HardDrive size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />;
     }

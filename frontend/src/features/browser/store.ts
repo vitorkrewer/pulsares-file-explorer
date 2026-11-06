@@ -157,6 +157,12 @@ function createTabState(path: string, partial?: Partial<TabState>): TabState {
 export function getTabLabel(path: string): string {
   if (!path) return '...';
   const normalized = path.replace(/\\/g, '/');
+  const sftpMatch = normalized.match(/^sftp:\/\/(\d+)(\/.*)?$/i);
+  if (sftpMatch) {
+    const sub = (sftpMatch[2] || '/').replace(/\/+$/, '');
+    const seg = sub.split('/').filter(Boolean).pop();
+    return seg ? `SSH:${seg}` : `SSH #${sftpMatch[1]}`;
+  }
   if (normalized === '/') return '/';
   const parts = normalized.split('/').filter(Boolean);
   if (parts.length === 0) return path;
@@ -353,6 +359,18 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     if (!currentPath) return;
 
     const normalized = currentPath.replace(/\\/g, '/');
+    const sftpMatch = normalized.match(/^sftp:\/\/(\d+)(\/.*)?$/i);
+    if (sftpMatch) {
+      const id = sftpMatch[1];
+      const subParts = (sftpMatch[2] || '/').split('/').filter(Boolean);
+      if (subParts.length > 0) {
+        subParts.pop();
+        const nextSub = subParts.length > 0 ? '/' + subParts.join('/') : '/';
+        navigateTo(`sftp://${id}${nextSub}`);
+      }
+      return;
+    }
+
     const parts = normalized.split('/').filter(Boolean);
 
     if (parts.length > 1) {

@@ -330,7 +330,43 @@ export interface RemoteProfile {
   port: number;
   username: string;
   remotePath: string;
+  authType?: 'key' | 'agent' | 'password';
+  keyPath?: string;
+  hostKeyFp?: string;
   createdAt?: string;
+}
+
+export interface SFTPConnectRequest {
+  profileId: number;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  remotePath: string;
+  authType: 'key' | 'agent' | 'password';
+  keyPath: string;
+  passphrase: string;
+  trustHost: boolean;
+}
+
+export interface SFTPConnectResult {
+  connected: boolean;
+  profileId: number;
+  rootUri: string;
+  initialPath: string;
+  hostKeyFp: string;
+  hostKeyType: string;
+  needsHostTrust: boolean;
+  hostKeyMismatch: boolean;
+  expectedHostFp?: string;
+  serverBanner?: string;
+  message?: string;
+}
+
+export interface LocalSSHKey {
+  name: string;
+  path: string;
+  publicKey?: string;
 }
 
 export interface TextFilePayload {
@@ -498,6 +534,10 @@ declare global {
           SaveRemoteProfile: (profile: RemoteProfile) => Promise<number>;
           ListRemoteProfiles: () => Promise<RemoteProfile[]>;
           DeleteRemoteProfile: (id: number) => Promise<void>;
+          ConnectRemoteSFTP: (req: SFTPConnectRequest) => Promise<SFTPConnectResult>;
+          DisconnectRemoteSFTP: (profileId: number) => Promise<void>;
+          ListActiveSFTPConnections: () => Promise<number[]>;
+          DetectLocalSSHKeys: () => Promise<LocalSSHKey[]>;
           GetDrives: () => Promise<DriveInfo[]>;
           GetSetting: (key: string) => Promise<string>;
           SetSetting: (key: string, val: string) => Promise<void>;
@@ -1340,6 +1380,44 @@ export async function deleteRemoteProfile(id: number): Promise<void> {
   if (isWailsAvailable()) {
     return window.go!.app.App.DeleteRemoteProfile(id);
   }
+}
+
+export async function connectRemoteSFTP(req: SFTPConnectRequest): Promise<SFTPConnectResult> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.ConnectRemoteSFTP(req);
+  }
+  return {
+    connected: false,
+    profileId: req.profileId,
+    rootUri: '',
+    initialPath: '',
+    hostKeyFp: '',
+    hostKeyType: '',
+    needsHostTrust: false,
+    hostKeyMismatch: false,
+  };
+}
+
+export async function disconnectRemoteSFTP(profileId: number): Promise<void> {
+  if (isWailsAvailable()) {
+    return window.go!.app.App.DisconnectRemoteSFTP(profileId);
+  }
+}
+
+export async function listActiveSFTPConnections(): Promise<number[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.ListActiveSFTPConnections();
+    return res || [];
+  }
+  return [];
+}
+
+export async function detectLocalSSHKeys(): Promise<LocalSSHKey[]> {
+  if (isWailsAvailable()) {
+    const res = await window.go!.app.App.DetectLocalSSHKeys();
+    return res || [];
+  }
+  return [];
 }
 
 export async function saveSetting(key: string, val: string): Promise<void> {

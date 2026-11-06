@@ -9,7 +9,9 @@
     "toggleHidden": "Arquivos ocultos",
     "toggleSidebar": "Alternar painel lateral (Ctrl+B)",
     "viewDetails": "Modo detalhes",
-    "addressPlaceholder": "Digite um caminho ou selecione..."
+    "addressPlaceholder": "Digite um caminho ou selecione...",
+    "copyPath": "Copiar caminho atual",
+    "pathCopied": "Caminho copiado!"
   },
   "tabs": {
     "newTab": "Nova aba (Ctrl+T)",

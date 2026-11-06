@@ -31,6 +31,7 @@ import {
   Command,
   FileCode2,
   Database,
+  Server,
   X,
 } from 'lucide-react';
 import { useOperationsStore } from './store';
@@ -93,7 +94,8 @@ export const OperationsToolbar: React.FC = () => {
     togglePreviewPanel,
   } = usePreviewStore();
   const { drawerOpen: searchOpen, toggleDrawer: toggleSearch } = useSearchStore();
-  const { paletteOpen, togglePalette } = useProductivityStore();
+  const { paletteOpen, togglePalette, remoteOpen, openRemoteModal, activeSftpIds } =
+    useProductivityStore();
   const filterInputRef = useRef<HTMLInputElement>(null);
   const [viewBarOpen, setViewBarOpen] = React.useState(false);
 
@@ -493,6 +495,26 @@ export const OperationsToolbar: React.FC = () => {
           aria-label={t('terminal.togglePanel')}
         >
           <TerminalSquare size={14} />
+        </button>
+
+        {/* Gerenciador de Conexões Seguras SSH / SFTP */}
+        <button
+          type="button"
+          style={
+            remoteOpen || activeSftpIds.length > 0
+              ? { ...styles.btn, color: activeSftpIds.length > 0 ? '#10b981' : 'var(--accent)' }
+              : styles.btn
+          }
+          onClick={() => void openRemoteModal()}
+          title={t('remote.title')}
+          aria-label={t('remote.title')}
+        >
+          <Server size={14} />
+          {activeSftpIds.length > 0 && (
+            <span style={{ ...styles.badge, backgroundColor: '#10b981' }}>
+              {activeSftpIds.length}
+            </span>
+          )}
         </button>
 
         <span style={styles.divider} />
