@@ -38,6 +38,7 @@ export interface PersistedSession {
   };
 }
 
+export const MAX_OPEN_TABS = 20;
 const MAX_CLOSED_TABS = 25;
 const MAX_LRU_CACHED_TABS = 10;
 
@@ -539,6 +540,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
   newTab: (targetPath?: string) => {
     const state = get();
+    if (state.tabs.length >= MAX_OPEN_TABS) return;
     const path = targetPath || state.currentPath || '/';
 
     if (state.currentPath && state.rawEntries.length > 0) {
@@ -749,6 +751,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
   duplicateTab: (tabId: string) => {
     const state = get();
+    if (state.tabs.length >= MAX_OPEN_TABS) return;
     const idx = state.tabs.findIndex((t) => t.id === tabId);
     if (idx === -1) return;
 
@@ -792,7 +795,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
   reopenClosedTab: () => {
     const state = get();
-    if (state.closedTabs.length === 0) return;
+    if (state.closedTabs.length === 0 || state.tabs.length >= MAX_OPEN_TABS) return;
     const [restored, ...restClosed] = state.closedTabs;
     const revived = createTabState(restored.path, {
       ...restored,
@@ -822,9 +825,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       try {
         const parsed = JSON.parse(rawJson) as PersistedSession;
         if (Array.isArray(parsed.tabs) && parsed.tabs.length > 0) {
-          const validTabs = parsed.tabs.map((t) =>
-            createTabState(t.path || fallbackPath, t)
-          );
+          const validTabs = parsed.tabs
+            .slice(0, MAX_OPEN_TABS)
+            .map((t) => createTabState(t.path || fallbackPath, t));
           const active =
             validTabs.find((t) => t.id === parsed.activeTabId) || validTabs[0];
           const requestId = crypto.randomUUID();

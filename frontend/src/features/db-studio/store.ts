@@ -400,3 +400,4 @@ export const useDBStudioStore = create<DBStudioState>((set, get) => ({
   toggleMaximize: () => set((s) => ({ isMaximized: !s.isMaximized, isMinimized: false })),
   closeDBStudio: () => set({ isOpen: false, isMinimized: false }),
 }));
+
