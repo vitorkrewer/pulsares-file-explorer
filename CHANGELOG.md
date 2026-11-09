@@ -6,6 +6,11 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Barra Lateral com Activity Bar (estilo VS Code) e Flyout com Auto-Ocultar**:
+  - Ao recolher o painel lateral (`Ctrl+B` ou botão na barra de navegação), o espaço de pastas abertas ganha foco total e surge uma **Activity Bar** vertical compacta com ícones rápidos para **Pastas**, **Favoritos**, **Recentes**, **Unidades/Volumes** e **SSH / SFTP**.
+  - Abertura de gaveta flutuante (*Flyout*) com efeito de sobreposição ao clicar em qualquer ícone da barra, sem redimensionar ou mover os painéis de arquivos.
+  - Comportamento inteligente de **auto-ocultar**: o painel recolhe automaticamente ao navegar para uma pasta/item, ao clicar fora ou ao pressionar `Escape`.
+  - Fixação definitiva rápida: botão dedicado de fixação (*Pin*) e botão de alternância do painel para travar a barra lateral aberta permanentemente.
 - **Suporte ao Idioma Sueco (Svenska - `sv`)**:
   - Catálogo completo de internacionalização em sueco (`locales/sv/common.json`) com 100% de paridade com os catálogos existentes.
   - Detecção automática de idioma do sistema (`resolveLanguage`) e opção de seleção manual no seletor de idiomas da barra de navegação (`AddressBar`).

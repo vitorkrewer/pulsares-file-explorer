@@ -23,7 +23,11 @@ import { useBrowserStore } from '../../browser/store';
 import { useOperationsStore } from '../../operations/store';
 import { enqueueOperation } from '../../../lib/wails';
 
-export const FolderTree: React.FC = () => {
+interface FolderTreeProps {
+  onNavigate?: () => void;
+}
+
+export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
   const { t, i18n } = useTranslation('common');
   const {
     roots,
@@ -287,11 +291,13 @@ export const FolderTree: React.FC = () => {
               onClick={() => {
                 setFocusedPath(path);
                 navigateTo(path);
+                onNavigate?.();
               }}
               onAuxClick={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();
                   newTab(path);
+                  onNavigate?.();
                 }
               }}
               onContextMenu={(e) => {
