@@ -135,4 +135,25 @@ for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it', 'ja', 'zh-CN', 'sv', 
   }
 }
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.0.0) passaram com sucesso.');
+// 4. Testar geometria e conexões de arestas Bézier do Mapa de Entidade-Relacionamento (ERD)
+function computeBezierCurve(x1, y1, x2, y2) {
+  const dx = Math.max(Math.abs(x2 - x1) * 0.45, 50);
+  const isLeft = x1 < x2;
+  const cx1 = isLeft ? x1 + dx : x1 - dx;
+  const cx2 = isLeft ? x2 - dx : x2 + dx;
+  const pathD = `M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`;
+  const midX = (x1 + 3 * cx1 + 3 * cx2 + x2) / 8;
+  const midY = (y1 + 3 * y1 + 3 * y2 + y2) / 8;
+  return { pathD, midX, midY };
+}
+
+const edge1 = computeBezierCurve(320, 100, 680, 180);
+assert.ok(edge1.pathD.startsWith('M 320 100 C'));
+assert.ok(edge1.midX > 320 && edge1.midX < 680);
+assert.ok(edge1.midY > 100 && edge1.midY < 180);
+
+const edge2 = computeBezierCurve(700, 200, 200, 100);
+assert.ok(edge2.pathD.startsWith('M 700 200 C'));
+assert.ok(edge2.midX > 200 && edge2.midX < 700);
+
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.0.0 + ERD) passaram com sucesso.');

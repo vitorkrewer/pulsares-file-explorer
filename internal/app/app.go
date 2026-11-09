@@ -1201,24 +1201,49 @@ type DBColumnInfo struct {
 	NotNull      bool   `json:"notNull"`
 	DefaultValue string `json:"defaultValue"`
 	PK           bool   `json:"pk"`
+	FK           bool   `json:"fk"`
+	FKTarget     string `json:"fkTarget,omitempty"`
+}
+
+type DBForeignKeyInfo struct {
+	ID        int    `json:"id"`
+	Seq       int    `json:"seq"`
+	FromTable string `json:"fromTable"`
+	FromCol   string `json:"fromCol"`
+	ToTable   string `json:"toTable"`
+	ToCol     string `json:"toCol"`
+	OnUpdate  string `json:"onUpdate"`
+	OnDelete  string `json:"onDelete"`
+}
+
+type DBRelationshipInfo struct {
+	ID        string `json:"id"`
+	FromTable string `json:"fromTable"`
+	FromCol   string `json:"fromCol"`
+	ToTable   string `json:"toTable"`
+	ToCol     string `json:"toCol"`
+	OnUpdate  string `json:"onUpdate"`
+	OnDelete  string `json:"onDelete"`
 }
 
 type DBObjectInfo struct {
-	Name     string         `json:"name"`
-	Type     string         `json:"type"` // "table" | "view" | "index" | "trigger"
-	RowCount int64          `json:"rowCount"`
-	SQL      string         `json:"sql"`
-	Columns  []DBColumnInfo `json:"columns"`
+	Name        string             `json:"name"`
+	Type        string             `json:"type"` // "table" | "view" | "index" | "trigger"
+	RowCount    int64              `json:"rowCount"`
+	SQL         string             `json:"sql"`
+	Columns     []DBColumnInfo     `json:"columns"`
+	ForeignKeys []DBForeignKeyInfo `json:"foreignKeys"`
 }
 
 type DBSchemaInfo struct {
-	Path          string         `json:"path"`
-	Name          string         `json:"name"`
-	Size          int64          `json:"size"`
-	SQLiteVersion string         `json:"sqliteVersion"`
-	Tables        []DBObjectInfo `json:"tables"`
-	Views         []DBObjectInfo `json:"views"`
-	Indexes       []DBObjectInfo `json:"indexes"`
+	Path          string               `json:"path"`
+	Name          string               `json:"name"`
+	Size          int64                `json:"size"`
+	SQLiteVersion string               `json:"sqliteVersion"`
+	Tables        []DBObjectInfo       `json:"tables"`
+	Views         []DBObjectInfo       `json:"views"`
+	Indexes       []DBObjectInfo       `json:"indexes"`
+	Relationships []DBRelationshipInfo `json:"relationships"`
 }
 
 type DBQueryResult struct {
@@ -1312,6 +1337,38 @@ func fetchTableColumns(db *sql.DB, tableName string) []DBColumnInfo {
 	return cols
 }
 
+func fetchTableForeignKeys(db *sql.DB, tableName string) []DBForeignKeyInfo {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA foreign_key_list(%s)", quoteSQLIdent(tableName)))
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var fks []DBForeignKeyInfo
+	for rows.Next() {
+		var id, seq int
+		var toTable, fromCol, onUpdate, onDelete, match string
+		var nullToCol sql.NullString
+		if err := rows.Scan(&id, &seq, &toTable, &fromCol, &nullToCol, &onUpdate, &onDelete, &match); err == nil {
+			toCol := ""
+			if nullToCol.Valid {
+				toCol = nullToCol.String
+			}
+			fks = append(fks, DBForeignKeyInfo{
+				ID:        id,
+				Seq:       seq,
+				FromTable: tableName,
+				FromCol:   fromCol,
+				ToTable:   toTable,
+				ToCol:     toCol,
+				OnUpdate:  onUpdate,
+				OnDelete:  onDelete,
+			})
+		}
+	}
+	return fks
+}
+
 func (a *App) DBInspectSchema(dbPath string) (DBSchemaInfo, error) {
 	db, clean, err := openUserSQLite(dbPath)
 	if err != nil {
@@ -1361,16 +1418,19 @@ func (a *App) DBInspectSchema(dbPath string) (DBSchemaInfo, error) {
 		Tables:        []DBObjectInfo{},
 		Views:         []DBObjectInfo{},
 		Indexes:       []DBObjectInfo{},
+		Relationships: []DBRelationshipInfo{},
 	}
 
 	for _, item := range rawList {
 		obj := DBObjectInfo{
-			Name: item.name,
-			Type: item.objType,
-			SQL:  item.sqlDef,
+			Name:        item.name,
+			Type:        item.objType,
+			SQL:         item.sqlDef,
+			ForeignKeys: []DBForeignKeyInfo{},
 		}
 		if item.objType == "table" {
 			obj.Columns = fetchTableColumns(db, item.name)
+			obj.ForeignKeys = fetchTableForeignKeys(db, item.name)
 
 			// Contagem inteligente sem travar bancos gigantes:
 			var cnt int64 = -1
@@ -1393,6 +1453,54 @@ func (a *App) DBInspectSchema(dbPath string) (DBSchemaInfo, error) {
 			schema.Views = append(schema.Views, obj)
 		} else if item.objType == "index" {
 			schema.Indexes = append(schema.Indexes, obj)
+		}
+	}
+
+	// 1. Mapear PKs das tabelas
+	pkMap := make(map[string]string)
+	for _, tbl := range schema.Tables {
+		for _, col := range tbl.Columns {
+			if col.PK && pkMap[tbl.Name] == "" {
+				pkMap[tbl.Name] = col.Name
+			}
+		}
+		if pkMap[tbl.Name] == "" {
+			pkMap[tbl.Name] = "id"
+		}
+	}
+
+	// 2. Resolver Foreign Keys e gerar lista de Relationships
+	schema.Relationships = []DBRelationshipInfo{}
+	for tIdx := range schema.Tables {
+		tbl := &schema.Tables[tIdx]
+		for fkIdx := range tbl.ForeignKeys {
+			fk := &tbl.ForeignKeys[fkIdx]
+			if fk.ToCol == "" {
+				if destPK, ok := pkMap[fk.ToTable]; ok {
+					fk.ToCol = destPK
+				} else {
+					fk.ToCol = "id"
+				}
+			}
+
+			// Marca a coluna como FK na tabela de origem
+			for cIdx := range tbl.Columns {
+				if tbl.Columns[cIdx].Name == fk.FromCol {
+					tbl.Columns[cIdx].FK = true
+					tbl.Columns[cIdx].FKTarget = fmt.Sprintf("%s.%s", fk.ToTable, fk.ToCol)
+				}
+			}
+
+			relID := fmt.Sprintf("%s_%s__%s_%s", fk.FromTable, fk.FromCol, fk.ToTable, fk.ToCol)
+			schema.Relationships = append(schema.Relationships, DBRelationshipInfo{
+				ID:        relID,
+				FromTable: fk.FromTable,
+				FromCol:   fk.FromCol,
+				ToTable:   fk.ToTable,
+				ToCol:     fk.ToCol,
+				OnUpdate:  fk.OnUpdate,
+				OnDelete:  fk.OnDelete,
+			})
 		}
 	}
 

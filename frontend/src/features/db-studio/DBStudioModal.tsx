@@ -28,6 +28,7 @@ import {
   Minimize2,
   X,
   FolderOpen,
+  Network,
 } from 'lucide-react';
 import {
   useDBStudioStore,
@@ -41,6 +42,7 @@ import {
   windowClose,
 } from '../../lib/wails';
 import { formatBytes } from '../../i18n/format';
+import { ERDiagramView } from './ERDiagramView';
 
 interface DBStudioModalProps {
   standalone?: boolean;
@@ -353,6 +355,15 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
             style={{ padding: '4px 9px', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}
           >
             <Code2 size={13} /> Estrutura / DDL
+          </button>
+          <button
+            type="button"
+            className={`op-btn ${activeTabMode === 'erd' ? 'active' : ''}`}
+            onClick={() => setActiveTabMode('erd')}
+            style={{ padding: '4px 9px', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+            title="Mapa de Entidade-Relacionamento e Chaves do Banco"
+          >
+            <Network size={13} /> Mapa ER (Diagrama)
           </button>
 
           <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 2px' }} />
@@ -1544,7 +1555,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                             <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>#</th>
                             <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>Coluna</th>
                             <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>Tipo</th>
-                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>Chave Primária</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>Chaves</th>
                             <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>NOT NULL</th>
                             <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>Valor Padrão</th>
                           </tr>
@@ -1556,11 +1567,24 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                               <td style={{ padding: '6px 10px', fontWeight: 600 }}>{col.name}</td>
                               <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{col.type || 'ANY'}</td>
                               <td style={{ padding: '6px 10px' }}>
-                                {col.pk ? (
-                                  <span style={{ color: '#f59e0b', fontWeight: 700 }}>PK</span>
-                                ) : (
-                                  <span style={{ color: 'var(--text-muted)' }}>—</span>
-                                )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  {col.pk && (
+                                    <span style={{ color: '#f59e0b', fontWeight: 700, backgroundColor: 'rgba(245,158,11,0.15)', padding: '1px 5px', borderRadius: 3, fontSize: 10.5 }}>
+                                      PK
+                                    </span>
+                                  )}
+                                  {col.fk && (
+                                    <span
+                                      title={`Chave Estrangeira → ${col.fkTarget || 'referência'}`}
+                                      style={{ color: '#a78bfa', fontWeight: 700, backgroundColor: 'rgba(167,139,250,0.15)', padding: '1px 5px', borderRadius: 3, fontSize: 10.5 }}
+                                    >
+                                      FK {col.fkTarget ? `→ ${col.fkTarget}` : ''}
+                                    </span>
+                                  )}
+                                  {!col.pk && !col.fk && (
+                                    <span style={{ color: 'var(--text-muted)' }}>—</span>
+                                  )}
+                                </div>
                               </td>
                               <td style={{ padding: '6px 10px' }}>{col.notNull ? 'Sim' : 'Não'}</td>
                               <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
@@ -1616,6 +1640,19 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTabMode === 'erd' && (
+              <ERDiagramView
+                schema={schema}
+                onSelectTable={(tableName) => {
+                  void selectTable(tableName);
+                }}
+                onOpenTableData={(tableName) => {
+                  void selectTable(tableName);
+                  setActiveTabMode('data');
+                }}
+              />
             )}
           </div>
         </div>

@@ -38,7 +38,7 @@ export function isStandaloneDBStudioWindow(): boolean {
   }
 }
 
-export type DBStudioTabMode = 'data' | 'query' | 'schema';
+export type DBStudioTabMode = 'data' | 'query' | 'schema' | 'erd';
 
 export interface SQLHistoryItem {
   id: string;

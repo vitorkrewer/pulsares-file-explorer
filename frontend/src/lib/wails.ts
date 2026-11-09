@@ -398,6 +398,29 @@ export interface DBColumnInfo {
   notNull: boolean;
   defaultValue: string;
   pk: boolean;
+  fk?: boolean;
+  fkTarget?: string;
+}
+
+export interface DBForeignKeyInfo {
+  id: number;
+  seq: number;
+  fromTable: string;
+  fromCol: string;
+  toTable: string;
+  toCol: string;
+  onUpdate: string;
+  onDelete: string;
+}
+
+export interface DBRelationshipInfo {
+  id: string;
+  fromTable: string;
+  fromCol: string;
+  toTable: string;
+  toCol: string;
+  onUpdate: string;
+  onDelete: string;
 }
 
 export interface DBObjectInfo {
@@ -407,6 +430,7 @@ export interface DBObjectInfo {
   rowCount: number;
   sql: string;
   columns: DBColumnInfo[];
+  foreignKeys?: DBForeignKeyInfo[];
 }
 
 export interface DBSchemaInfo {
@@ -417,6 +441,7 @@ export interface DBSchemaInfo {
   tables: DBObjectInfo[];
   views: DBObjectInfo[];
   indexes: DBObjectInfo[];
+  relationships?: DBRelationshipInfo[];
 }
 
 export interface DBQueryResult {

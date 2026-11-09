@@ -6,7 +6,22 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
-- **Ícones Nativos Dedicados e Distinção Visual na Barra de Tarefas do Windows**:
+- **Mapa de Entidade-Relacionamento (ERD / Diagrama Interativo no Estilo React Flow) no Pulse DB Studio**:
+  - Nova aba dedicada **"Mapa ER (Diagrama)"** na barra de ferramentas superior do DB Studio para visualização interativa do grafo de entidades e chaves do banco de dados.
+  - **Mapeamento e Extração de Chaves no SQLite (`internal/app/app.go`)**:
+    - Inspeção nativa via `PRAGMA foreign_key_list(tabela)` para mapear chaves estrangeiras (FK), tabela destino, coluna referenciada (PK), regras de integridade referencial (`ON UPDATE`, `ON DELETE`).
+    - Resolução automática de chave primária quando omitida no schema e consolidação da lista de arestas relacionais (`schema.Relationships`).
+    - Marcação granular de atributos por coluna: badges douradas de **PK** (`Key`) e badges lilás/roxas de **FK** (`Link` com destino `tabela.coluna`).
+  - **Engine Visual Interativa de Nós e Arestas (`ERDiagramView.tsx`)**:
+    - **Canvas Infinito com Panning e Zooming**: arrasto fluido com o mouse, zoom suave centrado no ponteiro via scroll wheel (25% a 250%) e grade de pontos (*dots background*) proporcional.
+    - **Nós de Tabelas Arrastáveis (Draggable Nodes)**: cartões estilizados com gradiente de cabeçalho, contagem de registros/colunas, tipos de dados em tipografia mono, botões de atalho para inspecionar dados e pontos de ancoragem (*connection handles*) nas laterais.
+    - **Arestas de Conexão Bézier Cúbicas**: traçadas dinamicamente entre o handle da chave estrangeira (FK) e a chave primária (PK) com marcadores direcionais, labels centrais das regras (`coluna_fk → coluna_pk`), realce neon em hover (`#38bdf8`), drop-shadow glow e atenuação suave de tabelas não conectadas.
+    - **Controles Avançados estilo React Flow**:
+      - Barra de ferramentas com Zoom In, Zoom Out, Ajustar à Tela (*Fit View*), Resetar Zoom para 100%.
+      - **Auto Layout Inteligente**: algoritmo em camadas topológicas que organiza automaticamente tabelas mestres e dependentes em colunas balanceadas.
+      - **Busca e Foco Rápido**: campo de busca que filtra tabelas/colunas e realiza foco suave centralizado na tabela escolhida.
+      - **Minimapa Interativo (MiniMap)** no canto inferior direito para visão panorâmica e navegação rápida por grandes esquemas.
+      - **Exportação para SVG Vetorial**: gera e baixa arquivo `.svg` autônomo com design de alta fidelidade para documentação técnica.
   - Geração de pacotes de ícones `.ico` e `.png` multi-resolução (16x16 até 256x256 com High-DPI) padronizados com o gradiente azul clássico do Pulsares (`#2563eb` a `#4f46e5`), squircle com cantos arredondados, iluminação interna e sombra suave:
     - **Pulsares Explorer**: ícone da pasta branca moderna.
     - **Pulse DB Studio**: ícone do cilindro de banco de dados SQLite em branco (`build/windows/icon-dbstudio.ico` e `favicon-dbstudio.svg`).
