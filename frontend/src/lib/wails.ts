@@ -542,6 +542,8 @@ declare global {
           GetSetting: (key: string) => Promise<string>;
           SetSetting: (key: string, val: string) => Promise<void>;
           ShowSaveFileDialog?: (opts: SaveFileDialogOptions) => Promise<string>;
+          DBCreatorInspectSource?: (sourcePath: string) => Promise<DBCreatorInspection>;
+          DBCreatorExecute?: (req: DBCreatorRequest) => Promise<DBCreatorResult>;
         };
       };
     };
@@ -1451,3 +1453,74 @@ export function subscribeEvent<T>(eventName: string, callback: (data: T) => void
   }
   return () => {};
 }
+
+export interface DBCreatorColumnDef {
+  name: string;
+  dataType: string;
+  isPrimaryKey?: boolean;
+  notNull?: boolean;
+}
+
+export interface DBCreatorInspection {
+  sourcePath: string;
+  format: 'csv' | 'tsv' | 'json' | 'jsonl';
+  detectedDelim: string;
+  hasHeader: boolean;
+  estimatedRows: number;
+  fileSize: number;
+  suggestedTable: string;
+  suggestedDBName: string;
+  columns: DBCreatorColumnDef[];
+  sampleRows: string[][];
+  rawSampleJson?: Record<string, unknown>[];
+}
+
+export interface DBCreatorRequest {
+  sourcePath: string;
+  destinationPath: string;
+  tableName: string;
+  columns: DBCreatorColumnDef[];
+  addAutoId: boolean;
+  delimiter?: string;
+  hasHeader?: boolean;
+  batchSize?: number;
+  enableWal?: boolean;
+  customDdl?: string;
+}
+
+export interface DBCreatorProgressEvent {
+  stage: 'analyzing' | 'creating_schema' | 'importing' | 'finalizing' | 'completed' | 'error';
+  processedRows: number;
+  totalRows: number;
+  percentage: number;
+  speedRowsSec: number;
+  elapsedMs: number;
+  estimatedRemMs: number;
+  currentLog?: string;
+}
+
+export interface DBCreatorResult {
+  destinationPath: string;
+  tableName: string;
+  totalRows: number;
+  totalDurationMs: number;
+  finalFileSizeBytes: number;
+  ddlExecuted: string;
+}
+
+export async function dbCreatorInspectSource(sourcePath: string): Promise<DBCreatorInspection> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.DBCreatorInspectSource === 'function') {
+    return await (appObj.DBCreatorInspectSource as (path: string) => Promise<DBCreatorInspection>)(sourcePath);
+  }
+  throw new Error('DBCreatorInspectSource indisponível no ambiente atual');
+}
+
+export async function dbCreatorExecute(req: DBCreatorRequest): Promise<DBCreatorResult> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.DBCreatorExecute === 'function') {
+    return await (appObj.DBCreatorExecute as (r: DBCreatorRequest) => Promise<DBCreatorResult>)(req);
+  }
+  throw new Error('DBCreatorExecute indisponível no ambiente atual');
+}
+

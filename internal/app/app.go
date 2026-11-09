@@ -17,6 +17,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	_ "modernc.org/sqlite"
+	"pulsares-file-explorer/internal/dbcreator"
 	"pulsares-file-explorer/internal/listing"
 	"pulsares-file-explorer/internal/ops"
 	"pulsares-file-explorer/internal/platform"
@@ -1602,4 +1603,20 @@ func (a *App) OpenDBStudioWindow(targetPath string) error {
 		a.studioMu.Unlock()
 	}(cmd)
 	return nil
+}
+
+func (a *App) DBCreatorInspectSource(sourcePath string) (*dbcreator.SourceInspection, error) {
+	return dbcreator.InspectSource(sourcePath)
+}
+
+func (a *App) DBCreatorExecute(req dbcreator.CreateDBRequest) (*dbcreator.CreateDBResult, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return dbcreator.CreateDatabase(ctx, req, func(event dbcreator.ProgressEvent) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "dbcreator:progress", event)
+		}
+	})
 }

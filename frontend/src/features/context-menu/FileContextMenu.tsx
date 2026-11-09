@@ -37,6 +37,7 @@ import { usePreviewStore } from '../preview/store';
 import { useProductivityStore } from '../productivity/store';
 import { useEditorStore, isEditableTextFile } from '../editor/store';
 import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
+import { useDBCreatorStore, isConvertibleToDB } from '../db-creator/store';
 
 export interface ContextMenuTarget {
   x: number;
@@ -132,6 +133,10 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
   const isDbFile =
     entry && entry.kind !== 'dir'
       ? isDatabaseFile(entry.name)
+      : false;
+  const isConvertible =
+    entry && entry.kind !== 'dir'
+      ? isConvertibleToDB(entry.name)
       : false;
   const isFavorite = entry ? favorites.some((f) => f.path === entry.location.path) : false;
   const targetDir = entry
@@ -262,6 +267,19 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
               onClick={() =>
                 runAndClose(() => {
                   void useDBStudioStore.getState().openDatabase(entry.location.path);
+                })
+              }
+            />
+          )}
+
+          {!isDir && isConvertible && (
+            <MenuItem
+              icon={<Database size={14} style={{ color: 'var(--accent)' }} />}
+              label="Criar Banco de Dados SQLite..."
+              badge={entryExt ? entryExt.toUpperCase() : 'DB'}
+              onClick={() =>
+                runAndClose(() => {
+                  void useDBCreatorStore.getState().openCreator(entry.location.path);
                 })
               }
             />

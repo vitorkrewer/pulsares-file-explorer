@@ -30,6 +30,7 @@ import {
   isDatabaseFile,
 } from '../features/db-studio/store';
 import { DBStudioModal } from '../features/db-studio/DBStudioModal';
+import { DBCreatorModal } from '../features/db-creator/DBCreatorModal';
 import {
   FileContextMenu,
   ContextMenuTarget,
@@ -806,6 +807,7 @@ export const App: React.FC = () => {
       <ProductivityModals />
       <CodeEditorModal />
       <DBStudioModal />
+      <DBCreatorModal />
       <FileContextMenu
         target={contextMenuTarget}
         onClose={() => setContextMenuTarget(null)}

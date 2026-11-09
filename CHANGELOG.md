@@ -6,6 +6,16 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Criação Rápida de Banco de Dados SQLite a partir de Arquivos (CSV, TSV, JSON, JSONL)**:
+  - Nova ação integrada no menu de contexto do navegador de arquivos para arquivos tabulares e semiestruturados (`.csv`, `.tsv`, `.tab`, `.json`, `.jsonl`, `.ndjson`): **"Criar Banco de Dados SQLite..."**.
+  - **Mecanismo de Análise e Inferência Automática (`dbcreator`)**: detecção inteligente de delimitador (vírgula, ponto-e-vírgula, tabulação), cabeçalhos e inferência dinâmica de tipos (`INTEGER`, `REAL`, `BOOLEAN`, `TEXT`, `DATETIME`) a partir da amostragem dos dados.
+  - **Experiência Híbrida (Simples vs Desenvolvedor)**:
+    - **Modo Simples**: pré-visualização tabular limpa dos dados, contagem estimada de registros, geração automática de chave primária (`id INTEGER PRIMARY KEY AUTOINCREMENT`) e seleção direta do local de salvamento via diálogo nativo (`.db`).
+    - **Modo Desenvolvedor**: controle minucioso do esquema de colunas (edição de tipos, renomeação de campos, restrições `NOT NULL` e `PK`), visualização e customização do DDL SQL (`CREATE TABLE ...`) em tempo real, ajuste de transações em lote (*batch size* de 1.000 a 10.000 linhas) e ativação do modo WAL (*Write-Ahead Logging*).
+  - **Injeção de Alta Performance com Streaming de Progresso**:
+    - Transações SQLite em massa com otimização de PRAGMAs (`synchronous=OFF`, `journal_mode=MEMORY` e restauração segura para `WAL`), atingindo dezenas de milhares de inserções por segundo.
+    - Barra de progresso percentual, métricas em tempo real (linhas injetadas, velocidade em linhas/s, tempo decorrido) e console interativo com logs de transações para desenvolvedores.
+  - **Integração Direta com o Pulse DB Studio**: botão imediato ao finalizar para abrir e consultar o novo banco SQLite diretamente na interface do DB Studio, além de atalho para revelar o arquivo `.db` na pasta.
 - **Diálogo Nativo de Salvamento na Exportação do Pulse DB Studio**:
   - Ao clicar para exportar dados para **CSV** ou **JSON** no Pulse DB Studio, agora é aberta a janela nativa de diálogo de salvamento do sistema operacional (`ShowSaveFileDialog` via Wails runtime / `SaveFileDialog`).
   - O diálogo sugere automaticamente o nome do arquivo com base na tabela ativa (`<tabela>_export.<csv|json>`), a pasta do banco de dados inspecionado como diretório inicial padrão, e filtros de arquivo específicos (`*.csv` e `*.json`).
