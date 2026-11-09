@@ -6,6 +6,10 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Diálogo Nativo de Salvamento na Exportação do Pulse DB Studio**:
+  - Ao clicar para exportar dados para **CSV** ou **JSON** no Pulse DB Studio, agora é aberta a janela nativa de diálogo de salvamento do sistema operacional (`ShowSaveFileDialog` via Wails runtime / `SaveFileDialog`).
+  - O diálogo sugere automaticamente o nome do arquivo com base na tabela ativa (`<tabela>_export.<csv|json>`), a pasta do banco de dados inspecionado como diretório inicial padrão, e filtros de arquivo específicos (`*.csv` e `*.json`).
+  - Suporte resiliente com cancelamento limpo (não salva nada e não exibe erro se o usuário cancelar) e fallback automático para a File System Access API do navegador (`showSaveFilePicker`) ou download direto quando em ambiente web puro.
 - **Arrastar e Soltar (Drag & Drop) Fluido, Seguro e Funcional**:
   - Eliminação da causa raiz de travamentos e congelamentos (*freezes*): remoção do atributo `draggable` global do container de painel em `App.tsx`, que interceptava cliques de seleção de arquivos e causava auto-drops involuntários.
   - Implementação de arrastar e soltar granular em itens e linhas de pastas na visão detalhada (`DetailsView`), lista compacta, grade de cartões e colunas Miller (`AlternativeViews`).

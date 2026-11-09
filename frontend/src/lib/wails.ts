@@ -541,6 +541,7 @@ declare global {
           GetDrives: () => Promise<DriveInfo[]>;
           GetSetting: (key: string) => Promise<string>;
           SetSetting: (key: string, val: string) => Promise<void>;
+          ShowSaveFileDialog?: (opts: SaveFileDialogOptions) => Promise<string>;
         };
       };
     };
@@ -1049,6 +1050,22 @@ export async function writeTextFile(path: string, content: string): Promise<void
   if (isWailsAvailable() && typeof appObj?.WriteTextFile === 'function') {
     return window.go!.app.App.WriteTextFile(path, content);
   }
+}
+
+export interface SaveFileDialogOptions {
+  title?: string;
+  defaultDirectory?: string;
+  defaultFilename?: string;
+  filterDisplayName?: string;
+  filterPattern?: string;
+}
+
+export async function showSaveFileDialog(opts: SaveFileDialogOptions): Promise<string> {
+  const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
+  if (isWailsAvailable() && typeof appObj?.ShowSaveFileDialog === 'function') {
+    return await (appObj.ShowSaveFileDialog as (o: SaveFileDialogOptions) => Promise<string>)(opts);
+  }
+  return '';
 }
 
 export async function runStudioCommand(cwd: string, command: string): Promise<StudioRunResult> {

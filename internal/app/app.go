@@ -669,6 +669,46 @@ func (a *App) WriteTextFile(path string, content string) error {
 	return os.WriteFile(clean, []byte(content), mode)
 }
 
+type SaveFileDialogOptions struct {
+	Title             string `json:"title"`
+	DefaultDirectory  string `json:"defaultDirectory"`
+	DefaultFilename   string `json:"defaultFilename"`
+	FilterDisplayName string `json:"filterDisplayName"`
+	FilterPattern     string `json:"filterPattern"`
+}
+
+func (a *App) ShowSaveFileDialog(opts SaveFileDialogOptions) (string, error) {
+	if a.ctx == nil {
+		return "", errors.New("app context not initialized")
+	}
+
+	dialogOpts := runtime.SaveDialogOptions{
+		Title:                opts.Title,
+		DefaultDirectory:     opts.DefaultDirectory,
+		DefaultFilename:      opts.DefaultFilename,
+		CanCreateDirectories: true,
+	}
+
+	if opts.FilterPattern != "" {
+		displayName := opts.FilterDisplayName
+		if displayName == "" {
+			displayName = "Arquivos"
+		}
+		dialogOpts.Filters = []runtime.FileFilter{
+			{
+				DisplayName: displayName,
+				Pattern:     opts.FilterPattern,
+			},
+			{
+				DisplayName: "Todos os arquivos (*.*)",
+				Pattern:     "*.*",
+			},
+		}
+	}
+
+	return runtime.SaveFileDialog(a.ctx, dialogOpts)
+}
+
 type StudioRunResult struct {
 	Stdout     string `json:"stdout"`
 	Stderr     string `json:"stderr"`

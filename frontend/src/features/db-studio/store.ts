@@ -5,6 +5,8 @@ import {
   dbExecuteSQL,
   openDBStudioWindowNative,
   writeTextFile,
+  showSaveFileDialog,
+  isWailsAvailable,
   DBSchemaInfo,
   DBQueryResult,
 } from '../../lib/wails';
@@ -372,16 +374,66 @@ export const useDBStudioStore = create<DBStudioState>((set, get) => ({
 
     const baseDir = dbPath ? dbPath.replace(/[/\\][^/\\]+$/, '') : '';
     const safeTable = (activeTable || 'query_export').replace(/[^a-zA-Z0-9_-]/g, '_');
-    if (baseDir) {
-      const sep = dbPath.includes('\\') ? '\\' : '/';
-      const outPath = `${baseDir}${sep}${safeTable}_export.${ext}`;
+    const defaultFilename = `${safeTable}_export.${ext}`;
+
+    // 1. Tentar diálogo nativo do sistema operacional (Wails)
+    if (isWailsAvailable()) {
+      let chosenPath = '';
       try {
-        await writeTextFile(outPath, content);
-        set({ toastMessage: `Exportado para ${outPath}` });
+        chosenPath = await showSaveFileDialog({
+          title: format === 'csv' ? 'Salvar Exportação CSV' : 'Salvar Exportação JSON',
+          defaultDirectory: baseDir,
+          defaultFilename,
+          filterDisplayName: format === 'csv' ? 'Arquivos CSV (*.csv)' : 'Arquivos JSON (*.json)',
+          filterPattern: `*.${ext}`,
+        });
+      } catch (err) {
+        console.error('Erro ao abrir diálogo de salvamento:', err);
+      }
+
+      // Se o usuário cancelou o diálogo de seleção de arquivo
+      if (!chosenPath) {
+        return;
+      }
+
+      try {
+        await writeTextFile(chosenPath, content);
+        set({ toastMessage: `Exportado com sucesso para ${chosenPath}` });
+        setTimeout(() => set({ toastMessage: null }), 3500);
+      } catch (err) {
+        console.error('Falha ao salvar arquivo exportado:', err);
+        set({ toastMessage: `Erro ao exportar para ${chosenPath}` });
+        setTimeout(() => set({ toastMessage: null }), 3500);
+      }
+      return;
+    }
+
+    // 2. Fallback para navegador web (desenvolvimento / browser puro)
+    if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+      try {
+        const handle = await (window as unknown as {
+          showSaveFilePicker: (options: unknown) => Promise<{
+            createWritable: () => Promise<{ write: (data: string) => Promise<void>; close: () => Promise<void> }>;
+          }>;
+        }).showSaveFilePicker({
+          suggestedName: defaultFilename,
+          types: [
+            {
+              description: format === 'csv' ? 'Arquivo CSV (*.csv)' : 'Arquivo JSON (*.json)',
+              accept: {
+                [format === 'csv' ? 'text/csv' : 'application/json']: [`.${ext}`],
+              },
+            },
+          ],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        set({ toastMessage: `Exportado com sucesso` });
         setTimeout(() => set({ toastMessage: null }), 3500);
         return;
-      } catch {
-        // Fallback para download no navegador abaixo
+      } catch (pickerErr: unknown) {
+        if ((pickerErr as { name?: string })?.name === 'AbortError') return;
       }
     }
 
@@ -391,7 +443,7 @@ export const useDBStudioStore = create<DBStudioState>((set, get) => ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${safeTable}_export.${ext}`;
+    a.download = defaultFilename;
     a.click();
     URL.revokeObjectURL(url);
   },
