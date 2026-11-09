@@ -114,7 +114,7 @@
     "closeTab": "Fechar aba do terminal",
     "selectProfile": "Perfil padrão do terminal",
     "cdCurrentFolder": "Ir para a pasta atual",
-    "followOsc7": "Acompanhar pasta do terminal (OSC 7)",
+    "followOsc7": "Follow-up: Acompanhar navegação de pastas do terminal na aba ativa",
     "splitTerminal": "Dividir terminal lado a lado",
     "searchPlaceholder": "Buscar na saída do terminal (Ctrl+Shift+F)...",
     "clearOutput": "Limpar saída (Ctrl+L)",

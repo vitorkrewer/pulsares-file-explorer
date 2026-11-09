@@ -501,14 +501,26 @@ export const TerminalPanel: React.FC = () => {
     };
   }, [setPanelHeight]);
 
-  if (!visible) return null;
-
   const activeSession =
     sessions.find((s) => s.id === activeTabId) || sessions[0] || null;
   const splitSession =
     splitTabId && splitTabId !== activeSession?.id
       ? sessions.find((s) => s.id === splitTabId) || null
       : null;
+
+  useEffect(() => {
+    if (!followOsc7 || !activeSession?.cwd) return;
+    const targetCwd = activeSession.cwd.trim();
+    if (!targetCwd || targetCwd === '/') return;
+    const browserCur = useBrowserStore.getState().currentPath || '';
+    const normTerm = targetCwd.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const normBrowser = browserCur.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    if (normTerm && normTerm !== normBrowser) {
+      navigateTo(targetCwd);
+    }
+  }, [followOsc7, activeSession?.id, activeSession?.cwd, navigateTo]);
+
+  if (!visible) return null;
 
   return (
     <section
@@ -652,16 +664,47 @@ export const TerminalPanel: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setFollowOsc7(!followOsc7)}
-            title={t('terminal.followOsc7')}
+            onClick={() => {
+              const nextState = !followOsc7;
+              setFollowOsc7(nextState);
+              if (nextState && activeSession?.cwd && activeSession.cwd !== '/') {
+                const browserCur = useBrowserStore.getState().currentPath || '';
+                const normTerm = activeSession.cwd
+                  .replace(/\\/g, '/')
+                  .replace(/\/+$/, '')
+                  .toLowerCase();
+                const normBrowser = browserCur
+                  .replace(/\\/g, '/')
+                  .replace(/\/+$/, '')
+                  .toLowerCase();
+                if (normTerm && normTerm !== normBrowser) {
+                  navigateTo(activeSession.cwd);
+                }
+              }
+            }}
+            title={`${t('terminal.followOsc7')} — ${
+              followOsc7 ? 'Ativo (Aba ativa acompanha o terminal)' : 'Inativo'
+            }`}
+            aria-pressed={followOsc7}
             style={{
               ...termActionBtnStyle,
               borderColor: followOsc7 ? 'var(--accent-primary)' : 'var(--border-subtle)',
-              color: followOsc7 ? 'var(--accent)' : 'var(--text-secondary)',
+              backgroundColor: followOsc7 ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+              color: followOsc7 ? 'var(--accent-text)' : 'var(--text-secondary)',
+              fontWeight: followOsc7 ? 600 : 400,
             }}
           >
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '999px',
+                backgroundColor: followOsc7 ? '#22c55e' : 'var(--text-muted)',
+                display: 'inline-block',
+              }}
+            />
             <ArrowLeftRight size={12} />
-            <span>OSC7</span>
+            <span>Follow-up</span>
           </button>
 
           {sessions.length > 1 && (

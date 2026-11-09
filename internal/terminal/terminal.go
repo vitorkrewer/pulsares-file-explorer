@@ -386,6 +386,16 @@ func (s *Service) Write(id string, data []byte) error {
 		sess.mu.Lock()
 		sess.cwd = nextCwd
 		sess.mu.Unlock()
+
+		s.mu.RLock()
+		emit := s.emit
+		s.mu.RUnlock()
+		emit("terminal:data", DataEvent{
+			ID:      sess.id,
+			Chunk:   "",
+			RawLen:  0,
+			CwdOSC7: nextCwd,
+		})
 	}
 
 	_, err := stdin.Write(data)
@@ -394,20 +404,56 @@ func (s *Service) Write(id string, data []byte) error {
 
 func detectCdTarget(baseCwd string, rawInput string) string {
 	line := strings.TrimSpace(rawInput)
-	if line == "" || !strings.ContainsAny( rawInput, "\r\n") {
+	if line == "" || !strings.ContainsAny(rawInput, "\r\n") {
+		return ""
+	}
+	cur := baseCwd
+	segments := strings.FieldsFunc(line, func(r rune) bool {
+		return r == ';' || r == '\n' || r == '\r'
+	})
+	resolvedAny := false
+	for _, seg := range segments {
+		for _, sub := range strings.Split(seg, "&&") {
+			if next := detectSingleCdTarget(cur, sub); next != "" {
+				cur = next
+				resolvedAny = true
+			}
+		}
+	}
+	if resolvedAny {
+		return cur
+	}
+	return ""
+}
+
+func detectSingleCdTarget(baseCwd string, rawSegment string) string {
+	line := strings.TrimSpace(rawSegment)
+	if line == "" {
 		return ""
 	}
 	lower := strings.ToLower(line)
 	var arg string
 	switch {
+	case lower == "cd.." || lower == "..":
+		arg = ".."
+	case lower == "cd" || lower == "sl" || lower == "~":
+		arg = "~"
+	case len(lower) == 2 && lower[1] == ':' && lower[0] >= 'a' && lower[0] <= 'z':
+		arg = strings.ToUpper(line) + `\`
 	case strings.HasPrefix(lower, "cd /d "):
 		arg = strings.TrimSpace(line[6:])
 	case strings.HasPrefix(lower, "cd -- "):
 		arg = strings.TrimSpace(line[6:])
 	case strings.HasPrefix(lower, "cd "):
 		arg = strings.TrimSpace(line[3:])
+	case strings.HasPrefix(lower, "chdir "):
+		arg = strings.TrimSpace(line[6:])
+	case strings.HasPrefix(lower, "pushd "):
+		arg = strings.TrimSpace(line[6:])
 	case strings.HasPrefix(lower, "set-location -literalpath "):
 		arg = strings.TrimSpace(line[26:])
+	case strings.HasPrefix(lower, "set-location -path "):
+		arg = strings.TrimSpace(line[19:])
 	case strings.HasPrefix(lower, "set-location "):
 		arg = strings.TrimSpace(line[13:])
 	case strings.HasPrefix(lower, "sl "):
@@ -419,9 +465,13 @@ func detectCdTarget(baseCwd string, rawInput string) string {
 	if arg == "" {
 		return ""
 	}
-	if arg == "~" {
+	if arg == "~" || strings.HasPrefix(arg, "~/") || strings.HasPrefix(arg, `~\`) {
 		if home, err := os.UserHomeDir(); err == nil {
-			return home
+			if arg == "~" {
+				arg = home
+			} else {
+				arg = filepath.Join(home, arg[2:])
+			}
 		}
 	}
 	target := arg

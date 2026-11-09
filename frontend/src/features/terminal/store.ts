@@ -10,7 +10,106 @@ import {
   terminalHasRunningChildren,
   terminalChangeDir,
   terminalQuotePaths,
+  expandPath,
+  isDirectoryPath,
 } from '../../lib/wails';
+import { useBrowserStore } from '../browser/store';
+
+export function resolveClientCdCommand(baseCwd: string, rawInput: string): string {
+  const line = rawInput.trim();
+  if (!line || (!rawInput.includes('\n') && !rawInput.includes('\r'))) {
+    return '';
+  }
+
+  const isWin = baseCwd.includes('\\') || /^[A-Za-z]:/.test(baseCwd);
+  const sep = isWin ? '\\' : '/';
+
+  const resolveRelative = (cwd: string, targetArg: string): string => {
+    const cleanArg = targetArg.trim().replace(/^["']+|["']+$/g, '');
+    if (!cleanArg) return '';
+    if (cleanArg === '~' || cleanArg.startsWith('~/') || cleanArg.startsWith('~\\')) {
+      return cleanArg;
+    }
+    if (/^[A-Za-z]:[/\\]/.test(cleanArg)) {
+      return cleanArg.replace(/[/\\]+/g, sep).replace(new RegExp(`\\${sep}+$`), '') || `${cleanArg.slice(0, 2)}${sep}`;
+    }
+    if (/^[A-Za-z]:$/.test(cleanArg)) {
+      return `${cleanArg.toUpperCase()}${sep}`;
+    }
+    if (cleanArg.startsWith('/')) {
+      return cleanArg;
+    }
+    const cleanBase = (cwd || '').replace(/[/\\]+$/, '');
+    const parts = cleanBase ? cleanBase.split(/[/\\]/) : [];
+    const relParts = cleanArg.replace(/[/\\]+$/, '').split(/[/\\]/);
+    for (const p of relParts) {
+      if (!p || p === '.') continue;
+      if (p === '..') {
+        if (parts.length > 1) parts.pop();
+      } else if (p === '...') {
+        if (parts.length > 1) parts.pop();
+        if (parts.length > 1) parts.pop();
+      } else {
+        parts.push(p);
+      }
+    }
+    if (parts.length === 1 && /^[A-Za-z]:$/.test(parts[0])) {
+      return `${parts[0]}${sep}`;
+    }
+    return parts.join(sep) || (isWin ? `${parts[0] || 'C:'}\\` : '/');
+  };
+
+  const parseSegment = (cwd: string, seg: string): string => {
+    const s = seg.trim();
+    if (!s) return '';
+    const lower = s.toLowerCase();
+    let arg = '';
+    if (lower === 'cd..' || lower === '..') {
+      arg = '..';
+    } else if (lower === '...') {
+      arg = '...';
+    } else if (lower === 'cd' || lower === 'sl' || lower === '~') {
+      arg = '~';
+    } else if (/^[a-z]:$/i.test(s)) {
+      arg = `${s.toUpperCase()}\\`;
+    } else if (lower.startsWith('cd /d ')) {
+      arg = s.slice(6).trim();
+    } else if (lower.startsWith('cd -- ')) {
+      arg = s.slice(6).trim();
+    } else if (lower.startsWith('cd ')) {
+      arg = s.slice(3).trim();
+    } else if (lower.startsWith('chdir ')) {
+      arg = s.slice(6).trim();
+    } else if (lower.startsWith('pushd ')) {
+      arg = s.slice(6).trim();
+    } else if (lower.startsWith('set-location -literalpath ')) {
+      arg = s.slice(26).trim();
+    } else if (lower.startsWith('set-location -path ')) {
+      arg = s.slice(19).trim();
+    } else if (lower.startsWith('set-location ')) {
+      arg = s.slice(13).trim();
+    } else if (lower.startsWith('sl ')) {
+      arg = s.slice(3).trim();
+    } else {
+      return '';
+    }
+    return resolveRelative(cwd, arg);
+  };
+
+  let cur = baseCwd;
+  let changed = false;
+  const segments = line.split(/[;\r\n]+/);
+  for (const seg of segments) {
+    for (const sub of seg.split('&&')) {
+      const next = parseSegment(cur, sub);
+      if (next) {
+        cur = next;
+        changed = true;
+      }
+    }
+  }
+  return changed ? cur : '';
+}
 
 export interface TerminalTabSession {
   id: string;
@@ -157,7 +256,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
     sessions: [],
     activeTabId: null,
     splitTabId: null,
-    followOsc7: persisted.followOsc7 ?? false,
+    followOsc7: false,
     fontSize: persisted.fontSize ?? 13,
     scrollbackLines: persisted.scrollbackLines ?? 2000,
     searchOpen: false,
@@ -372,6 +471,31 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
       const sess = get().sessions.find((s) => s.id === tabId);
       if (!sess || sess.exited) return;
       await terminalWrite(sess.backendId, data);
+
+      const baseCwd =
+        sess.cwd && sess.cwd !== '/'
+          ? sess.cwd
+          : useBrowserStore.getState().currentPath || sess.cwd;
+      const candidate = resolveClientCdCommand(baseCwd, data);
+      if (candidate) {
+        try {
+          const expanded = await expandPath(candidate);
+          const targetPath = expanded || candidate;
+          if (await isDirectoryPath(targetPath)) {
+            set((prev) => ({
+              sessions: prev.sessions.map((s) =>
+                s.id === tabId ? { ...s, cwd: targetPath } : s
+              ),
+            }));
+            persistSnapshot();
+            if (get().followOsc7 && get().activeTabId === tabId) {
+              useBrowserStore.getState().navigateTo(targetPath);
+            }
+          }
+        } catch {
+          // ignora caminho inválido
+        }
+      }
     },
 
     setInputDraft: (tabId, draft) => {
@@ -401,6 +525,9 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
         sessions: prev.sessions.map((s) => (s.id === tabId ? { ...s, cwd: path } : s)),
       }));
       persistSnapshot();
+      if (get().followOsc7 && get().activeTabId === tabId && path) {
+        useBrowserStore.getState().navigateTo(path);
+      }
     },
 
     clearOutput: (tabId) => {
@@ -416,11 +543,13 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
     },
 
     handleBackendData: (backendId, chunkB64, rawLen, cwdOsc7) => {
-      const decoded = stripAnsiCodes(decodeBase64UTF8(chunkB64));
-      void terminalAck(backendId, rawLen);
+      const decoded = chunkB64 ? stripAnsiCodes(decodeBase64UTF8(chunkB64)) : '';
+      if (rawLen > 0) {
+        void terminalAck(backendId, rawLen);
+      }
 
       let promptCwd = cwdOsc7 || '';
-      if (!promptCwd) {
+      if (!promptCwd && decoded) {
         const psMatches = Array.from(decoded.matchAll(/PS\s+([A-Za-z]:\\[^\r\n>]+?)>/g));
         if (psMatches.length > 0) {
           promptCwd = psMatches[psMatches.length - 1][1].trim();
@@ -433,10 +562,14 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
       }
 
       const maxLines = get().scrollbackLines;
+      let isActiveSession = false;
       set((prev) => ({
         sessions: prev.sessions.map((s) => {
           if (s.backendId !== backendId) return s;
-          const combined = s.output + decoded;
+          if (s.id === prev.activeTabId) {
+            isActiveSession = true;
+          }
+          const combined = decoded ? s.output + decoded : s.output;
           const lines = combined.split('\n');
           const trimmed =
             lines.length > maxLines ? lines.slice(lines.length - maxLines).join('\n') : combined;
@@ -447,6 +580,10 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => {
           };
         }),
       }));
+
+      if (promptCwd && get().followOsc7 && isActiveSession) {
+        useBrowserStore.getState().navigateTo(promptCwd);
+      }
     },
 
     handleBackendExit: (backendId, exitCode) => {

@@ -6,6 +6,10 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Botão "Follow-up" no Terminal Integrado (Sincronização de Navegação com a Aba Ativa)**:
+  - Novo botão **Follow-up** na barra de ferramentas do Terminal Integrado (`TerminalPanel.tsx`), **desativado por padrão**.
+  - Quando ativado pelo usuário (indicador luminoso verde), conforme você navega pelas pastas no terminal (`cd`, `cd ..`, `cd /d`, `sl`, `Set-Location`, `pushd`, trocas de unidade `C:`/`D:`, prompts do PowerShell/CMD ou sequências `OSC 7`), a **aba ativa** do gerenciador de pastas (`useBrowserStore.navigateTo`) acompanha e navega automaticamente junto com o terminal em tempo real.
+  - Detecção dupla (cliente em `resolveClientCdCommand` + backend em `detectCdTarget` com emissão imediata de evento `terminal:data`), garantindo sincronização instantânea mesmo em shells que não emitem saída padrão ao executar `cd`.
 - **Menu de Contexto e Operações Completas em "Arquivos do Projeto" no Pulsares Studio Editor**:
   - Ao clicar com o botão direito do mouse sobre qualquer arquivo, pasta ou área vazia em **ARQUIVOS DO PROJETO**, abre um menu de contexto com todas as operações essenciais de desenvolvimento:
     - **Editar arquivo / Abrir pasta**: abre o arquivo na aba ativa do editor ou entra na pasta selecionada.

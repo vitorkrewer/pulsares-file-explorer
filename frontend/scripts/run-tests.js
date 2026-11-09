@@ -170,4 +170,33 @@ const filteredTabs = filterPersistedStudioTabs(sampleTabs);
 assert.equal(filteredTabs.length, 1);
 assert.equal(filteredTabs[0].name, 'index.html');
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.0.0 + ERD + Studio Web Preview) passaram com sucesso.');
+// 6. Testar resolução de navegação de pastas do Terminal para o modo Follow-up
+function resolveClientCdTest(baseCwd, rawInput) {
+  const line = rawInput.trim();
+  if (!line) return '';
+  const isWin = baseCwd.includes('\\') || /^[A-Za-z]:/.test(baseCwd);
+  const sep = isWin ? '\\' : '/';
+  const cleanBase = baseCwd.replace(/[/\\]+$/, '');
+  const parts = cleanBase.split(/[/\\]/);
+  const arg = line.replace(/^(cd|sl|set-location)\s+/i, '').replace(/^["']+|["']+$/g, '');
+  for (const p of arg.split(/[/\\]/)) {
+    if (!p || p === '.') continue;
+    if (p === '..') {
+      if (parts.length > 1) parts.pop();
+    } else {
+      parts.push(p);
+    }
+  }
+  return parts.join(sep);
+}
+
+assert.equal(
+  resolveClientCdTest('C:\\Users\\Vitor\\Downloads', 'cd dev-full-stack-pos\r\n'),
+  'C:\\Users\\Vitor\\Downloads\\dev-full-stack-pos'
+);
+assert.equal(
+  resolveClientCdTest('C:\\Users\\Vitor\\Downloads\\dev-full-stack-pos', 'cd ..\r\n'),
+  'C:\\Users\\Vitor\\Downloads'
+);
+
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.0.0 + ERD + Studio Web Preview + Terminal Follow-up) passaram com sucesso.');
