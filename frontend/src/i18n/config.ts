@@ -4,6 +4,7 @@ import { initReactI18next } from 'react-i18next';
 import ptBRCommon from './locales/pt-BR/common.json';
 import enCommon from './locales/en/common.json';
 import esCommon from './locales/es/common.json';
+import deCommon from './locales/de/common.json';
 
 const charMap: Record<string, string> = {
   a: 'ä', A: 'Ä', e: 'ë', E: 'Ë', i: 'ï', I: 'Ï',
@@ -55,6 +56,9 @@ const resources = {
   es: {
     common: esCommon,
   },
+  de: {
+    common: deCommon,
+  },
   pseudo: {
     common: pseudoCommon,
   },
@@ -72,6 +76,7 @@ export function resolveLanguage(sysLang?: string, prefLang?: string): string {
   const lower = sysLang.toLowerCase();
   if (lower.startsWith('pt')) return 'pt-BR';
   if (lower.startsWith('es')) return 'es';
+  if (lower.startsWith('de')) return 'de';
   if (lower.startsWith('en')) return 'en';
   return 'en'; // fallback padrão do projeto
 }
