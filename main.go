@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"pulsares-file-explorer/internal/app"
+	"pulsares-file-explorer/internal/platform"
 	"pulsares-file-explorer/internal/thumbs"
 )
 
@@ -45,18 +47,21 @@ func main() {
 	title := "Pulsares Explorer"
 	appID := "Pulsares.Explorer"
 	windowClass := "PulsaresExplorerWindow"
+	iconType := "explorer"
 
 	for _, arg := range os.Args[1:] {
 		if arg == "--studio" {
 			title = "Pulsares Studio Editor"
 			appID = "Pulsares.StudioEditor"
 			windowClass = "PulsaresStudioEditorWindow"
+			iconType = "studio"
 			break
 		}
 		if arg == "--dbstudio" {
 			title = "Pulsares DB Studio"
 			appID = "Pulsares.DBStudio"
 			windowClass = "PulsaresDBStudioWindow"
+			iconType = "dbstudio"
 			break
 		}
 	}
@@ -75,8 +80,11 @@ func main() {
 			Handler: localMediaHandler(),
 		},
 		BackgroundColour: &options.RGBA{R: 24, G: 24, B: 27, A: 1},
-		OnStartup:        explorerApp.Startup,
-		OnShutdown:       explorerApp.Shutdown,
+		OnStartup: func(ctx context.Context) {
+			platform.ApplyWindowIcon(windowClass, iconType)
+			explorerApp.Startup(ctx)
+		},
+		OnShutdown: explorerApp.Shutdown,
 		Windows: &windows.Options{
 			WindowClassName: windowClass,
 		},
@@ -89,3 +97,4 @@ func main() {
 		println("Error:", err.Error())
 	}
 }
+

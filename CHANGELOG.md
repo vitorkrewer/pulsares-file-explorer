@@ -6,12 +6,15 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
-- **Ícones Dedicados e Distinção de Janelas na Barra de Tarefas**:
-  - Criação de ícones oficiais padronizados com o fundo gradiente azul clássico do Pulsares Explorer (`#2563eb` a `#4f46e5`) para cada módulo autônomo:
-    - **Pulse DB Studio**: ícone com símbolo de cilindro/banco de dados SQLite em branco com cantos arredondados (`favicon-dbstudio.svg`).
-    - **Pulsares Studio Editor**: ícone com símbolo de código `< / >` em branco com cantos arredondados (`favicon-studio.svg`).
-  - Distinção nativa de processos na barra de tarefas do Windows: integração com a Win32 API (`SetCurrentProcessExplicitAppUserModelID`) no executável Go (`main.go`), atribuindo `AppUserModelID` (`Pulsares.Explorer`, `Pulsares.DBStudio`, `Pulsares.StudioEditor`) e `WindowClassName` independentes para cada janela. Isso impede que o Windows agrupe ou confunda os botões na barra de tarefas, permitindo alternar livremente entre Explorer, DB Studio e Editor com ícones distintos.
-  - Atualização dos emblemas de identificação nas barras de título frameless de ambos os utilitários e troca dinâmica de favicons na inicialização de cada janela autônoma.
+- **Ícones Nativos Dedicados e Distinção Visual na Barra de Tarefas do Windows**:
+  - Geração de pacotes de ícones `.ico` e `.png` multi-resolução (16x16 até 256x256 com High-DPI) padronizados com o gradiente azul clássico do Pulsares (`#2563eb` a `#4f46e5`), squircle com cantos arredondados, iluminação interna e sombra suave:
+    - **Pulsares Explorer**: ícone da pasta branca moderna.
+    - **Pulse DB Studio**: ícone do cilindro de banco de dados SQLite em branco (`build/windows/icon-dbstudio.ico` e `favicon-dbstudio.svg`).
+    - **Pulsares Studio Editor**: ícone com os símbolos de código `< / >` em branco (`build/windows/icon-studio.ico` e `favicon-studio.svg`).
+  - **Injeção de Ícone Nativo em Janelas Win32 (`internal/platform/window_icon_windows.go`)**:
+    - Integração de inicialização via `WM_SETICON` (`ICON_BIG` e `ICON_SMALL`) e `SetClassLongPtrW` (`GCLP_HICON` e `GCLP_HICONSM`) no runtime Go (`main.go`).
+    - Identificação precisa da janela pelo identificador de classe (`WindowClassName`) e PID do processo com carregamento automático de `HICON` nativo via `LoadImageW` (`LR_LOADFROMFILE`).
+    - Atribuição de `AppUserModelID` dedicado (`Pulsares.Explorer`, `Pulsares.DBStudio`, `Pulsares.StudioEditor`) impedindo o agrupamento incorreto no Windows e garantindo que cada botão na barra de tarefas exiba seu respectivo ícone individualizado e nítido.
 - **Janelas Independentes e Autônomas para o Pulse DB Studio e Pulsares Studio Editor**:
   - Restauração e reforço estrito da arquitetura desacoplada: tanto o **Pulse DB Studio** quanto o **Pulsares Studio Editor** operam exclusivamente como janelas independentes do sistema operacional, nunca acoplados ou sobrepostos aos arquivos do Pulsares Explorer.
   - O store de ambos os módulos mantém `preferSeparateWindow: true` por padrão, acionando as APIs nativas (`OpenDBStudioWindow` e `OpenStudioWindow`) que invocam os processos frameless autônomos (`--dbstudio` e `--studio`) com controles nativos de janela (minimizar, maximizar e fechar).
