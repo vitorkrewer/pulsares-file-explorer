@@ -336,6 +336,10 @@ func (s *Service) ReadPreview(path string, maxTextBytes int) (PreviewData, error
 	case ext == "md" || ext == "markdown":
 		data.Kind = PreviewMarkdown
 		data.MimeType = "text/markdown"
+	case ext == "html" || ext == "htm":
+		data.Kind = PreviewCode
+		data.MimeType = "text/html"
+		data.DataURI = LocalProjectURL(path)
 	case isCodeExt(ext):
 		data.Kind = PreviewCode
 		data.MimeType = "text/plain"

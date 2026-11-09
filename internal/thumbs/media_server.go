@@ -1,6 +1,7 @@
 package thumbs
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,7 +19,7 @@ var (
 )
 
 // ensureMediaServer inicia (uma única vez) um servidor HTTP local em 127.0.0.1:0 dedicado ao streaming
-// de vídeos, áudios e PDFs grandes via TCP real (206 Partial Content), contornando o buffer em memória
+// de vídeos, áudios, PDFs e projetos web locais via TCP real, contornando o buffer em memória
 // do WebResourceRequested (ICoreWebView2WebResourceResponse) do Wails no Windows.
 func ensureMediaServer() string {
 	mediaServerOnce.Do(func() {
@@ -28,6 +29,7 @@ func ensureMediaServer() string {
 		}
 		mux := http.NewServeMux()
 		mux.HandleFunc("/__localmedia", ServeLocalMediaHTTP)
+		mux.HandleFunc("/__project/", ServeLocalMediaHTTP)
 		srv := &http.Server{
 			Handler: mux,
 		}
@@ -48,7 +50,20 @@ func LocalMediaURL(path string) string {
 	return "/__localmedia?path=" + escaped
 }
 
-// ServeLocalMediaHTTP serve arquivos locais de mídia e PDF via HTTP Range Requests (206 Partial Content).
+// LocalProjectURL retorna a URL de servidor web local para um arquivo HTML e seus recursos irmãos (CSS, JS, imagens).
+func LocalProjectURL(filePath string) string {
+	clean := filepath.Clean(filePath)
+	dir := filepath.Dir(clean)
+	baseName := filepath.Base(clean)
+	b64Dir := base64.RawURLEncoding.EncodeToString([]byte(dir))
+	relEscaped := url.PathEscape(baseName)
+	if base := ensureMediaServer(); base != "" {
+		return base + "/__project/" + b64Dir + "/" + relEscaped
+	}
+	return "/__project/" + b64Dir + "/" + relEscaped
+}
+
+// ServeLocalMediaHTTP serve arquivos locais de mídia, PDF e ativos de projetos web (/ __project /).
 // Funciona tanto no servidor TCP de loopback (127.0.0.1) quanto como fallback no AssetServer do Wails.
 func ServeLocalMediaHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -58,6 +73,11 @@ func ServeLocalMediaHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/__project/") {
+		serveLocalProjectAsset(w, r)
 		return
 	}
 
@@ -100,6 +120,88 @@ func ServeLocalMediaHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+func serveLocalProjectAsset(w http.ResponseWriter, r *http.Request) {
+	trimmed := strings.TrimPrefix(r.URL.Path, "/__project/")
+	slashIdx := strings.IndexByte(trimmed, '/')
+	if slashIdx <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	b64Dir := trimmed[:slashIdx]
+	relPart := trimmed[slashIdx+1:]
+
+	decodedDir, err := base64.RawURLEncoding.DecodeString(b64Dir)
+	if err != nil {
+		decodedDir, err = base64.StdEncoding.DecodeString(b64Dir)
+		if err != nil {
+			http.Error(w, "invalid project dir encoding", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if unescaped, err := url.PathUnescape(relPart); err == nil {
+		relPart = unescaped
+	}
+
+	baseDir := filepath.Clean(string(decodedDir))
+	if relPart == "" || relPart == "/" {
+		relPart = "index.html"
+	}
+	targetPath := filepath.Clean(filepath.Join(baseDir, filepath.FromSlash(relPart)))
+
+	info, err := os.Stat(targetPath)
+	if err == nil && info.IsDir() {
+		targetPath = filepath.Join(targetPath, "index.html")
+		info, err = os.Stat(targetPath)
+	}
+	if err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+
+	f, err := os.Open(targetPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(targetPath), "."))
+	if mimeType := webAssetMime(ext); mimeType != "" {
+		w.Header().Set("Content-Type", mimeType)
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+func webAssetMime(ext string) string {
+	switch ext {
+	case "html", "htm":
+		return "text/html; charset=utf-8"
+	case "css":
+		return "text/css; charset=utf-8"
+	case "js", "mjs", "cjs":
+		return "application/javascript; charset=utf-8"
+	case "json", "map":
+		return "application/json; charset=utf-8"
+	case "svg":
+		return "image/svg+xml"
+	case "wasm":
+		return "application/wasm"
+	case "woff2":
+		return "font/woff2"
+	case "woff":
+		return "font/woff"
+	case "ttf":
+		return "font/ttf"
+	case "otf":
+		return "font/otf"
+	case "ico":
+		return "image/x-icon"
+	}
+	return mediaOrDocMime(ext)
 }
 
 func clampOpenRangeHeader(r *http.Request, fileSize int64, maxChunk int64) {

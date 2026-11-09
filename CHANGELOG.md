@@ -6,6 +6,29 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Menu de Contexto e Operações Completas em "Arquivos do Projeto" no Pulsares Studio Editor**:
+  - Ao clicar com o botão direito do mouse sobre qualquer arquivo, pasta ou área vazia em **ARQUIVOS DO PROJETO**, abre um menu de contexto com todas as operações essenciais de desenvolvimento:
+    - **Editar arquivo / Abrir pasta**: abre o arquivo na aba ativa do editor ou entra na pasta selecionada.
+    - **Novo arquivo...**: cria o arquivo em disco (com seletor rápido de extensões `.html`, `.css`, `.js`, `.ts`, `.tsx`, `.json`, `.md`, `.py`, `.go`, `.sql`) e já o abre imediatamente para edição.
+    - **Nova pasta...**: cria diretórios e subpastas diretamente na árvore do projeto.
+    - **Renomear (`F2`)**: renomeia arquivos e pastas em disco sincronizando automaticamente o caminho, nome e linguagem das abas abertas no Studio (`syncTabAfterPathChange`).
+    - **Mover para... (Modal, Recortar/Colar e Drag & Drop)**: permite mover arquivos ou pastas selecionando subpastas do projeto, subindo para a pasta pai (`..`), recortando/colando pelo menu de contexto ou arrastando e soltando diretamente sobre pastas na lista lateral.
+    - **Duplicar arquivo**: cria uma cópia imediata (`*-copia.ext`) na mesma pasta e abre no editor.
+    - **Excluir (`Delete` / Lixeira ou Exclusão Permanente)**: envia para a Lixeira ou exclui permanentemente com diálogo de confirmação e fechamento automático de abas associadas (`closeTabsForDeletedPath`).
+    - **Botões rápidos no cabeçalho**: atalhos diretos para **Novo Arquivo**, **Nova Pasta** e **Atualizar Lista** no topo de `ARQUIVOS DO PROJETO`.
+- **Abertura Direta de Pastas de Projeto no Pulsares Studio Editor (Sem Criar Rascunhos `sem-titulo.md`)**:
+  - Ao clicar em **"Abrir Pulsares Studio Editor"** no menu de contexto de uma pasta (ou no fundo da pasta atual) ou no botão da barra de ferramentas, o Pulsares Studio abre diretamente a pasta selecionada como projeto (`workspaceDir`) sem criar arquivos `sem-titulo-1.md` ou `sem-titulo-2.md` do zero.
+  - Descarte automático de abas de rascunho vazias (`sem-titulo-*` sem caminho e sem conteúdo) ao restaurar sessão do `localStorage`.
+  - Seleção inteligente do arquivo de entrada do projeto (`index.html`, `README.md`, `main.tsx`, `main.go`, `package.json`, etc.) ao abrir uma pasta no editor.
+  - Suporte completo na IPC e argumentos CLI (`--studio <pasta>`) para abrir diretórios diretamente na janela independente do Pulsares Studio Editor.
+- **Prévia Web Conectada em Tempo Real (HTML + CSS + JS + Imagens Locais)**:
+  - **Servidor HTTP Local de Ativos de Projeto (`/__project/<base64_dir>/<relPath>`)**: nova rota em `internal/thumbs/media_server.go` capaz de servir folhas de estilo, scripts ES/JS, imagens, ícones SVG e fontes de projetos web locais com cabeçalhos MIME e CORS apropriados.
+  - **Conector em Tempo Real no Pulsares Studio Editor (`buildConnectedWebPreviewDoc`)**:
+    - Injeta automaticamente `<base href="...">` apontando para o servidor de projeto local e substitui `<link rel="stylesheet" href="...">` e `<script src="..."></script>` locais pelo conteúdo ao vivo das abas abertas e dos arquivos irmãos da pasta (`style.css`, `matrizes.js`, `tech-effects.js`, etc.).
+    - Permite visualizar a página `index.html` renderizada na Prévia em Tempo Real mesmo enquanto o desenvolvedor está editando a aba `style.css` ou `matrizes.js` da mesma pasta.
+    - Habilitação de `sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"` no iframe de prévia para execução fiel de animações, bibliotecas externas (Anime.js, Xterm.js, FontAwesome, Google Fonts) e scripts do projeto.
+  - **Prévia Web Renderizada no Painel de Prévia do Pulsares Explorer (`PreviewPanel.tsx`)**:
+    - Ao selecionar um arquivo `.html`/`.htm` e abrir a Prévia, exibe por padrão a página web totalmente estilizada e conectada aos arquivos `.css` e `.js` da pasta, com seletor rápido para alternar entre **"Prévia Web Renderizada"** e **"Código HTML"**.
 - **Mapa de Entidade-Relacionamento (ERD / Diagrama Interativo no Estilo React Flow) no Pulse DB Studio**:
   - Nova aba dedicada **"Mapa ER (Diagrama)"** na barra de ferramentas superior do DB Studio para visualização interativa do grafo de entidades e chaves do banco de dados.
   - **Mapeamento e Extração de Chaves no SQLite (`internal/app/app.go`)**:

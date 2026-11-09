@@ -36,6 +36,13 @@ import {
   WrapText,
   Table2,
   Trash2,
+  FilePlus,
+  FolderPlus,
+  Pencil,
+  FolderInput,
+  Scissors,
+  ClipboardPaste,
+  Files,
 } from 'lucide-react';
 import {
   useEditorStore,
@@ -53,6 +60,13 @@ import { useBrowserStore } from '../browser/store';
 import {
   Entry,
   listDirectorySnapshot,
+  readTextFile,
+  writeTextFile,
+  createFile,
+  createFolder,
+  renameItem,
+  runOperationAndWait,
+  revealInSystemExplorer,
   subscribeEvent,
   StudioOpenFileEvent,
   windowMinimize,
@@ -60,6 +74,112 @@ import {
   windowClose,
 } from '../../lib/wails';
 import { FileTypeIcon } from '../../ui/FileTypeIcon';
+
+function encodeBase64Url(str: string): string {
+  try {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    bytes.forEach((b) => (bin += String.fromCharCode(b)));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function normalizeRelativeAssetRef(ref: string): string {
+  return ref
+    .trim()
+    .replace(/^[./\\]+/, '')
+    .split(/[?#]/)[0]
+    .toLowerCase();
+}
+
+function isExternalOrDataUrl(ref: string): boolean {
+  const trimmed = ref.trim().toLowerCase();
+  return (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('//') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  );
+}
+
+export function buildConnectedWebPreviewDoc(
+  rawHtml: string,
+  projectDir: string,
+  siblingFilesMap: Record<string, string>,
+  openTabs: EditorTab[]
+): string {
+  const assetContent = new Map<string, string>();
+  Object.entries(siblingFilesMap).forEach(([fileName, content]) => {
+    assetContent.set(normalizeRelativeAssetRef(fileName), content);
+  });
+
+  openTabs.forEach((t) => {
+    if (t.name) {
+      assetContent.set(normalizeRelativeAssetRef(t.name), t.content);
+    }
+    if (t.path && projectDir) {
+      const cleanBase = projectDir.replace(/[\\/]+$/, '');
+      if (t.path.toLowerCase().startsWith(cleanBase.toLowerCase())) {
+        const rel = t.path.slice(cleanBase.length).replace(/^[/\\]+/, '');
+        if (rel) {
+          assetContent.set(normalizeRelativeAssetRef(rel), t.content);
+        }
+      }
+    }
+  });
+
+  let html = rawHtml;
+
+  // 1. Injeta <base href="/__project/<b64>/"> para resolver imagens, fontes, subpastas e recursos relativos via servidor local
+  if (projectDir && typeof window !== 'undefined') {
+    const b64 = encodeBase64Url(projectDir);
+    if (b64) {
+      const baseTag = `<base href="${window.location.origin}/__project/${b64}/" />`;
+      if (/<head[^>]*>/i.test(html)) {
+        html = html.replace(/<head([^>]*)>/i, `<head$1>\n  ${baseTag}`);
+      } else {
+        html = `${baseTag}\n${html}`;
+      }
+    }
+  }
+
+  // 2. Substitui <link ... rel="stylesheet" ... href="..."> locais pelo conteúdo CSS conectado em tempo real
+  html = html.replace(/<link\b[^>]*>/gi, (fullTag) => {
+    if (!/rel\s*=\s*["']?stylesheet["']?/i.test(fullTag)) return fullTag;
+    const hrefMatch = fullTag.match(/href\s*=\s*["']([^"']+)["']/i);
+    if (!hrefMatch) return fullTag;
+    const href = hrefMatch[1];
+    if (isExternalOrDataUrl(href)) return fullTag;
+    const key = normalizeRelativeAssetRef(href);
+    const baseKey = key.split(/[/\\]/).pop() || key;
+    const css = assetContent.get(key) ?? assetContent.get(baseKey);
+    if (css !== undefined) {
+      return `<style data-pulsares-source="${href}">\n${css}\n</style>`;
+    }
+    return fullTag;
+  });
+
+  // 3. Substitui <script ... src="..."></script> locais pelo conteúdo JS conectado em tempo real
+  html = html.replace(/<script\b([^>]*)>\s*<\/script>/gi, (fullTag, attrs: string) => {
+    const srcMatch = attrs.match(/src\s*=\s*["']([^"']+)["']/i);
+    if (!srcMatch) return fullTag;
+    const src = srcMatch[1];
+    if (isExternalOrDataUrl(src)) return fullTag;
+    const key = normalizeRelativeAssetRef(src);
+    const baseKey = key.split(/[/\\]/).pop() || key;
+    const js = assetContent.get(key) ?? assetContent.get(baseKey);
+    if (js !== undefined) {
+      const cleanAttrs = attrs.replace(/src\s*=\s*["'][^"']+["']/i, '').trim();
+      return `<script ${cleanAttrs} data-pulsares-source="${src}">\n${js}\n</script>`;
+    }
+    return fullTag;
+  });
+
+  return html;
+}
 
 interface SnippetItem {
   label: string;
@@ -473,10 +593,13 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
     runnerResult,
     statusMessage,
     openFileInEditor,
+    openFolderInEditor,
     openNewUntitledTab,
     detachToSeparateWindow,
     closeTab,
     closeOtherTabs,
+    syncTabAfterPathChange,
+    closeTabsForDeletedPath,
     togglePinTab,
     setActiveTab,
     updateTabContent,
@@ -503,6 +626,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
     setFindBarOpen,
     setRunnerOpen,
     setRunnerCommand,
+    setStatusMessage,
   } = useEditorStore();
 
   const { currentPath, refresh } = useBrowserStore();
@@ -532,7 +656,30 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
 
   // Explorador lateral do projeto dentro do Studio
   const [workspaceEntries, setWorkspaceEntries] = useState<Entry[]>([]);
+  const [siblingWebFiles, setSiblingWebFiles] = useState<Record<string, string>>({});
   const [workspaceFilter, setWorkspaceFilter] = useState('');
+  const [selectedProjectEntryPath, setSelectedProjectEntryPath] = useState<string>('');
+  const [projectCtxMenu, setProjectCtxMenu] = useState<{
+    x: number;
+    y: number;
+    entry: Entry | null;
+  } | null>(null);
+  const [studioFileClipboard, setStudioFileClipboard] = useState<{
+    path: string;
+    name: string;
+    mode: 'copy' | 'cut';
+  } | null>(null);
+  const [projectModal, setProjectModal] = useState<{
+    kind: 'newFile' | 'newFolder' | 'rename' | 'move' | 'delete';
+    targetDir: string;
+    entry: Entry | null;
+    inputValue: string;
+    error: string | null;
+    busy: boolean;
+  } | null>(null);
+  const [draggedProjectEntry, setDraggedProjectEntry] = useState<Entry | null>(null);
+  const [dropTargetFolderPath, setDropTargetFolderPath] = useState<string | null>(null);
+
   const [regexTestPattern, setRegexTestPattern] = useState('');
   const [studioMinHovered, setStudioMinHovered] = useState(false);
   const [studioMaxHovered, setStudioMaxHovered] = useState(false);
@@ -542,10 +689,62 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
   const [csvSortAsc, setCsvSortAsc] = useState(true);
   const [jsonFilterQuery, setJsonFilterQuery] = useState('');
 
-  const effectiveWorkspace = workspaceDir || currentPath || '/';
-
   const activeTab: EditorTab | null =
     tabs.find((t) => t.id === activeTabId) || tabs[0] || null;
+
+  const activeTabParentDir = useMemo(() => {
+    if (activeTab?.path) {
+      return activeTab.path.replace(/[/\\][^/\\]+$/, '');
+    }
+    return '';
+  }, [activeTab?.path]);
+
+  const effectiveWorkspace = workspaceDir || activeTabParentDir || currentPath || '/';
+
+  const activeProjectDir = useMemo(() => {
+    if (activeTabParentDir) return activeTabParentDir;
+    return effectiveWorkspace;
+  }, [activeTabParentDir, effectiveWorkspace]);
+
+  // Documento HTML conectado para a Prévia em Tempo Real (une HTML + CSS + JS locais da pasta e das abas)
+  const connectedWebPreview = useMemo(() => {
+    if (!activeTab) return null;
+    if (activeTab.language === 'html') {
+      return {
+        isWebProject: true,
+        doc: buildConnectedWebPreviewDoc(
+          activeTab.content,
+          activeProjectDir,
+          siblingWebFiles,
+          tabs
+        ),
+      };
+    }
+    if (activeTab.language === 'css' || activeTab.language === 'javascript') {
+      // Se houver um index.html aberto nas abas ou na pasta do projeto, permite visualizar a prévia web conectada!
+      const openHtmlTab = tabs.find(
+        (t) =>
+          t.language === 'html' &&
+          (!t.path || t.path.toLowerCase().startsWith(activeProjectDir.toLowerCase()))
+      );
+      const htmlSource =
+        openHtmlTab?.content ||
+        siblingWebFiles['index.html'] ||
+        siblingWebFiles['index.htm'];
+      if (htmlSource) {
+        return {
+          isWebProject: true,
+          doc: buildConnectedWebPreviewDoc(
+            htmlSource,
+            activeProjectDir,
+            siblingWebFiles,
+            tabs
+          ),
+        };
+      }
+    }
+    return null;
+  }, [activeTab, activeProjectDir, siblingWebFiles, tabs]);
 
   const parsedCsv = useMemo(() => {
     if (!activeTab || activeTab.language !== 'csv') return null;
@@ -637,28 +836,311 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
     openNewUntitledTab,
   ]);
 
-  // Carrega arquivos da pasta do projeto quando a aba lateral 'files' estiver aberta
+  const showFlashStatus = (msg: string) => {
+    setStatusMessage(msg);
+    setTimeout(() => {
+      if (useEditorStore.getState().statusMessage === msg) {
+        setStatusMessage(null);
+      }
+    }, 3200);
+  };
+
+  const reloadWorkspaceEntries = React.useCallback(
+    async (customDir?: string) => {
+      const targetDir = customDir || effectiveWorkspace;
+      if (!targetDir) return;
+      try {
+        const items = await listDirectorySnapshot(targetDir, false);
+        const sorted = [...items].sort((a, b) => {
+          if (a.kind === 'dir' && b.kind !== 'dir') return -1;
+          if (a.kind !== 'dir' && b.kind === 'dir') return 1;
+          return a.name.localeCompare(b.name);
+        });
+        setWorkspaceEntries(sorted);
+
+        // Auto-saneamento: se alguma aba aberta tiver como caminho exatamente uma pasta, remove a aba fantasma e abre a pasta corretamente
+        const dirPathMap = new Map<string, string>();
+        dirPathMap.set(
+          targetDir.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase(),
+          targetDir
+        );
+        sorted.forEach((it) => {
+          if (it.kind === 'dir') {
+            dirPathMap.set(
+              it.location.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase(),
+              it.location.path
+            );
+          }
+        });
+        const currentTabs = useEditorStore.getState().tabs;
+        let folderToRecover = '';
+        currentTabs.forEach((t) => {
+          if (!t.path) return;
+          const normT = t.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+          const matchedFolder = dirPathMap.get(normT);
+          if (matchedFolder) {
+            closeTab(t.id);
+            folderToRecover = matchedFolder;
+          }
+        });
+        if (folderToRecover && folderToRecover !== targetDir) {
+          void openFolderInEditor(folderToRecover, true);
+          return;
+        }
+
+        const webDir = activeProjectDir || targetDir;
+        const webItems =
+          webDir === targetDir ? sorted : await listDirectorySnapshot(webDir, false);
+        const webFiles = webItems.filter(
+          (it) =>
+            it.kind !== 'dir' &&
+            /\.(html?|css|m?js)$/i.test(it.name) &&
+            (it.size === undefined || it.size <= 2 * 1024 * 1024)
+        );
+        if (webFiles.length > 0) {
+          const pairs = await Promise.all(
+            webFiles.map(async (wf) => {
+              try {
+                const res = await readTextFile(wf.location.path);
+                return [wf.name, res.content] as const;
+              } catch {
+                return null;
+              }
+            })
+          );
+          const nextMap: Record<string, string> = {};
+          pairs.forEach((p) => {
+            if (p) nextMap[p[0]] = p[1];
+          });
+          setSiblingWebFiles(nextMap);
+        } else {
+          setSiblingWebFiles({});
+        }
+      } catch {
+        // ignora pasta inacessível
+      }
+    },
+    [effectiveWorkspace, activeProjectDir]
+  );
+
+  // Carrega arquivos da pasta do projeto e ativos web irmãos (.html, .css, .js) para conectar na Prévia
   useEffect(() => {
-    if ((!isOpen && !isDedicatedWindow) || sidebarTab !== 'files' || !effectiveWorkspace) return;
-    void listDirectorySnapshot(effectiveWorkspace, false).then((items) => {
-      const sorted = [...items].sort((a, b) => {
-        if (a.kind === 'dir' && b.kind !== 'dir') return -1;
-        if (a.kind !== 'dir' && b.kind === 'dir') return 1;
-        return a.name.localeCompare(b.name);
-      });
-      setWorkspaceEntries(sorted);
-    });
-  }, [isOpen, isDedicatedWindow, sidebarTab, effectiveWorkspace]);
+    if ((!isOpen && !isDedicatedWindow) || !effectiveWorkspace) return;
+    void reloadWorkspaceEntries(effectiveWorkspace);
+  }, [isOpen, isDedicatedWindow, effectiveWorkspace, activeProjectDir, reloadWorkspaceEntries]);
+
+  // Fecha o menu de contexto de Arquivos do Projeto ao clicar fora ou pressionar Escape
+  useEffect(() => {
+    if (!projectCtxMenu) return;
+    const onDown = () => setProjectCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setProjectCtxMenu(null);
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [projectCtxMenu]);
+
+  const joinProjectPath = (baseDir: string, childName: string): string => {
+    const cleanBase = baseDir.replace(/[\\/]+$/, '');
+    const sep = cleanBase.includes('\\') ? '\\' : '/';
+    return `${cleanBase}${sep}${childName.replace(/^[/\\]+/, '')}`;
+  };
+
+  const handleMoveProjectEntryDirect = async (srcEntry: Entry, destDir: string) => {
+    const cleanSrc = srcEntry.location.path.replace(/[\\/]+$/, '');
+    const cleanDest = destDir.replace(/[\\/]+$/, '');
+    if (!cleanSrc || !cleanDest) return;
+    const srcParent = cleanSrc.replace(/[/\\][^/\\]+$/, '');
+    if (srcParent.toLowerCase() === cleanDest.toLowerCase()) {
+      showFlashStatus('O item já está nesta pasta.');
+      return;
+    }
+    if (
+      srcEntry.kind === 'dir' &&
+      (cleanDest.toLowerCase() === cleanSrc.toLowerCase() ||
+        cleanDest.toLowerCase().startsWith(`${cleanSrc.toLowerCase()}\\`) ||
+        cleanDest.toLowerCase().startsWith(`${cleanSrc.toLowerCase()}/`))
+    ) {
+      showFlashStatus('Não é possível mover uma pasta para dentro dela mesma.');
+      return;
+    }
+    try {
+      await runOperationAndWait('move', [cleanSrc], cleanDest, 'rename');
+      const expectedNewPath = joinProjectPath(cleanDest, srcEntry.name);
+      syncTabAfterPathChange(cleanSrc, expectedNewPath);
+      await reloadWorkspaceEntries();
+      if (!isDedicatedWindow) void refresh();
+      showFlashStatus(`Movido: ${srcEntry.name} → ${cleanDest.split(/[/\\]/).pop() || cleanDest}`);
+    } catch (err) {
+      showFlashStatus(
+        `Não foi possível mover: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  };
+
+  const handleDuplicateProjectFile = async (entry: Entry) => {
+    if (entry.kind === 'dir') return;
+    try {
+      const parentDir =
+        entry.location.path.replace(/[/\\][^/\\]+$/, '') || effectiveWorkspace;
+      const dotIdx = entry.name.lastIndexOf('.');
+      const stem = dotIdx > 0 ? entry.name.slice(0, dotIdx) : entry.name;
+      const ext = dotIdx > 0 ? entry.name.slice(dotIdx) : '';
+      let candidateName = `${stem}-copia${ext}`;
+      const existingNames = new Set(workspaceEntries.map((e) => e.name.toLowerCase()));
+      let seq = 2;
+      while (existingNames.has(candidateName.toLowerCase())) {
+        candidateName = `${stem}-copia-${seq}${ext}`;
+        seq++;
+      }
+      const sourcePayload = await readTextFile(entry.location.path);
+      const createdPath = await createFile(parentDir, candidateName);
+      if (sourcePayload.content) {
+        await writeTextFile(createdPath, sourcePayload.content);
+      }
+      await reloadWorkspaceEntries();
+      if (!isDedicatedWindow) void refresh();
+      await openFileInEditor(createdPath, true);
+      showFlashStatus(`Arquivo duplicado: ${candidateName}`);
+    } catch (err) {
+      showFlashStatus(
+        `Não foi possível duplicar: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  };
+
+  const handlePasteProjectEntry = async (targetDir: string) => {
+    if (!studioFileClipboard || !targetDir) return;
+    const { path: srcPath, name: srcName, mode } = studioFileClipboard;
+    try {
+      const kind = mode === 'cut' ? 'move' : 'copy';
+      await runOperationAndWait(kind, [srcPath], targetDir, 'rename');
+      if (mode === 'cut') {
+        const expectedNewPath = joinProjectPath(targetDir, srcName);
+        syncTabAfterPathChange(srcPath, expectedNewPath);
+        setStudioFileClipboard(null);
+      }
+      await reloadWorkspaceEntries();
+      if (!isDedicatedWindow) void refresh();
+      showFlashStatus(
+        mode === 'cut' ? `Movido: ${srcName}` : `Copiado: ${srcName}`
+      );
+    } catch (err) {
+      showFlashStatus(
+        `Não foi possível colar: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  };
+
+  const handleTrashProjectEntry = async (entry: Entry) => {
+    try {
+      await runOperationAndWait('trash', [entry.location.path], '', 'overwrite');
+      closeTabsForDeletedPath(entry.location.path);
+      if (selectedProjectEntryPath === entry.location.path) {
+        setSelectedProjectEntryPath('');
+      }
+      await reloadWorkspaceEntries();
+      if (!isDedicatedWindow) void refresh();
+      showFlashStatus(`Movido para a Lixeira: ${entry.name}`);
+    } catch (err) {
+      showFlashStatus(
+        `Não foi possível excluir: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  };
+
+  const handleSubmitProjectModal = async (deletePermanently = true) => {
+    if (!projectModal || projectModal.busy) return;
+    const { kind, targetDir, entry, inputValue } = projectModal;
+    const trimmed = inputValue.trim();
+
+    if (kind !== 'delete' && !trimmed) {
+      setProjectModal({ ...projectModal, error: 'Informe um nome válido.' });
+      return;
+    }
+
+    setProjectModal({ ...projectModal, busy: true, error: null });
+    try {
+      if (kind === 'newFile') {
+        const createdPath = await createFile(targetDir, trimmed);
+        setProjectModal(null);
+        await reloadWorkspaceEntries();
+        if (!isDedicatedWindow) void refresh();
+        await openFileInEditor(createdPath, true);
+        showFlashStatus(`Arquivo criado: ${trimmed}`);
+      } else if (kind === 'newFolder') {
+        await createFolder(targetDir, trimmed);
+        setProjectModal(null);
+        await reloadWorkspaceEntries();
+        if (!isDedicatedWindow) void refresh();
+        showFlashStatus(`Pasta criada: ${trimmed}`);
+      } else if (kind === 'rename' && entry) {
+        if (trimmed === entry.name) {
+          setProjectModal(null);
+          return;
+        }
+        const renamedPath = await renameItem(entry.location.path, trimmed);
+        const finalNewPath =
+          renamedPath && (renamedPath.includes('/') || renamedPath.includes('\\'))
+            ? renamedPath
+            : joinProjectPath(
+                entry.location.path.replace(/[/\\][^/\\]+$/, ''),
+                trimmed
+              );
+        syncTabAfterPathChange(entry.location.path, finalNewPath);
+        setProjectModal(null);
+        await reloadWorkspaceEntries();
+        if (!isDedicatedWindow) void refresh();
+        showFlashStatus(`Renomeado para: ${trimmed}`);
+      } else if (kind === 'move' && entry) {
+        setProjectModal(null);
+        await handleMoveProjectEntryDirect(entry, trimmed);
+      } else if (kind === 'delete' && entry) {
+        await runOperationAndWait(
+          deletePermanently ? 'delete' : 'trash',
+          [entry.location.path],
+          '',
+          'overwrite'
+        );
+        closeTabsForDeletedPath(entry.location.path);
+        if (selectedProjectEntryPath === entry.location.path) {
+          setSelectedProjectEntryPath('');
+        }
+        setProjectModal(null);
+        await reloadWorkspaceEntries();
+        if (!isDedicatedWindow) void refresh();
+        showFlashStatus(
+          deletePermanently
+            ? `Excluído permanentemente: ${entry.name}`
+            : `Movido para a Lixeira: ${entry.name}`
+        );
+      }
+    } catch (err) {
+      setProjectModal((prev) =>
+        prev
+          ? {
+              ...prev,
+              busy: false,
+              error: err instanceof Error ? err.message : String(err),
+            }
+          : null
+      );
+    }
+  };
 
   // Escuta eventos entre janelas (Explorer <-> Pulsares Studio Window via Wails IPC, BroadcastChannel e localStorage)
   useEffect(() => {
     const unsubWailsIPC = subscribeEvent<StudioOpenFileEvent>('studio:open-file', (ev) => {
       if (!isDedicatedWindow || !ev) return;
-      if (ev.workspaceDir) {
-        setWorkspaceDir(ev.workspaceDir);
-      }
       if (ev.targetPath) {
+        if (ev.workspaceDir) setWorkspaceDir(ev.workspaceDir);
         void openFileInEditor(ev.targetPath, true);
+      } else if (ev.workspaceDir) {
+        void openFolderInEditor(ev.workspaceDir, true);
       }
       window.focus();
     });
@@ -670,11 +1152,11 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
             targetPath?: string;
             workspaceDir?: string;
           };
-          if (payload.workspaceDir) {
-            setWorkspaceDir(payload.workspaceDir);
-          }
           if (payload.targetPath) {
+            if (payload.workspaceDir) setWorkspaceDir(payload.workspaceDir);
             void openFileInEditor(payload.targetPath, true);
+          } else if (payload.workspaceDir) {
+            void openFolderInEditor(payload.workspaceDir, true);
           }
           window.focus();
         } catch {
@@ -693,11 +1175,11 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
           workspaceDir?: string;
         };
         if (data?.type === 'STUDIO_OPEN_REQUEST' && isDedicatedWindow) {
-          if (data.workspaceDir) {
-            setWorkspaceDir(data.workspaceDir);
-          }
           if (data.targetPath) {
+            if (data.workspaceDir) setWorkspaceDir(data.workspaceDir);
             void openFileInEditor(data.targetPath, true);
+          } else if (data.workspaceDir) {
+            void openFolderInEditor(data.workspaceDir, true);
           }
           window.focus();
         } else if (data?.type === 'STUDIO_FILE_SAVED' && !isDedicatedWindow) {
@@ -712,7 +1194,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
       window.removeEventListener('storage', onStorage);
       if (ch) ch.close();
     };
-  }, [isDedicatedWindow, openFileInEditor, refresh, setWorkspaceDir]);
+  }, [isDedicatedWindow, openFileInEditor, openFolderInEditor, refresh, setWorkspaceDir]);
 
   const lines = useMemo(() => {
     if (!activeTab) return [''];
@@ -1879,18 +2361,50 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
               <>
                 <div style={sidebarHeaderStyle}>
                   <span>ARQUIVOS DO PROJETO</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void listDirectorySnapshot(effectiveWorkspace, false).then(
-                        setWorkspaceEntries
-                      )
-                    }
-                    title="Atualizar lista"
-                    style={statusLinkBtnStyle}
-                  >
-                    <RefreshCw size={12} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setProjectModal({
+                          kind: 'newFile',
+                          targetDir: effectiveWorkspace,
+                          entry: null,
+                          inputValue: 'novo-arquivo.js',
+                          error: null,
+                          busy: false,
+                        })
+                      }
+                      title="Novo arquivo nesta pasta"
+                      style={statusLinkBtnStyle}
+                    >
+                      <FilePlus size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setProjectModal({
+                          kind: 'newFolder',
+                          targetDir: effectiveWorkspace,
+                          entry: null,
+                          inputValue: 'nova-pasta',
+                          error: null,
+                          busy: false,
+                        })
+                      }
+                      title="Nova pasta"
+                      style={statusLinkBtnStyle}
+                    >
+                      <FolderPlus size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void reloadWorkspaceEntries(effectiveWorkspace)}
+                      title="Atualizar lista"
+                      style={statusLinkBtnStyle}
+                    >
+                      <RefreshCw size={12} />
+                    </button>
+                  </div>
                 </div>
                 <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
                   <input
@@ -1901,7 +2415,46 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                     style={{ ...findInputStyle, width: '100%' }}
                   />
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '4px' }}>
+                <div
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (!selectedProjectEntryPath) return;
+                    const selEntry = workspaceEntries.find(
+                      (it) => it.location.path === selectedProjectEntryPath
+                    );
+                    if (!selEntry) return;
+                    if (e.key === 'F2') {
+                      e.preventDefault();
+                      setProjectModal({
+                        kind: 'rename',
+                        targetDir: effectiveWorkspace,
+                        entry: selEntry,
+                        inputValue: selEntry.name,
+                        error: null,
+                        busy: false,
+                      });
+                    } else if (e.key === 'Delete') {
+                      e.preventDefault();
+                      setProjectModal({
+                        kind: 'delete',
+                        targetDir: effectiveWorkspace,
+                        entry: selEntry,
+                        inputValue: selEntry.name,
+                        error: null,
+                        busy: false,
+                      });
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setProjectCtxMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      entry: null,
+                    });
+                  }}
+                  style={{ flex: 1, overflowY: 'auto', padding: '4px', outline: 'none' }}
+                >
                   {effectiveWorkspace && effectiveWorkspace !== '/' && (
                     <div
                       onClick={() => {
@@ -1910,8 +2463,37 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                           setWorkspaceDir(parent);
                         }
                       }}
-                      style={sidebarItemStyle}
-                      title="Subir pasta"
+                      onDragOver={(e) => {
+                        if (!draggedProjectEntry) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDropTargetFolderPath('..');
+                      }}
+                      onDragLeave={() => {
+                        if (dropTargetFolderPath === '..') setDropTargetFolderPath(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDropTargetFolderPath(null);
+                        if (!draggedProjectEntry) return;
+                        const parent = effectiveWorkspace.replace(/[/\\][^/\\]+$/, '');
+                        if (parent && parent !== effectiveWorkspace) {
+                          void handleMoveProjectEntryDirect(draggedProjectEntry, parent);
+                        }
+                        setDraggedProjectEntry(null);
+                      }}
+                      style={{
+                        ...sidebarItemStyle,
+                        border:
+                          dropTargetFolderPath === '..'
+                            ? '1px dashed var(--accent-primary)'
+                            : '1px solid transparent',
+                        backgroundColor:
+                          dropTargetFolderPath === '..'
+                            ? 'var(--accent-subtle)'
+                            : 'transparent',
+                      }}
+                      title="Subir pasta (ou arraste um item aqui para mover para a pasta superior)"
                     >
                       <Folder size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
                       <span>..</span>
@@ -1919,22 +2501,88 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                   )}
                   {filteredWorkspaceEntries.map((entry) => {
                     const isCurrentFile = activeTab?.path === entry.location.path;
+                    const isSelectedItem = selectedProjectEntryPath === entry.location.path;
+                    const isDropHovered =
+                      entry.kind === 'dir' && dropTargetFolderPath === entry.location.path;
+                    const isCutClip =
+                      studioFileClipboard?.mode === 'cut' &&
+                      studioFileClipboard.path === entry.location.path;
                     return (
                       <div
                         key={entry.location.path}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedProjectEntry(entry);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', entry.location.path);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedProjectEntry(null);
+                          setDropTargetFolderPath(null);
+                        }}
+                        onDragOver={(e) => {
+                          if (
+                            entry.kind !== 'dir' ||
+                            !draggedProjectEntry ||
+                            draggedProjectEntry.location.path === entry.location.path
+                          ) {
+                            return;
+                          }
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.dataTransfer.dropEffect = 'move';
+                          setDropTargetFolderPath(entry.location.path);
+                        }}
+                        onDragLeave={() => {
+                          if (dropTargetFolderPath === entry.location.path) {
+                            setDropTargetFolderPath(null);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          if (entry.kind !== 'dir' || !draggedProjectEntry) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDropTargetFolderPath(null);
+                          if (draggedProjectEntry.location.path !== entry.location.path) {
+                            void handleMoveProjectEntryDirect(
+                              draggedProjectEntry,
+                              entry.location.path
+                            );
+                          }
+                          setDraggedProjectEntry(null);
+                        }}
                         onClick={() => {
+                          setSelectedProjectEntryPath(entry.location.path);
                           if (entry.kind === 'dir') {
                             setWorkspaceDir(entry.location.path);
                           } else {
                             void openFileInEditor(entry.location.path, true);
                           }
                         }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedProjectEntryPath(entry.location.path);
+                          setProjectCtxMenu({
+                            x: e.clientX,
+                            y: e.clientY,
+                            entry,
+                          });
+                        }}
                         style={{
                           ...sidebarItemStyle,
-                          backgroundColor: isCurrentFile ? 'var(--bg-selected)' : 'transparent',
+                          backgroundColor: isDropHovered
+                            ? 'var(--accent-subtle)'
+                            : isCurrentFile || isSelectedItem
+                            ? 'var(--bg-selected)'
+                            : 'transparent',
+                          border: isDropHovered
+                            ? '1px dashed var(--accent-primary)'
+                            : '1px solid transparent',
                           fontWeight: isCurrentFile ? 600 : 400,
+                          opacity: isCutClip ? 0.55 : 1,
                         }}
-                        title={entry.location.path}
+                        title={`${entry.location.path} (Clique direito para opções)`}
                       >
                         <FileTypeIcon
                           name={entry.name}
@@ -3167,11 +3815,11 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                         </div>
                       ) : activeTab.language === 'markdown' ? (
                         <div>{renderMarkdownPreview(activeTab.content)}</div>
-                      ) : activeTab.language === 'html' ? (
+                      ) : connectedWebPreview?.isWebProject ? (
                         <iframe
                           title="HTML Live Preview"
-                          sandbox=""
-                          srcDoc={activeTab.content}
+                          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                          srcDoc={connectedWebPreview.doc}
                           style={{
                             width: '100%',
                             height: '92%',
@@ -3574,6 +4222,700 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
         )}
       </div>
 
+      {/* Menu de Contexto de ARQUIVOS DO PROJETO */}
+      {projectCtxMenu && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{
+            position: 'fixed',
+            left: `${Math.min(
+              projectCtxMenu.x,
+              (typeof window !== 'undefined' ? window.innerWidth : 1024) - 235
+            )}px`,
+            top: `${Math.min(
+              projectCtxMenu.y,
+              (typeof window !== 'undefined' ? window.innerHeight : 768) - 340
+            )}px`,
+            width: '225px',
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-strong)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: '0 14px 34px rgba(0, 0, 0, 0.42)',
+            padding: '4px',
+            zIndex: 9800,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1px',
+            userSelect: 'none',
+          }}
+        >
+          <div
+            style={{
+              padding: '5px 8px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: 'var(--text-muted)',
+              borderBottom: '1px solid var(--border-subtle)',
+              marginBottom: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {projectCtxMenu.entry ? (
+              <>
+                <FileTypeIcon
+                  name={projectCtxMenu.entry.name}
+                  kind={projectCtxMenu.entry.kind}
+                  size={12}
+                  showBadge={false}
+                />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {projectCtxMenu.entry.name}
+                </span>
+              </>
+            ) : (
+              <>
+                <Folder size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {effectiveWorkspace.split(/[/\\]/).pop() || effectiveWorkspace}
+                </span>
+              </>
+            )}
+          </div>
+
+          {projectCtxMenu.entry && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = projectCtxMenu.entry!;
+                  setProjectCtxMenu(null);
+                  if (target.kind === 'dir') {
+                    setWorkspaceDir(target.location.path);
+                  } else {
+                    void openFileInEditor(target.location.path, true);
+                  }
+                }}
+                style={projectCtxItemStyle}
+              >
+                {projectCtxMenu.entry.kind === 'dir' ? (
+                  <>
+                    <Folder size={13} style={{ color: 'var(--accent)' }} />
+                    <span style={{ flex: 1, textAlign: 'left' }}>Abrir pasta</span>
+                  </>
+                ) : (
+                  <>
+                    <FileCode2 size={13} style={{ color: 'var(--accent)' }} />
+                    <span style={{ flex: 1, textAlign: 'left' }}>Editar arquivo</span>
+                  </>
+                )}
+              </button>
+              <div style={projectCtxDividerStyle} />
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              const targetDir =
+                projectCtxMenu.entry?.kind === 'dir'
+                  ? projectCtxMenu.entry.location.path
+                  : effectiveWorkspace;
+              setProjectCtxMenu(null);
+              setProjectModal({
+                kind: 'newFile',
+                targetDir,
+                entry: null,
+                inputValue: 'novo-arquivo.js',
+                error: null,
+                busy: false,
+              });
+            }}
+            style={projectCtxItemStyle}
+          >
+            <FilePlus size={13} style={{ color: 'var(--accent)' }} />
+            <span style={{ flex: 1, textAlign: 'left' }}>
+              {projectCtxMenu.entry?.kind === 'dir'
+                ? 'Novo arquivo na pasta...'
+                : 'Novo arquivo...'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const targetDir =
+                projectCtxMenu.entry?.kind === 'dir'
+                  ? projectCtxMenu.entry.location.path
+                  : effectiveWorkspace;
+              setProjectCtxMenu(null);
+              setProjectModal({
+                kind: 'newFolder',
+                targetDir,
+                entry: null,
+                inputValue: 'nova-pasta',
+                error: null,
+                busy: false,
+              });
+            }}
+            style={projectCtxItemStyle}
+          >
+            <FolderPlus size={13} style={{ color: 'var(--accent)' }} />
+            <span style={{ flex: 1, textAlign: 'left' }}>
+              {projectCtxMenu.entry?.kind === 'dir'
+                ? 'Nova subpasta...'
+                : 'Nova pasta...'}
+            </span>
+          </button>
+
+          {projectCtxMenu.entry && (
+            <>
+              <div style={projectCtxDividerStyle} />
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = projectCtxMenu.entry!;
+                  setProjectCtxMenu(null);
+                  setProjectModal({
+                    kind: 'rename',
+                    targetDir: effectiveWorkspace,
+                    entry: target,
+                    inputValue: target.name,
+                    error: null,
+                    busy: false,
+                  });
+                }}
+                style={projectCtxItemStyle}
+              >
+                <Pencil size={13} />
+                <span style={{ flex: 1, textAlign: 'left' }}>Renomear...</span>
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>F2</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = projectCtxMenu.entry!;
+                  setProjectCtxMenu(null);
+                  setProjectModal({
+                    kind: 'move',
+                    targetDir: effectiveWorkspace,
+                    entry: target,
+                    inputValue: effectiveWorkspace,
+                    error: null,
+                    busy: false,
+                  });
+                }}
+                style={projectCtxItemStyle}
+              >
+                <FolderInput size={13} />
+                <span style={{ flex: 1, textAlign: 'left' }}>Mover para...</span>
+              </button>
+
+              {projectCtxMenu.entry.kind !== 'dir' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = projectCtxMenu.entry!;
+                    setProjectCtxMenu(null);
+                    void handleDuplicateProjectFile(target);
+                  }}
+                  style={projectCtxItemStyle}
+                >
+                  <Files size={13} />
+                  <span style={{ flex: 1, textAlign: 'left' }}>Duplicar arquivo</span>
+                </button>
+              )}
+
+              <div style={projectCtxDividerStyle} />
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = projectCtxMenu.entry!;
+                  setProjectCtxMenu(null);
+                  setStudioFileClipboard({
+                    path: target.location.path,
+                    name: target.name,
+                    mode: 'cut',
+                  });
+                  showFlashStatus(`Recortado: ${target.name} (clique direito para colar)`);
+                }}
+                style={projectCtxItemStyle}
+              >
+                <Scissors size={13} />
+                <span style={{ flex: 1, textAlign: 'left' }}>Recortar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = projectCtxMenu.entry!;
+                  setProjectCtxMenu(null);
+                  setStudioFileClipboard({
+                    path: target.location.path,
+                    name: target.name,
+                    mode: 'copy',
+                  });
+                  showFlashStatus(`Copiado: ${target.name} (clique direito para colar)`);
+                }}
+                style={projectCtxItemStyle}
+              >
+                <Copy size={13} />
+                <span style={{ flex: 1, textAlign: 'left' }}>Copiar</span>
+              </button>
+            </>
+          )}
+
+          {studioFileClipboard && (
+            <button
+              type="button"
+              onClick={() => {
+                const targetDir =
+                  projectCtxMenu.entry?.kind === 'dir'
+                    ? projectCtxMenu.entry.location.path
+                    : effectiveWorkspace;
+                setProjectCtxMenu(null);
+                void handlePasteProjectEntry(targetDir);
+              }}
+              style={projectCtxItemStyle}
+            >
+              <ClipboardPaste size={13} style={{ color: 'var(--accent)' }} />
+              <span style={{ flex: 1, textAlign: 'left' }}>
+                Colar "{studioFileClipboard.name}" aqui
+              </span>
+            </button>
+          )}
+
+          <div style={projectCtxDividerStyle} />
+
+          <button
+            type="button"
+            onClick={() => {
+              const pathToCopy = projectCtxMenu.entry
+                ? projectCtxMenu.entry.location.path
+                : effectiveWorkspace;
+              setProjectCtxMenu(null);
+              if (navigator.clipboard) {
+                void navigator.clipboard.writeText(pathToCopy);
+                showFlashStatus('Caminho copiado para a área de transferência');
+              }
+            }}
+            style={projectCtxItemStyle}
+          >
+            <Copy size={13} />
+            <span style={{ flex: 1, textAlign: 'left' }}>Copiar caminho</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const pathToReveal = projectCtxMenu.entry
+                ? projectCtxMenu.entry.location.path
+                : effectiveWorkspace;
+              setProjectCtxMenu(null);
+              void revealInSystemExplorer(pathToReveal);
+            }}
+            style={projectCtxItemStyle}
+          >
+            <ExternalLink size={13} />
+            <span style={{ flex: 1, textAlign: 'left' }}>Mostrar no Explorador</span>
+          </button>
+
+          {!projectCtxMenu.entry && (
+            <button
+              type="button"
+              onClick={() => {
+                setProjectCtxMenu(null);
+                void reloadWorkspaceEntries(effectiveWorkspace);
+              }}
+              style={projectCtxItemStyle}
+            >
+              <RefreshCw size={13} />
+              <span style={{ flex: 1, textAlign: 'left' }}>Atualizar lista</span>
+            </button>
+          )}
+
+          {projectCtxMenu.entry && (
+            <>
+              <div style={projectCtxDividerStyle} />
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = projectCtxMenu.entry!;
+                  setProjectCtxMenu(null);
+                  void handleTrashProjectEntry(target);
+                }}
+                style={projectCtxItemStyle}
+              >
+                <Trash2 size={13} style={{ color: 'var(--status-warning)' }} />
+                <span style={{ flex: 1, textAlign: 'left' }}>Mover para a Lixeira</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = projectCtxMenu.entry!;
+                  setProjectCtxMenu(null);
+                  setProjectModal({
+                    kind: 'delete',
+                    targetDir: effectiveWorkspace,
+                    entry: target,
+                    inputValue: target.name,
+                    error: null,
+                    busy: false,
+                  });
+                }}
+                style={{ ...projectCtxItemStyle, color: 'var(--status-danger)' }}
+              >
+                <Trash2 size={13} style={{ color: 'var(--status-danger)' }} />
+                <span style={{ flex: 1, textAlign: 'left' }}>Excluir...</span>
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Del</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Modal de Ações de Arquivos do Projeto (Criar Arquivo/Pasta, Renomear, Mover, Excluir) */}
+      {projectModal && (
+        <div
+          onMouseDown={() => {
+            if (!projectModal.busy) setProjectModal(null);
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            zIndex: 9850,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '430px',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.55)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '13px' }}>
+                {projectModal.kind === 'newFile' && (
+                  <>
+                    <FilePlus size={15} style={{ color: 'var(--accent)' }} />
+                    <span>Novo Arquivo no Projeto</span>
+                  </>
+                )}
+                {projectModal.kind === 'newFolder' && (
+                  <>
+                    <FolderPlus size={15} style={{ color: 'var(--accent)' }} />
+                    <span>Nova Pasta no Projeto</span>
+                  </>
+                )}
+                {projectModal.kind === 'rename' && (
+                  <>
+                    <Pencil size={15} style={{ color: 'var(--accent)' }} />
+                    <span>
+                      Renomear {projectModal.entry?.kind === 'dir' ? 'Pasta' : 'Arquivo'}
+                    </span>
+                  </>
+                )}
+                {projectModal.kind === 'move' && (
+                  <>
+                    <FolderInput size={15} style={{ color: 'var(--accent)' }} />
+                    <span>Mover "{projectModal.entry?.name}"</span>
+                  </>
+                )}
+                {projectModal.kind === 'delete' && (
+                  <>
+                    <Trash2 size={15} style={{ color: 'var(--status-danger)' }} />
+                    <span>Excluir "{projectModal.entry?.name}"</span>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setProjectModal(null)}
+                disabled={projectModal.busy}
+                style={windowCtrlBtnStyle}
+              >
+                <X size={13} />
+              </button>
+            </div>
+
+            {projectModal.kind !== 'delete' && (
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                {projectModal.kind === 'move'
+                  ? 'Selecione uma pasta do projeto abaixo ou informe o caminho de destino:'
+                  : `Local: ${projectModal.targetDir}`}
+              </div>
+            )}
+
+            {projectModal.kind === 'newFile' && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                {['.html', '.css', '.js', '.ts', '.tsx', '.json', '.md', '.py', '.go', '.sql'].map(
+                  (ext) => (
+                    <button
+                      key={ext}
+                      type="button"
+                      onClick={() => {
+                        const cur = projectModal.inputValue.trim() || 'novo-arquivo';
+                        const stem = cur.includes('.') ? cur.slice(0, cur.lastIndexOf('.')) : cur;
+                        setProjectModal({
+                          ...projectModal,
+                          inputValue: `${stem || 'novo-arquivo'}${ext}`,
+                        });
+                      }}
+                      style={{
+                        padding: '2px 7px',
+                        fontSize: '10px',
+                        borderRadius: '999px',
+                        border: '1px solid var(--border-subtle)',
+                        backgroundColor: projectModal.inputValue.endsWith(ext)
+                          ? 'var(--accent-subtle)'
+                          : 'var(--bg-subtle)',
+                        color: projectModal.inputValue.endsWith(ext)
+                          ? 'var(--accent-text)'
+                          : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {ext}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+
+            {projectModal.kind === 'move' && (
+              <div
+                style={{
+                  maxHeight: '150px',
+                  overflowY: 'auto',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--bg-subtle)',
+                  padding: '4px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                }}
+              >
+                {(() => {
+                  const parent = effectiveWorkspace.replace(/[/\\][^/\\]+$/, '');
+                  const canGoParent = Boolean(parent && parent !== effectiveWorkspace);
+                  const folders = workspaceEntries.filter(
+                    (it) =>
+                      it.kind === 'dir' &&
+                      it.location.path !== projectModal.entry?.location.path
+                  );
+                  return (
+                    <>
+                      {canGoParent && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setProjectModal({ ...projectModal, inputValue: parent })
+                          }
+                          style={{
+                            ...sidebarItemStyle,
+                            width: '100%',
+                            border: 'none',
+                            backgroundColor:
+                              projectModal.inputValue === parent
+                                ? 'var(--bg-selected)'
+                                : 'transparent',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <Folder size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            .. (Pasta superior: {parent.split(/[/\\]/).pop() || parent})
+                          </span>
+                        </button>
+                      )}
+                      {folders.map((f) => (
+                        <button
+                          key={f.location.path}
+                          type="button"
+                          onClick={() =>
+                            setProjectModal({
+                              ...projectModal,
+                              inputValue: f.location.path,
+                            })
+                          }
+                          style={{
+                            ...sidebarItemStyle,
+                            width: '100%',
+                            border: 'none',
+                            backgroundColor:
+                              projectModal.inputValue === f.location.path
+                                ? 'var(--bg-selected)'
+                                : 'transparent',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <Folder size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {f.name}
+                          </span>
+                        </button>
+                      ))}
+                      {!canGoParent && folders.length === 0 && (
+                        <div style={{ padding: '6px 8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                          Nenhuma subpasta listada. Digite o caminho de destino abaixo.
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {projectModal.kind !== 'delete' ? (
+              <input
+                type="text"
+                autoFocus
+                value={projectModal.inputValue}
+                onChange={(e) =>
+                  setProjectModal({
+                    ...projectModal,
+                    inputValue: e.target.value,
+                    error: null,
+                  })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleSubmitProjectModal(true);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setProjectModal(null);
+                  }
+                }}
+                placeholder={
+                  projectModal.kind === 'move'
+                    ? 'Caminho da pasta de destino...'
+                    : 'Digite o nome...'
+                }
+                style={{
+                  ...findInputStyle,
+                  width: '100%',
+                  padding: '7px 10px',
+                  fontSize: '13px',
+                }}
+              />
+            ) : (
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                Deseja excluir{' '}
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {projectModal.entry?.name}
+                </strong>
+                ?
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  {projectModal.entry?.location.path}
+                </div>
+              </div>
+            )}
+
+            {projectModal.error && (
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--status-danger)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <AlertTriangle size={12} />
+                <span>{projectModal.error}</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
+              <button
+                type="button"
+                onClick={() => setProjectModal(null)}
+                disabled={projectModal.busy}
+                style={{ ...headerBtnStyle, padding: '5px 12px' }}
+              >
+                Cancelar
+              </button>
+              {projectModal.kind === 'delete' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleSubmitProjectModal(false)}
+                    disabled={projectModal.busy}
+                    style={{
+                      ...headerBtnStyle,
+                      padding: '5px 12px',
+                      borderColor: 'var(--border-strong)',
+                    }}
+                  >
+                    Mover p/ Lixeira
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSubmitProjectModal(true)}
+                    disabled={projectModal.busy}
+                    style={{
+                      ...headerBtnStyle,
+                      padding: '5px 12px',
+                      backgroundColor: 'var(--status-danger)',
+                      borderColor: 'var(--status-danger)',
+                      color: '#ffffff',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Excluir Permanentemente
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleSubmitProjectModal(true)}
+                  disabled={projectModal.busy}
+                  style={{
+                    ...headerBtnStyle,
+                    padding: '5px 14px',
+                    backgroundColor: 'var(--accent-primary)',
+                    borderColor: 'var(--accent-primary)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                  }}
+                >
+                  {projectModal.kind === 'newFile' || projectModal.kind === 'newFolder'
+                    ? 'Criar'
+                    : projectModal.kind === 'rename'
+                    ? 'Renomear'
+                    : 'Mover'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Alça de redimensionamento quando em modo flutuante */}
       {!isDedicatedWindow && !isMaximized && (
         <div
@@ -3728,4 +5070,24 @@ const toolBtnStyle: React.CSSProperties = {
   fontSize: '11px',
   cursor: 'pointer',
   textAlign: 'center',
+};
+
+const projectCtxItemStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  width: '100%',
+  padding: '6px 10px',
+  borderRadius: 'var(--radius-sm)',
+  border: 'none',
+  backgroundColor: 'transparent',
+  color: 'var(--text-primary)',
+  fontSize: '12px',
+  cursor: 'pointer',
+};
+
+const projectCtxDividerStyle: React.CSSProperties = {
+  height: '1px',
+  backgroundColor: 'var(--border-subtle)',
+  margin: '3px 4px',
 };

@@ -750,6 +750,39 @@ export async function enqueueOperation(
   return 'mock-job-id';
 }
 
+export async function runOperationAndWait(
+  kind: JobKind,
+  sources: string[],
+  destination = '',
+  policy: ConflictPolicy = 'rename'
+): Promise<void> {
+  if (!isWailsAvailable()) return;
+  const jobId = await enqueueOperation(kind, sources, destination, policy, false);
+  if (!jobId || jobId === 'mock-job-id') return;
+
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 45));
+    try {
+      const jobs = await listJobs();
+      const job = jobs.find((j) => j.id === jobId);
+      if (!job) break;
+      if (job.status === 'completed') return;
+      if (job.status === 'failed') {
+        throw new Error(job.error || 'Falha ao executar operação no arquivo.');
+      }
+      if (job.status === 'canceled') {
+        throw new Error('Operação cancelada.');
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message !== '') {
+        throw err;
+      }
+      break;
+    }
+  }
+}
+
 export async function pauseJob(jobId: string): Promise<void> {
   if (isWailsAvailable()) {
     return window.go!.app.App.PauseJob(jobId);
@@ -1037,30 +1070,51 @@ export async function terminalAutocomplete(
   return candidates;
 }
 
+export async function isDirectoryPath(path: string): Promise<boolean> {
+  if (!path || !isWailsAvailable()) return false;
+  try {
+    const props = await getItemProperties(path);
+    return props.kind === 'folder';
+  } catch {
+    try {
+      const prev = await getPreview(path, 256);
+      return prev.kind === 'folder';
+    } catch {
+      return false;
+    }
+  }
+}
+
 export async function readTextFile(path: string): Promise<TextFilePayload> {
+  if (await isDirectoryPath(path)) {
+    throw new Error('IS_DIRECTORY');
+  }
   const appObj = window.go?.app?.App as Record<string, unknown> | undefined;
   if (isWailsAvailable() && typeof appObj?.ReadTextFile === 'function') {
     try {
       return await window.go!.app.App.ReadTextFile(path);
-    } catch {
-      // Fallback para GetPreview abaixo
+    } catch (err) {
+      if (await isDirectoryPath(path)) {
+        throw new Error('IS_DIRECTORY');
+      }
+      // Fallback para GetPreview abaixo apenas se não for diretório
+      void err;
     }
   }
   if (isWailsAvailable()) {
-    try {
-      const prev = await getPreview(path, 512 * 1024);
-      const content = prev.textContent || '';
-      return {
-        path: prev.path || path,
-        name: prev.name || path.split(/[/\\]/).pop() || path,
-        content,
-        lineEnding: content.includes('\r\n') ? 'CRLF' : 'LF',
-        encoding: 'UTF-8',
-        size: prev.size || content.length,
-      };
-    } catch {
-      // Fallback vazio abaixo
+    const prev = await getPreview(path, 512 * 1024);
+    if (prev.kind === 'folder') {
+      throw new Error('IS_DIRECTORY');
     }
+    const content = prev.textContent || '';
+    return {
+      path: prev.path || path,
+      name: prev.name || path.split(/[/\\]/).pop() || path,
+      content,
+      lineEnding: content.includes('\r\n') ? 'CRLF' : 'LF',
+      encoding: 'UTF-8',
+      size: prev.size || content.length,
+    };
   }
   return {
     path,

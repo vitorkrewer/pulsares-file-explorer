@@ -83,7 +83,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
   } = useTerminalStore();
   const { toggleQuickLook } = usePreviewStore();
   const { openBatchRename, openArchiveModal, openHashModal } = useProductivityStore();
-  const { openFileInEditor, openNewUntitledTab } = useEditorStore();
+  const { openFileInEditor, openFolderInEditor } = useEditorStore();
 
   useEffect(() => {
     if (!target) return;
@@ -285,7 +285,18 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
             />
           )}
 
-          {!isDir && (
+          {isDir ? (
+            <MenuItem
+              icon={<FileCode2 size={14} />}
+              label="Abrir pasta no Pulsares Studio Editor"
+              badge="Studio"
+              onClick={() =>
+                runAndClose(() => {
+                  void openFolderInEditor(entry.location.path);
+                })
+              }
+            />
+          ) : (
             <MenuItem
               icon={<FileCode2 size={14} />}
               label="Editar no Pulsares Studio"
@@ -499,7 +510,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
             icon={<FileCode2 size={14} />}
             label="Abrir Pulsares Studio Editor"
             badge="Dev"
-            onClick={() => runAndClose(() => openNewUntitledTab(currentPath, 'markdown'))}
+            onClick={() => runAndClose(() => void openFolderInEditor(currentPath))}
           />
 
           {clipboard && clipboard.paths.length > 0 && (

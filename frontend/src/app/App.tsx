@@ -400,8 +400,10 @@ export const App: React.FC = () => {
           .entries.find((it) => it.location.path === firstSelected);
         if (entry && entry.kind !== 'dir') {
           void useEditorStore.getState().openFileInEditor(entry.location.path);
+        } else if (entry && entry.kind === 'dir') {
+          void useEditorStore.getState().openFolderInEditor(entry.location.path);
         } else {
-          useEditorStore.getState().openNewUntitledTab(currentPath, 'markdown');
+          void useEditorStore.getState().openFolderInEditor(currentPath);
         }
       } else if (key === 'r') {
         e.preventDefault();

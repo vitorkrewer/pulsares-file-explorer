@@ -5,6 +5,8 @@ import {
   createFile,
   runStudioCommand,
   openStudioWindowNative,
+  listDirectorySnapshot,
+  isDirectoryPath,
   StudioRunResult,
 } from '../../lib/wails';
 
@@ -598,9 +600,27 @@ function loadPersistedTabs(): {
     const raw = window.localStorage.getItem(STUDIO_STORAGE_KEY);
     if (!raw) return { tabs: [], activeTabId: null, workspaceDir: '' };
     const parsed = JSON.parse(raw);
+    const rawTabs: EditorTab[] = Array.isArray(parsed.tabs) ? parsed.tabs : [];
+    const normWs = String(parsed.workspaceDir || '')
+      .replace(/\\/g, '/')
+      .replace(/\/+$/, '')
+      .toLowerCase();
+    const cleanTabs = rawTabs.filter((t) => {
+      const hasContent = Boolean(t.content && t.content.trim());
+      if (!t.path) return hasContent;
+      const normTabPath = t.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      // Descarta abas fantasmas criadas indevidamente com o caminho de uma pasta ou sem extensão e vazias
+      if (normWs && normTabPath === normWs) return false;
+      if (!hasContent && !t.name.includes('.')) return false;
+      return true;
+    });
+    const activeId =
+      cleanTabs.find((t) => t.id === parsed.activeTabId)?.id ||
+      cleanTabs[cleanTabs.length - 1]?.id ||
+      null;
     return {
-      tabs: Array.isArray(parsed.tabs) ? parsed.tabs : [],
-      activeTabId: parsed.activeTabId || null,
+      tabs: cleanTabs,
+      activeTabId: activeId,
       workspaceDir: parsed.workspaceDir || '',
     };
   } catch {
@@ -634,10 +654,13 @@ interface EditorState {
 
   hydrateStudioFromStorage: (initialTarget?: string, defaultDir?: string) => Promise<void>;
   openFileInEditor: (path: string, forceLocalModal?: boolean) => Promise<void>;
+  openFolderInEditor: (folderPath: string, forceLocalModal?: boolean) => Promise<void>;
   openNewUntitledTab: (defaultDir?: string, language?: string, forceLocalModal?: boolean) => void;
   detachToSeparateWindow: () => Promise<void>;
   closeTab: (id: string) => void;
   closeOtherTabs: (id: string) => void;
+  syncTabAfterPathChange: (oldPath: string, newPath: string) => void;
+  closeTabsForDeletedPath: (deletedPath: string) => void;
   togglePinTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   updateTabContent: (id: string, content: string) => void;
@@ -743,11 +766,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   hydrateStudioFromStorage: async (initialTarget?: string, defaultDir?: string) => {
     const saved = loadPersistedTabs();
-    const dir = defaultDir || saved.workspaceDir || '';
+    const dir = saved.workspaceDir || defaultDir || '';
     set({
       isDedicatedStudio: true,
       isOpen: true,
       isMaximized: true,
+      sidebarTab: 'files',
     });
     if (saved.tabs.length > 0) {
       set({
@@ -771,6 +795,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         if (q.targetPath) {
           await get().openFileInEditor(q.targetPath, true);
           return;
+        } else if (q.workspaceDir) {
+          await get().openFolderInEditor(q.workspaceDir, true);
+          return;
         }
       }
     } catch {
@@ -778,31 +805,171 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
 
     if (initialTarget) {
-      await get().openFileInEditor(initialTarget, true);
-    } else if (get().tabs.length === 0) {
-      get().openNewUntitledTab(dir, 'typescript', true);
+      if (await isDirectoryPath(initialTarget)) {
+        await get().openFolderInEditor(initialTarget, true);
+      } else {
+        try {
+          await readTextFile(initialTarget);
+          await get().openFileInEditor(initialTarget, true);
+        } catch {
+          await get().openFolderInEditor(initialTarget, true);
+        }
+      }
+    } else if (dir) {
+      await get().openFolderInEditor(dir, true);
+    }
+  },
+
+  openFolderInEditor: async (folderPath: string, forceLocalModal = false) => {
+    const cleanDir = (folderPath || get().workspaceDir || '').replace(/[\\/]+$/, '');
+    const normDir = cleanDir.replace(/\\/g, '/').toLowerCase();
+    const realTabs = get().tabs.filter((t) => {
+      const hasContent = Boolean(t.content && t.content.trim());
+      if (!t.path) return hasContent;
+      const normTab = t.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      if (normDir && normTab === normDir) return false;
+      if (!hasContent && !t.name.includes('.')) return false;
+      return true;
+    });
+    const nextActive =
+      realTabs.find((t) => t.id === get().activeTabId)?.id ||
+      realTabs[realTabs.length - 1]?.id ||
+      null;
+
+    set({
+      workspaceDir: cleanDir,
+      tabs: realTabs,
+      activeTabId: nextActive,
+      sidebarTab: 'files',
+    });
+    persistTabsToStorage(realTabs, nextActive, cleanDir);
+
+    if (
+      !forceLocalModal &&
+      !get().isDedicatedStudio &&
+      !isStandaloneStudioWindow() &&
+      get().preferSeparateWindow
+    ) {
+      const openedNative = await openStudioWindowNative(cleanDir);
+      if (openedNative) {
+        set({ isOpen: false });
+        return;
+      }
+      const openedPopup = spawnOrFocusSeparateStudioWindow('', cleanDir);
+      if (openedPopup) {
+        set({ isOpen: false });
+        return;
+      }
+    }
+
+    set({
+      isOpen: true,
+      isMinimized: false,
+      sidebarTab: 'files',
+    });
+
+    if (cleanDir) {
+      try {
+        const items = await listDirectorySnapshot(cleanDir, false);
+        const files = items.filter((it) => it.kind !== 'dir');
+        const dirChildPrefix = `${normDir}/`;
+        const tabsInFolder = get().tabs.filter(
+          (t) =>
+            t.path &&
+            t.path.replace(/\\/g, '/').toLowerCase().startsWith(dirChildPrefix)
+        );
+        if (tabsInFolder.length > 0) {
+          const currentActive = get().tabs.find((t) => t.id === get().activeTabId);
+          if (
+            !currentActive ||
+            !currentActive.path
+              .replace(/\\/g, '/')
+              .toLowerCase()
+              .startsWith(dirChildPrefix)
+          ) {
+            set({ activeTabId: tabsInFolder[tabsInFolder.length - 1].id });
+          }
+          return;
+        }
+        if (files.length > 0) {
+          const priorityNames = [
+            'index.html',
+            'index.htm',
+            'main.tsx',
+            'app.tsx',
+            'index.tsx',
+            'index.ts',
+            'index.js',
+            'app.js',
+            'main.go',
+            'main.py',
+            'app.py',
+            'readme.md',
+            'package.json',
+          ];
+          let entryToOpen = undefined;
+          for (const pName of priorityNames) {
+            const found = files.find((f) => f.name.toLowerCase() === pName);
+            if (found) {
+              entryToOpen = found;
+              break;
+            }
+          }
+          if (!entryToOpen) {
+            entryToOpen = files.find((f) => isEditableTextFile(f.name));
+          }
+          if (entryToOpen) {
+            await get().openFileInEditor(entryToOpen.location.path, true);
+          }
+        }
+      } catch {
+        // mantém apenas o diretório aberto na árvore lateral
+      }
     }
   },
 
   openFileInEditor: async (path: string, forceLocalModal = false) => {
-    const parentDir = path.replace(/[/\\][^/\\]+$/, '') || get().workspaceDir;
+    const cleanPath = (path || '').replace(/[\\/]+$/, '');
+    if (!cleanPath) return;
+
+    // Se o caminho passado for uma pasta (diretório), delega imediatamente para openFolderInEditor
+    if (await isDirectoryPath(cleanPath)) {
+      await get().openFolderInEditor(cleanPath, forceLocalModal);
+      return;
+    }
+
+    const parentDir = cleanPath.replace(/[/\\][^/\\]+$/, '') || get().workspaceDir;
     if (parentDir) {
       set({ workspaceDir: parentDir });
     }
 
+    // Remove abas sem-titulo vazias ou abas fantasmas de pasta antes de abrir o arquivo real
+    const normParent = (parentDir || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const cleanedExistingTabs = get().tabs.filter((t) => {
+      const hasContent = Boolean(t.content && t.content.trim());
+      if (!t.path) return hasContent;
+      const normTab = t.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      if (normParent && normTab === normParent) return false;
+      if (!hasContent && !t.name.includes('.')) return false;
+      return true;
+    });
+    if (cleanedExistingTabs.length !== get().tabs.length) {
+      set({ tabs: cleanedExistingTabs });
+    }
+
     // Carrega e registra a aba no estado persistido antes de abrir/focar a janela separada
-    const existing = get().tabs.find((t) => t.path === path);
+    const existing = get().tabs.find((t) => t.path === cleanPath);
     let activeTab: EditorTab | null = existing || null;
 
     if (!activeTab) {
       try {
-        const payload = await readTextFile(path);
-        const lang = detectLanguageFromPath(payload.name || path);
+        const payload = await readTextFile(cleanPath);
+        const lang = detectLanguageFromPath(payload.name || cleanPath);
         const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         activeTab = {
           id,
-          path: payload.path || path,
-          name: payload.name || path.split(/[/\\]/).pop() || path,
+          path: payload.path || cleanPath,
+          name: payload.name || cleanPath.split(/[/\\]/).pop() || cleanPath,
           language: lang,
           content: payload.content,
           savedContent: payload.content,
@@ -821,8 +988,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         }));
         persistTabsToStorage(nextTabs, id, parentDir);
       } catch (err) {
-        console.error('Erro ao abrir arquivo no Pulsares Studio:', err);
         const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg === 'IS_DIRECTORY' || (await isDirectoryPath(cleanPath))) {
+          await get().openFolderInEditor(cleanPath, forceLocalModal);
+          return;
+        }
+        console.error('Erro ao abrir arquivo no Pulsares Studio:', err);
         set({
           isOpen: true,
           statusMessage: `Não foi possível abrir o arquivo: ${errMsg}`,
@@ -989,6 +1160,70 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         tabs: remaining,
         activeTabId: id,
+      };
+    });
+  },
+
+  syncTabAfterPathChange: (oldPath: string, newPath: string) => {
+    if (!oldPath || !newPath) return;
+    const normOld = oldPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const cleanNew = newPath.replace(/[\\/]+$/, '');
+    set((s) => {
+      let changed = false;
+      const nextTabs = s.tabs.map((t) => {
+        if (!t.path) return t;
+        const normTab = t.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        if (normTab === normOld) {
+          changed = true;
+          const nextName = cleanNew.split(/[/\\]/).pop() || t.name;
+          return {
+            ...t,
+            path: cleanNew,
+            name: nextName,
+            language: detectLanguageFromPath(nextName),
+          };
+        }
+        if (normTab.startsWith(`${normOld}/`)) {
+          changed = true;
+          const sep = cleanNew.includes('\\') ? '\\' : '/';
+          const relSuffix = t.path
+            .slice(oldPath.replace(/[\\/]+$/, '').length)
+            .replace(/^[/\\]+/, '');
+          const updatedPath = `${cleanNew}${sep}${relSuffix}`;
+          return {
+            ...t,
+            path: updatedPath,
+          };
+        }
+        return t;
+      });
+      const normWs = (s.workspaceDir || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      const nextWs = normWs === normOld ? cleanNew : s.workspaceDir;
+      if (changed || nextWs !== s.workspaceDir) {
+        persistTabsToStorage(nextTabs, s.activeTabId, nextWs);
+        return { tabs: nextTabs, workspaceDir: nextWs };
+      }
+      return {};
+    });
+  },
+
+  closeTabsForDeletedPath: (deletedPath: string) => {
+    if (!deletedPath) return;
+    const normDel = deletedPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    set((s) => {
+      const remaining = s.tabs.filter((t) => {
+        if (!t.path) return true;
+        const normTab = t.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        return normTab !== normDel && !normTab.startsWith(`${normDel}/`);
+      });
+      if (remaining.length === s.tabs.length) return {};
+      const nextActive = remaining.some((t) => t.id === s.activeTabId)
+        ? s.activeTabId
+        : remaining[remaining.length - 1]?.id || null;
+      persistTabsToStorage(remaining, nextActive, s.workspaceDir);
+      return {
+        tabs: remaining,
+        activeTabId: nextActive,
       };
     });
   },

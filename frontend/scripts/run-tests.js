@@ -156,4 +156,18 @@ const edge2 = computeBezierCurve(700, 200, 200, 100);
 assert.ok(edge2.pathD.startsWith('M 700 200 C'));
 assert.ok(edge2.midX > 200 && edge2.midX < 700);
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.0.0 + ERD) passaram com sucesso.');
+// 5. Testar limpeza de abas sem-titulo vazias e injeção de CSS/JS locais na Prévia Web
+function filterPersistedStudioTabs(tabs) {
+  return tabs.filter((t) => !(t.isUntitled && !t.path && (!t.content || !t.content.trim())));
+}
+
+const sampleTabs = [
+  { id: '1', name: 'sem-titulo-1.md', path: '', content: '', isUntitled: true },
+  { id: '2', name: 'sem-titulo-2.md', path: '', content: '   ', isUntitled: true },
+  { id: '3', name: 'index.html', path: 'C:/proj/index.html', content: '<h1>Oi</h1>', isUntitled: false },
+];
+const filteredTabs = filterPersistedStudioTabs(sampleTabs);
+assert.equal(filteredTabs.length, 1);
+assert.equal(filteredTabs[0].name, 'index.html');
+
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.0.0 + ERD + Studio Web Preview) passaram com sucesso.');

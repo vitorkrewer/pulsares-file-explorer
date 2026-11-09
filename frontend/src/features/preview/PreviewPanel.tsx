@@ -23,9 +23,16 @@ import {
 import { usePreviewStore } from './store';
 import { useBrowserStore } from '../browser/store';
 import { useEditorStore } from '../editor/store';
+import { buildConnectedWebPreviewDoc } from '../editor/CodeEditorModal';
 import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { formatBytes, formatDate } from '../../i18n/format';
-import { openPath, PreviewData, PresentationSlide } from '../../lib/wails';
+import {
+  openPath,
+  listDirectorySnapshot,
+  readTextFile,
+  PreviewData,
+  PresentationSlide,
+} from '../../lib/wails';
 import { FileTypeIcon, getFileTypeVisual } from '../../ui/FileTypeIcon';
 
 function renderSimpleMarkdown(md: string): React.ReactNode {
@@ -897,7 +904,60 @@ const PreviewBody: React.FC<{
 }> = ({ data, imageZoom, setImageZoom, language }) => {
   const { t } = useTranslation('common');
   const isDb = data.kind === 'database' || isDatabaseFile(data.path);
+  const isHtml =
+    data.extension === 'html' ||
+    data.extension === 'htm' ||
+    /\.(html?)$/i.test(data.name);
+  const [htmlViewMode, setHtmlViewMode] = useState<'web' | 'code'>('web');
+  const [siblingAssets, setSiblingAssets] = useState<Record<string, string>>({});
   const typeVisual = getFileTypeVisual(data.name, data.kind === 'folder' ? 'dir' : 'file');
+
+  const parentDir = data.path ? data.path.replace(/[/\\][^/\\]+$/, '') : '';
+
+  useEffect(() => {
+    if (!isHtml || !parentDir) {
+      setSiblingAssets({});
+      return;
+    }
+    let cancelled = false;
+    void listDirectorySnapshot(parentDir, false).then((items) => {
+      if (cancelled) return;
+      const webFiles = items.filter(
+        (it) =>
+          it.kind !== 'dir' &&
+          /\.(css|m?js)$/i.test(it.name) &&
+          (it.size === undefined || it.size <= 2 * 1024 * 1024)
+      );
+      if (webFiles.length === 0) {
+        setSiblingAssets({});
+        return;
+      }
+      void Promise.all(
+        webFiles.map(async (wf) => {
+          try {
+            const res = await readTextFile(wf.location.path);
+            return [wf.name, res.content] as const;
+          } catch {
+            return null;
+          }
+        })
+      ).then((pairs) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        pairs.forEach((p) => {
+          if (p) map[p[0]] = p[1];
+        });
+        setSiblingAssets(map);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isHtml, parentDir, data.path]);
+
+  const connectedHtmlDoc = isHtml
+    ? buildConnectedWebPreviewDoc(data.textContent || '', parentDir, siblingAssets, [])
+    : '';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -1028,9 +1088,82 @@ const PreviewBody: React.FC<{
         )}
 
         {(data.kind === 'code' || data.kind === 'text') && (
-          <div style={styles.codeBox}>
-            <pre style={styles.preBlock}>{data.textContent || ''}</pre>
-            {data.truncated && <div style={styles.truncatedNote}>{t('preview.truncated')}</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 6 }}>
+            {isHtml && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  flexShrink: 0,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setHtmlViewMode('web')}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    borderRadius: 4,
+                    border: '1px solid var(--border)',
+                    backgroundColor:
+                      htmlViewMode === 'web' ? 'var(--accent-primary)' : 'var(--bg-subtle)',
+                    color: htmlViewMode === 'web' ? '#ffffff' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Prévia Web Renderizada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHtmlViewMode('code')}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    borderRadius: 4,
+                    border: '1px solid var(--border)',
+                    backgroundColor:
+                      htmlViewMode === 'code' ? 'var(--accent-primary)' : 'var(--bg-subtle)',
+                    color: htmlViewMode === 'code' ? '#ffffff' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Código HTML
+                </button>
+              </div>
+            )}
+
+            {isHtml && htmlViewMode === 'web' ? (
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 280,
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  overflow: 'hidden',
+                  backgroundColor: '#ffffff',
+                }}
+              >
+                <iframe
+                  title={data.name}
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                  srcDoc={connectedHtmlDoc}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    border: 'none',
+                    backgroundColor: '#ffffff',
+                  }}
+                />
+              </div>
+            ) : (
+              <div style={styles.codeBox}>
+                <pre style={styles.preBlock}>{data.textContent || ''}</pre>
+                {data.truncated && <div style={styles.truncatedNote}>{t('preview.truncated')}</div>}
+              </div>
+            )}
           </div>
         )}
 

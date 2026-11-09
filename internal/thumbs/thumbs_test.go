@@ -285,5 +285,68 @@ func TestLargeVideoStreaming_LoopbackAndClampedRange(t *testing.T) {
 	}
 }
 
+func TestLocalProjectWebServer_HTMLAndAssets(t *testing.T) {
+	tmp := t.TempDir()
+	svc := New(filepath.Join(tmp, "cache"), 10*1024*1024)
+
+	indexPath := filepath.Join(tmp, "index.html")
+	cssPath := filepath.Join(tmp, "style.css")
+	jsPath := filepath.Join(tmp, "matrizes.js")
+
+	if err := os.WriteFile(indexPath, []byte("<!DOCTYPE html><html><head><link rel=\"stylesheet\" href=\"style.css\"></head><body><h1>Focus</h1><script src=\"matrizes.js\"></script></body></html>"), 0o644); err != nil {
+		t.Fatalf("write index.html failed: %v", err)
+	}
+	if err := os.WriteFile(cssPath, []byte("body { background: #0f172a; color: #f8fafc; }"), 0o644); err != nil {
+		t.Fatalf("write style.css failed: %v", err)
+	}
+	if err := os.WriteFile(jsPath, []byte("console.log('matrizes loaded');"), 0o644); err != nil {
+		t.Fatalf("write matrizes.js failed: %v", err)
+	}
+
+	prev, err := svc.ReadPreview(indexPath, 4096)
+	if err != nil {
+		t.Fatalf("ReadPreview index.html failed: %v", err)
+	}
+	if prev.Kind != PreviewCode || !strings.Contains(prev.DataURI, "/__project/") {
+		t.Fatalf("expected PreviewCode with /__project/ DataURI, got kind=%s dataURI=%s", prev.Kind, prev.DataURI)
+	}
+
+	// Extrai o caminho /__project/<b64>/index.html para testar a resolução de style.css e matrizes.js
+	u, err := url.Parse(prev.DataURI)
+	if err != nil {
+		t.Fatalf("url.Parse failed: %v", err)
+	}
+	baseProjectPrefix := strings.TrimSuffix(u.Path, "index.html")
+
+	// Testa carregamento de style.css via ServeLocalMediaHTTP
+	reqCSS := httptest.NewRequest(http.MethodGet, baseProjectPrefix+"style.css", nil)
+	recCSS := httptest.NewRecorder()
+	ServeLocalMediaHTTP(recCSS, reqCSS)
+	if recCSS.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for style.css, got %d", recCSS.Code)
+	}
+	if !strings.Contains(recCSS.Header().Get("Content-Type"), "text/css") {
+		t.Fatalf("expected text/css content-type, got %s", recCSS.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(recCSS.Body.String(), "#0f172a") {
+		t.Fatalf("unexpected CSS body: %s", recCSS.Body.String())
+	}
+
+	// Testa carregamento de matrizes.js via ServeLocalMediaHTTP
+	reqJS := httptest.NewRequest(http.MethodGet, baseProjectPrefix+"matrizes.js", nil)
+	recJS := httptest.NewRecorder()
+	ServeLocalMediaHTTP(recJS, reqJS)
+	if recJS.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for matrizes.js, got %d", recJS.Code)
+	}
+	if !strings.Contains(recJS.Header().Get("Content-Type"), "application/javascript") {
+		t.Fatalf("expected application/javascript content-type, got %s", recJS.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(recJS.Body.String(), "matrizes loaded") {
+		t.Fatalf("unexpected JS body: %s", recJS.Body.String())
+	}
+}
+
+
 
 

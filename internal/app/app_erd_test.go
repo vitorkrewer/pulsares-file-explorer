@@ -132,3 +132,4 @@ func TestDBInspectSchema_EntityRelationship(t *testing.T) {
 		t.Errorf("esperava OnDelete 'CASCADE', obteve '%s'", fk.OnDelete)
 	}
 }
+

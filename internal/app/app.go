@@ -177,6 +177,19 @@ func (a *App) GetInitialState() InitialState {
 		}
 	}
 
+	if studioMode && studioTarget == "" {
+		if raw, err := os.ReadFile(studioIPCFilePath()); err == nil {
+			var msg studioIPCMessage
+			if json.Unmarshal(raw, &msg) == nil {
+				if msg.TargetPath != "" {
+					studioTarget = msg.TargetPath
+				} else if msg.WorkspaceDir != "" {
+					studioTarget = msg.WorkspaceDir
+				}
+			}
+		}
+	}
+
 	return InitialState{
 		SystemLanguage: sysLang,
 		HomeDir:        home,
@@ -846,6 +859,8 @@ func (a *App) OpenStudioWindow(targetPath string) error {
 	args := []string{"--studio"}
 	if cleanTarget != "" {
 		args = append(args, cleanTarget)
+	} else if workspaceDir != "" {
+		args = append(args, workspaceDir)
 	}
 	cmd := exec.Command(exe, args...)
 	if err := cmd.Start(); err != nil {

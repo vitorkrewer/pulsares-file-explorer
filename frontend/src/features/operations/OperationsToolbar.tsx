@@ -248,8 +248,10 @@ export const OperationsToolbar: React.FC = () => {
               .entries.find((e) => e.location.path === firstSelected);
             if (entry && entry.kind !== 'dir') {
               void useEditorStore.getState().openFileInEditor(entry.location.path);
+            } else if (entry && entry.kind === 'dir') {
+              void useEditorStore.getState().openFolderInEditor(entry.location.path);
             } else {
-              useEditorStore.getState().openNewUntitledTab(currentPath, 'markdown');
+              void useEditorStore.getState().openFolderInEditor(currentPath);
             }
           }}
           title="Pulsares Studio Editor (Ctrl+E)"
