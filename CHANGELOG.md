@@ -6,6 +6,12 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Suporte ao Idioma Sueco (Svenska - `sv`)**:
+  - Catálogo completo de internacionalização em sueco (`locales/sv/common.json`) com 100% de paridade com os catálogos existentes.
+  - Detecção automática de idioma do sistema (`resolveLanguage`) e opção de seleção manual no seletor de idiomas da barra de navegação (`AddressBar`).
+- **Suporte ao Idioma Turco (Türkçe - `tr`)**:
+  - Catálogo completo de internacionalização em turco (`locales/tr/common.json`) cobrindo 100% dos termos da interface.
+  - Detecção automática de idioma do sistema (`resolveLanguage`) e inclusão no seletor de idiomas da interface.
 - **Suporte ao Idioma Japonês (日本語 - `ja`)**:
   - Catálogo completo de internacionalização em japonês (`locales/ja/common.json`) cobrindo 100% dos termos e namespaces da interface (navegação, operações, terminal, busca, painéis, visualizador e configurações).
   - Detecção automática de idioma do sistema (`resolveLanguage`) e opção de seleção manual no seletor de idiomas da barra de navegação (`AddressBar`).

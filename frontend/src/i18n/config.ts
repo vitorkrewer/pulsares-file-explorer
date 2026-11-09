@@ -9,6 +9,8 @@ import frCommon from './locales/fr/common.json';
 import itCommon from './locales/it/common.json';
 import jaCommon from './locales/ja/common.json';
 import zhCNCommon from './locales/zh-CN/common.json';
+import svCommon from './locales/sv/common.json';
+import trCommon from './locales/tr/common.json';
 
 const charMap: Record<string, string> = {
   a: 'ä', A: 'Ä', e: 'ë', E: 'Ë', i: 'ï', I: 'Ï',
@@ -75,6 +77,12 @@ const resources = {
   'zh-CN': {
     common: zhCNCommon,
   },
+  sv: {
+    common: svCommon,
+  },
+  tr: {
+    common: trCommon,
+  },
   pseudo: {
     common: pseudoCommon,
   },
@@ -97,6 +105,8 @@ export function resolveLanguage(sysLang?: string, prefLang?: string): string {
   if (lower.startsWith('it')) return 'it';
   if (lower.startsWith('ja')) return 'ja';
   if (lower.startsWith('zh')) return 'zh-CN';
+  if (lower.startsWith('sv')) return 'sv';
+  if (lower.startsWith('tr')) return 'tr';
   if (lower.startsWith('en')) return 'en';
   return 'en'; // fallback padrão do projeto
 }
