@@ -6,6 +6,10 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Suporte ao Idioma Italiano (Italiano - `it`)**:
+  - Catálogo completo de internacionalização em italiano (`locales/it/common.json`) cobrindo 100% dos termos e namespaces da interface (navegação, operações, terminal, busca, painéis, visualizador e configurações).
+  - Detecção automática de idioma do sistema com fallback inteligente (`resolveLanguage`) e opção de seleção manual no seletor de idiomas da barra de navegação (`AddressBar`), consolidando a cobertura do padrão EFIGS.
+  - Cobertura nos testes de sincronização de i18n (`check-i18n.js`) e testes unitários do frontend (`run-tests.js`).
 - **Suporte ao Idioma Francês (Français - `fr`)**:
   - Catálogo completo de internacionalização em francês (`locales/fr/common.json`) cobrindo 100% dos termos e namespaces da interface (navegação, operações, terminal, busca, painéis, visualizador e configurações).
   - Detecção automática de idioma do sistema com fallback inteligente (`resolveLanguage`) e opção de seleção manual no seletor de idiomas da barra de navegação (`AddressBar`).

@@ -6,6 +6,7 @@ import enCommon from './locales/en/common.json';
 import esCommon from './locales/es/common.json';
 import deCommon from './locales/de/common.json';
 import frCommon from './locales/fr/common.json';
+import itCommon from './locales/it/common.json';
 
 const charMap: Record<string, string> = {
   a: 'ä', A: 'Ä', e: 'ë', E: 'Ë', i: 'ï', I: 'Ï',
@@ -63,6 +64,9 @@ const resources = {
   fr: {
     common: frCommon,
   },
+  it: {
+    common: itCommon,
+  },
   pseudo: {
     common: pseudoCommon,
   },
@@ -82,6 +86,7 @@ export function resolveLanguage(sysLang?: string, prefLang?: string): string {
   if (lower.startsWith('es')) return 'es';
   if (lower.startsWith('de')) return 'de';
   if (lower.startsWith('fr')) return 'fr';
+  if (lower.startsWith('it')) return 'it';
   if (lower.startsWith('en')) return 'en';
   return 'en'; // fallback padrão do projeto
 }

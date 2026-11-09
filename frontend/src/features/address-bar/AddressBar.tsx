@@ -334,6 +334,7 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
             <option value="es">Español</option>
             <option value="de">Deutsch</option>
             <option value="fr">Français</option>
+            <option value="it">Italiano</option>
           </select>
         </div>
 

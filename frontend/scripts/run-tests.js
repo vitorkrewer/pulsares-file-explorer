@@ -15,6 +15,7 @@ function resolveLanguage(sysLang, prefLang) {
   if (lower.startsWith('es')) return 'es';
   if (lower.startsWith('de')) return 'de';
   if (lower.startsWith('fr')) return 'fr';
+  if (lower.startsWith('it')) return 'it';
   if (lower.startsWith('en')) return 'en';
   return 'en';
 }
@@ -25,7 +26,8 @@ assert.equal(resolveLanguage('es-ES', 'auto'), 'es');
 assert.equal(resolveLanguage('en-US', 'auto'), 'en');
 assert.equal(resolveLanguage('fr-FR', 'auto'), 'fr');
 assert.equal(resolveLanguage('de-DE', undefined), 'de');
-assert.equal(resolveLanguage('it-IT', 'auto'), 'en');
+assert.equal(resolveLanguage('it-IT', 'auto'), 'it');
+assert.equal(resolveLanguage('nl-NL', 'auto'), 'en');
 assert.equal(resolveLanguage('en-US', 'es'), 'es');
 
 // 2. Testar ordenação natural com Intl.Collator
@@ -78,7 +80,7 @@ const requiredProductivityKeys = [
 const requiredArchiveKeys = ['title', 'compressSelection', 'inspecting', 'extractHere'];
 const requiredRemoteKeys = ['title', 'hostPlaceholder', 'userPlaceholder', 'pathPlaceholder', 'saveProfile', 'empty'];
 
-for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr']) {
+for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
   const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   for (const errKey of requiredErrorKeys) {
