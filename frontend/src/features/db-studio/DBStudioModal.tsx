@@ -19,6 +19,7 @@ import {
   Copy,
   Check,
   AlertCircle,
+  AlertTriangle,
   Clock,
   Layers,
   Minus,
@@ -574,6 +575,93 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
             </button>
           </div>
         </div>
+      ) : loading && !schema ? (
+        /* Estado de Carregamento Inicial do Banco */
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 14,
+            padding: 32,
+          }}
+        >
+          <RefreshCw size={36} className="spin-animation" style={{ color: 'var(--accent)' }} />
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Abrindo banco de dados e inspecionando tabelas...</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 500, wordBreak: 'break-all', textAlign: 'center' }}>
+            {dbPath}
+          </div>
+        </div>
+      ) : error && !schema ? (
+        /* Estado de Erro ao Abrir Banco */
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 32,
+            gap: 14,
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: '50%',
+              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 4,
+            }}
+          >
+            <AlertTriangle size={32} style={{ color: '#ef4444' }} />
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+            Não foi possível abrir o banco de dados
+          </div>
+          <div
+            style={{
+              maxWidth: 520,
+              fontSize: 12.5,
+              lineHeight: 1.5,
+              color: 'var(--text-primary)',
+              background: 'rgba(239, 68, 68, 0.08)',
+              padding: '12px 16px',
+              borderRadius: 8,
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              textAlign: 'center',
+            }}
+          >
+            {error}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', wordBreak: 'break-all', maxWidth: 520 }}>
+            {dbPath}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+            <button
+              type="button"
+              className="op-btn primary"
+              onClick={() => void refreshSchema()}
+              style={{ padding: '7px 16px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <RefreshCw size={13} /> Tentar novamente
+            </button>
+            <button
+              type="button"
+              className="op-btn"
+              onClick={() => useDBStudioStore.setState({ dbPath: '', error: null, schema: null })}
+              style={{ padding: '7px 16px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <FolderOpen size={13} /> Escolher outro arquivo
+            </button>
+          </div>
+        </div>
       ) : (
         /* Corpo Principal: Sidebar de Esquema + Área de Dados/Consulta */
         <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
@@ -928,9 +1016,41 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
 
                 {/* Grade de Dados da Tabela */}
                 <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+                  {queryLoading && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.28)',
+                        backdropFilter: 'blur(2px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        zIndex: 10,
+                        fontSize: 12.5,
+                        fontWeight: 500,
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      <RefreshCw size={16} className="spin-animation" style={{ color: 'var(--accent)' }} />
+                      <span>Carregando registros da tabela...</span>
+                    </div>
+                  )}
+
                   {!tableData || tableData.columns.length === 0 ? (
-                    <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
-                      {queryLoading ? 'Carregando registros...' : 'Selecione uma tabela na barra lateral.'}
+                    <div style={{ padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13, gap: 10 }}>
+                      {queryLoading ? (
+                        <>
+                          <RefreshCw size={22} className="spin-animation" style={{ color: 'var(--accent)' }} />
+                          <span>Carregando registros...</span>
+                        </>
+                      ) : (
+                        'Selecione uma tabela na barra lateral.'
+                      )}
                     </div>
                   ) : (
                     <table

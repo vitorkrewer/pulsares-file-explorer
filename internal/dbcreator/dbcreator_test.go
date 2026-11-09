@@ -209,3 +209,4 @@ func TestSanitizeIdentifier(t *testing.T) {
 		}
 	}
 }
+

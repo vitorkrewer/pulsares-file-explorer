@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowUpDown } from 'lucide-react';
+import { ArrowUpDown, Loader2 } from 'lucide-react';
 import { useBrowserStore } from './store';
 import { useOperationsStore } from '../operations/store';
 import { Entry, openPath, enqueueOperation } from '../../lib/wails';
@@ -123,11 +123,24 @@ export const DetailsView: React.FC = () => {
 
       {/* Conteúdo Virtualizado */}
       <div ref={parentRef} style={styles.list}>
+        {isLoading && sortedEntries.length > 0 && (
+          <div style={styles.floatingLoader}>
+            <Loader2 size={13} className="spin-animation" style={{ color: 'var(--accent)' }} />
+            <span>{t('status.loading')}</span>
+          </div>
+        )}
         {error ? (
           <div style={styles.centerMessage}>{t('errors.generic')}</div>
         ) : sortedEntries.length === 0 ? (
           <div style={styles.centerMessage}>
-            {isLoading ? t('status.loading') : t('status.empty')}
+            {isLoading ? (
+              <div style={styles.centerLoading}>
+                <Loader2 size={24} className="spin-animation" style={{ color: 'var(--accent)', marginBottom: 8 }} />
+                <span>{t('status.loading')}</span>
+              </div>
+            ) : (
+              t('status.empty')
+            )}
           </div>
         ) : (
           <div
@@ -344,5 +357,25 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     color: 'var(--text-muted)',
     fontSize: 13,
+  },
+  floatingLoader: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 5,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '4px 10px',
+    fontSize: 11.5,
+    backgroundColor: 'var(--bg-selected)',
+    color: 'var(--accent)',
+    borderBottom: '1px solid var(--border-subtle)',
+  },
+  centerLoading: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 };

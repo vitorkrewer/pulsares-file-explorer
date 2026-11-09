@@ -1,12 +1,13 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Loader2 } from 'lucide-react';
 import { useBrowserStore } from './store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { formatBytes } from '../../i18n/format';
 
 export const StatusBar: React.FC = () => {
   const { t, i18n } = useTranslation('common');
-  const { entries, selectedPaths, showHidden, currentPath } = useBrowserStore();
+  const { entries, selectedPaths, showHidden, currentPath, isLoading } = useBrowserStore();
   const { drives } = useFolderTreeStore();
 
   const visibleEntries = showHidden ? entries : entries.filter((e) => !e.attrs.hidden);
@@ -20,11 +21,18 @@ export const StatusBar: React.FC = () => {
   return (
     <div style={styles.statusBar}>
       <div style={styles.section}>
-        <span>
-          {totalCount === 1
-            ? t('status.items', { count: totalCount })
-            : t('status.items_plural', { count: totalCount })}
-        </span>
+        {isLoading ? (
+          <span style={styles.loadingBadge}>
+            <Loader2 size={12} className="spin-animation" style={{ color: 'var(--accent)' }} />
+            <span>{t('status.loading')}</span>
+          </span>
+        ) : (
+          <span>
+            {totalCount === 1
+              ? t('status.items', { count: totalCount })
+              : t('status.items_plural', { count: totalCount })}
+          </span>
+        )}
         {selectedCount > 0 && (
           <>
             <span style={styles.divider}>•</span>
@@ -67,6 +75,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
+  },
+  loadingBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    color: 'var(--accent)',
+    fontWeight: 500,
   },
   divider: {
     color: 'var(--border-strong)',

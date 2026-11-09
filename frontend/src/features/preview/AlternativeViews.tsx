@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Loader2 } from 'lucide-react';
 import { useBrowserStore } from '../browser/store';
 import { usePreviewStore, GroupByOption } from './store';
 import { Entry, openPath, listDirectorySnapshot, enqueueOperation } from '../../lib/wails';
@@ -44,6 +45,7 @@ export const AlternativeViews: React.FC = () => {
   const { t, i18n } = useTranslation('common');
   const {
     entries,
+    isLoading,
     currentPath,
     showHidden,
     selectedPaths,
@@ -222,9 +224,24 @@ export const AlternativeViews: React.FC = () => {
   };
 
   if (viewMode === 'list') {
+    if (isLoading && sortedEntries.length === 0) {
+      return (
+        <div style={styles.centerLoading}>
+          <Loader2 size={24} className="spin-animation" style={{ color: 'var(--accent)', marginBottom: 8 }} />
+          <span>{t('status.loading')}</span>
+        </div>
+      );
+    }
+
     const rowPadding = density === 'compact' ? '4px 8px' : '7px 10px';
     return (
       <div style={styles.scrollContainer}>
+        {isLoading && (
+          <div style={styles.floatingLoader}>
+            <Loader2 size={13} className="spin-animation" style={{ color: 'var(--accent)' }} />
+            <span>{t('status.loading')}</span>
+          </div>
+        )}
         {groupedEntries.map((group) => (
           <div key={group.groupTitle || 'all'} style={{ marginBottom: 12 }}>
             {group.groupTitle && <div style={styles.groupHeader}>{group.groupTitle}</div>}
@@ -278,12 +295,27 @@ export const AlternativeViews: React.FC = () => {
   }
 
   if (viewMode === 'grid') {
+    if (isLoading && sortedEntries.length === 0) {
+      return (
+        <div style={styles.centerLoading}>
+          <Loader2 size={24} className="spin-animation" style={{ color: 'var(--accent)', marginBottom: 8 }} />
+          <span>{t('status.loading')}</span>
+        </div>
+      );
+    }
+
     const cardWidth = gridSize === 'small' ? 104 : gridSize === 'large' ? 184 : 140;
     const thumbHeight = gridSize === 'small' ? 68 : gridSize === 'large' ? 128 : 94;
     const dim = gridSize === 'small' ? 96 : gridSize === 'large' ? 180 : 136;
 
     return (
       <div style={styles.scrollContainer}>
+        {isLoading && (
+          <div style={styles.floatingLoader}>
+            <Loader2 size={13} className="spin-animation" style={{ color: 'var(--accent)' }} />
+            <span>{t('status.loading')}</span>
+          </div>
+        )}
         {groupedEntries.map((group) => (
           <div key={group.groupTitle || 'all'} style={{ marginBottom: 16 }}>
             {group.groupTitle && <div style={styles.groupHeader}>{group.groupTitle}</div>}
@@ -624,6 +656,32 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: 'var(--text-muted)',
     textAlign: 'center',
+  },
+  floatingLoader: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 5,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '4px 10px',
+    fontSize: 11.5,
+    backgroundColor: 'var(--bg-selected)',
+    color: 'var(--accent)',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  centerLoading: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    minHeight: 200,
+    color: 'var(--text-muted)',
+    fontSize: 13,
   },
 };
 

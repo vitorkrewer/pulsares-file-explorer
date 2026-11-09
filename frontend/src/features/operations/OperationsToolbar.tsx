@@ -247,9 +247,9 @@ export const OperationsToolbar: React.FC = () => {
               .getState()
               .entries.find((e) => e.location.path === firstSelected);
             if (entry && entry.kind !== 'dir') {
-              void useEditorStore.getState().openFileInEditor(entry.location.path);
+              void useEditorStore.getState().openFileInEditor(entry.location.path, true);
             } else {
-              useEditorStore.getState().openNewUntitledTab(currentPath, 'markdown');
+              useEditorStore.getState().openNewUntitledTab(currentPath, 'markdown', true);
             }
           }}
           title="Pulsares Studio Editor (Ctrl+E)"
@@ -266,12 +266,12 @@ export const OperationsToolbar: React.FC = () => {
             const firstSelected = Array.from(selectedPaths)[0];
             const selectedEntry = entries.find((e) => e.location.path === firstSelected);
             if (selectedEntry && selectedEntry.kind !== 'dir' && isDatabaseFile(selectedEntry.name)) {
-              void useDBStudioStore.getState().openDatabase(selectedEntry.location.path);
+              void useDBStudioStore.getState().openDatabase(selectedEntry.location.path, { forceInline: true });
               return;
             }
             const firstDbInFolder = entries.find((e) => e.kind !== 'dir' && isDatabaseFile(e.name));
             if (firstDbInFolder) {
-              void useDBStudioStore.getState().openDatabase(firstDbInFolder.location.path);
+              void useDBStudioStore.getState().openDatabase(firstDbInFolder.location.path, { forceInline: true });
               return;
             }
             void useDBStudioStore.getState().openDatabase('', { forceInline: true });

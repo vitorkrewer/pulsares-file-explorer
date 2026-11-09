@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1233,18 +1234,40 @@ type DBQueryResult struct {
 func openUserSQLite(dbPath string) (*sql.DB, string, error) {
 	clean := filepath.Clean(strings.TrimSpace(dbPath))
 	if clean == "" {
-		return nil, "", errors.New("caminho do banco de dados vazio")
+		return nil, "", errors.New("caminho do banco de dados não informado")
 	}
 	info, err := os.Stat(clean)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, "", fmt.Errorf("arquivo de banco de dados não encontrado: %s", filepath.Base(clean))
+		}
+		if os.IsPermission(err) {
+			return nil, "", fmt.Errorf("permissão negada para acessar o arquivo: %s", filepath.Base(clean))
+		}
 		return nil, "", err
 	}
 	if info.IsDir() {
-		return nil, "", errors.New("o caminho informado é uma pasta, não um arquivo de banco")
+		return nil, "", errors.New("o caminho informado é uma pasta, selecione um arquivo de banco (.db, .sqlite)")
 	}
+	if info.Size() < 100 {
+		return nil, "", fmt.Errorf("o arquivo '%s' possui tamanho insuficiente (%d bytes) para ser um banco SQLite válido ou está vazio", filepath.Base(clean), info.Size())
+	}
+
+	// Validar cabeçalho mágico de 16 bytes padrão do SQLite 3 ("SQLite format 3\x00")
+	f, err := os.Open(clean)
+	if err != nil {
+		return nil, "", fmt.Errorf("não foi possível ler o arquivo: %w", err)
+	}
+	header := make([]byte, 16)
+	n, readErr := io.ReadFull(f, header)
+	_ = f.Close()
+	if readErr != nil || n < 16 || string(header) != "SQLite format 3\x00" {
+		return nil, "", fmt.Errorf("o arquivo '%s' não é um banco de dados SQLite válido (cabeçalho incompatível ou corrompido)", filepath.Base(clean))
+	}
+
 	db, err := sql.Open("sqlite", clean)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("falha ao inicializar conexão SQLite: %w", err)
 	}
 	return db, clean, nil
 }

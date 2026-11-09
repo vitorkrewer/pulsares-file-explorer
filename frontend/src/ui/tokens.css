@@ -181,3 +181,19 @@ select, textarea {
   font-size: inherit;
   color: inherit;
 }
+
+@keyframes pulsares-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-animation,
+.pulsares-spin {
+  animation: pulsares-spin 0.85s linear infinite;
+  display: inline-block;
+  transform-origin: center center;
+}

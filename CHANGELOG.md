@@ -6,6 +6,16 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Spinners e Indicadores de Carregamento Visuais em Todo o Explorer**:
+  - Inclusão de animações padronizadas de rotação contínua (`@keyframes pulsares-spin`, `.spin-animation`, `.pulsares-spin`) no design system (`tokens.css`).
+  - Indicadores centrais com spinner e texto informativo na visão detalhada (`DetailsView`) e visões alternativas (`AlternativeViews`: lista compacta, grade de cartões e colunas Miller) durante o carregamento inicial de pastas.
+  - Barra sutil de carregamento em segundo plano no topo das listas ao alternar diretórios, mantendo a experiência fluida sem saltos visuais.
+  - Indicador animado de atividade na barra de status inferior (`StatusBar`) com spinner e mensagem contextual de carregamento de diretório.
+  - Indicador de carregamento e spinner em tela cheia no Pulse DB Studio durante a leitura do banco de dados e execução de consultas SQL.
+- **Correção da Abertura do Pulse DB Studio na Barra de Ferramentas e Mensagens de Erro Transparentes**:
+  - Correção do botão do Pulse DB Studio na barra de ferramentas superior (`OperationsToolbar`), garantindo que a abertura ocorra sempre no modal integrado e fluido (`forceInline: true`), eliminando o problema de abertura em tela preta decorrente de janelas secundárias do WebView2 sem contexto.
+  - Validação estrita no backend Go (`openUserSQLite`) verificando a existência, diretório, tamanho mínimo (< 100 bytes) e verificação dos 16 bytes do cabeçalho mágico oficial (`SQLite format 3\000`), prevenindo falhas silenciosas ou erros de PRAGMA em arquivos não-SQLite ou corrompidos.
+  - Apresentação de mensagens claras, amigáveis e explicativas ao usuário quando um banco de dados ou arquivo não puder ser aberto, tanto no Pulse DB Studio quanto no Pulsares Studio Editor, com tela informativa de boas-vindas/erro e ações para tentar novamente ou criar novo documento.
 - **Criação Rápida de Banco de Dados SQLite a partir de Arquivos (CSV, TSV, JSON, JSONL)**:
   - Nova ação integrada no menu de contexto do navegador de arquivos para arquivos tabulares e semiestruturados (`.csv`, `.tsv`, `.tab`, `.json`, `.jsonl`, `.ndjson`): **"Criar Banco de Dados SQLite..."**.
   - **Mecanismo de Análise e Inferência Automática (`dbcreator`)**: detecção inteligente de delimitador (vírgula, ponto-e-vírgula, tabulação), cabeçalhos e inferência dinâmica de tipos (`INTEGER`, `REAL`, `BOOLEAN`, `TEXT`, `DATETIME`) a partir da amostragem dos dados.

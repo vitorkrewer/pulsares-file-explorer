@@ -722,7 +722,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   isMinimized: false,
   isMaximized: isStandaloneStudioWindow(),
   isDedicatedStudio: isStandaloneStudioWindow(),
-  preferSeparateWindow: true,
+  preferSeparateWindow: false,
   workspaceDir: '',
   tabs: [],
   activeTabId: null,
@@ -822,6 +822,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         persistTabsToStorage(nextTabs, id, parentDir);
       } catch (err) {
         console.error('Erro ao abrir arquivo no Pulsares Studio:', err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        set({
+          isOpen: true,
+          statusMessage: `Não foi possível abrir o arquivo: ${errMsg}`,
+        });
+        setTimeout(() => {
+          if (get().statusMessage?.startsWith('Não foi possível abrir o arquivo:')) {
+            set({ statusMessage: null });
+          }
+        }, 5000);
         return;
       }
     } else {

@@ -3196,7 +3196,92 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                 </>
               )}
             </div>
-          ) : null}
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '32px',
+                textAlign: 'center',
+                backgroundColor: 'var(--bg-surface)',
+                color: 'var(--text-secondary)',
+                gap: '16px',
+              }}
+            >
+              <div
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '16px',
+                  backgroundColor: 'var(--bg-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--accent-primary)',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+                }}
+              >
+                <FileCode2 size={36} />
+              </div>
+
+              {statusMessage && statusMessage.startsWith('Não foi possível') ? (
+                <div
+                  style={{
+                    maxWidth: '520px',
+                    padding: '14px 18px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                    border: '1px solid rgba(220, 38, 38, 0.3)',
+                    color: 'var(--status-danger)',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, marginBottom: '6px' }}>
+                    <AlertTriangle size={16} />
+                    <span>Aviso do Pulsares Studio</span>
+                  </div>
+                  <div>{statusMessage}</div>
+                </div>
+              ) : (
+                <div style={{ maxWidth: '420px' }}>
+                  <h3 style={{ margin: '0 0 6px 0', fontSize: '15px', color: 'var(--text-primary)', fontWeight: 600 }}>
+                    Nenhum documento aberto
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '12px', lineHeight: '1.5', color: 'var(--text-muted)' }}>
+                    Crie um novo documento ou selecione um arquivo de texto no explorador para visualizá-lo e editá-lo no Pulsares Studio.
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => openNewUntitledTab(effectiveWorkspace)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'var(--accent-primary)',
+                    color: '#ffffff',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                  }}
+                >
+                  <Plus size={14} />
+                  <span>Novo Documento</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Console de Execução Integrado (Task & Script Runner) */}
           {runnerOpen && (
@@ -3342,47 +3427,64 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
       )}
 
       {/* Barra de status inferior do Pulsares Studio */}
-      {activeTab && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '4px 12px',
-            backgroundColor: 'var(--bg-subtle)',
-            borderTop: '1px solid var(--border-subtle)',
-            fontSize: '11px',
-            color: 'var(--text-secondary)',
-            userSelect: 'none',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span>
-              Ln {activeTab.cursorLine}, Col {activeTab.cursorCol}
-            </span>
-            <span>
-              {lines.length} linhas • {activeTab.content.length} caract.
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              {diagnostics.length === 0 ? (
-                <>
-                  <CheckCircle2 size={12} style={{ color: 'var(--status-success)' }} />
-                  <span>Sem alertas</span>
-                </>
-              ) : (
-                <>
-                  <AlertTriangle size={12} style={{ color: 'var(--status-warning)' }} />
-                  <span>{diagnostics.length} alerta(s)</span>
-                </>
-              )}
-            </span>
-            {statusMessage && (
-              <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>
-                {statusMessage}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '4px 12px',
+          backgroundColor: 'var(--bg-subtle)',
+          borderTop: '1px solid var(--border-subtle)',
+          fontSize: '11px',
+          color: 'var(--text-secondary)',
+          userSelect: 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {activeTab ? (
+            <>
+              <span>
+                Ln {activeTab.cursorLine}, Col {activeTab.cursorCol}
               </span>
-            )}
-          </div>
+              <span>
+                {lines.length} linhas • {activeTab.content.length} caract.
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                {diagnostics.length === 0 ? (
+                  <>
+                    <CheckCircle2 size={12} style={{ color: 'var(--status-success)' }} />
+                    <span>Sem alertas</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle size={12} style={{ color: 'var(--status-warning)' }} />
+                    <span>{diagnostics.length} alerta(s)</span>
+                  </>
+                )}
+              </span>
+            </>
+          ) : (
+            <span>Pulsares Studio</span>
+          )}
+          {statusMessage && (
+            <span
+              style={{
+                color: statusMessage.startsWith('Não foi possível')
+                  ? 'var(--status-danger)'
+                  : 'var(--accent-primary)',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              {statusMessage.startsWith('Não foi possível') && <AlertTriangle size={12} />}
+              {statusMessage}
+            </span>
+          )}
+        </div>
 
+        {activeTab && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               type="button"
@@ -3469,8 +3571,8 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Alça de redimensionamento quando em modo flutuante */}
       {!isDedicatedWindow && !isMaximized && (

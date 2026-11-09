@@ -91,7 +91,7 @@ export const useDBStudioStore = create<DBStudioState>((set, get) => ({
   isOpen: isStandaloneDBStudioWindow(),
   isMinimized: false,
   isMaximized: false,
-  preferSeparateWindow: true,
+  preferSeparateWindow: false,
   dbPath: '',
   schema: null,
   activeTable: '',
