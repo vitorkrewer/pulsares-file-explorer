@@ -185,17 +185,30 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
     if (!raw) return;
     try {
       const paths = JSON.parse(raw) as string[];
-      if (Array.isArray(paths) && paths.length > 0) {
-        const kind = e.shiftKey ? 'move' : 'copy';
-        useOperationsStore.getState().setPanelOpen(true);
-        await enqueueOperation(
-          kind,
-          paths,
-          targetPath,
-          'ask',
-          useOperationsStore.getState().verifyHash
-        );
-      }
+      if (!Array.isArray(paths) || paths.length === 0) return;
+
+      const normDest = targetPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      const validPaths = paths.filter((p) => {
+        const normSrc = p.replace(/\\/g, '/').toLowerCase();
+        if (normSrc === normDest) return false;
+        if (normDest.startsWith(normSrc + '/')) return false;
+        const normParent = normSrc.replace(/\/[^/]+$/, '');
+        if (normParent === normDest) return false;
+        return true;
+      });
+
+      if (validPaths.length === 0) return;
+
+      const kind = e.ctrlKey ? 'copy' : 'move';
+      useOperationsStore.getState().setPanelOpen(true);
+      await enqueueOperation(
+        kind,
+        validPaths,
+        targetPath,
+        'ask',
+        useOperationsStore.getState().verifyHash
+      );
+      useBrowserStore.getState().refresh();
     } catch {
       // Ignorar payload inválido
     }
@@ -288,6 +301,12 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
               aria-expanded={showChevron ? item.expanded : undefined}
               aria-selected={isCurrent}
               title={item.node.isLink ? `${path} (${t('tree.symlink')})` : path}
+              draggable={item.depth > 1}
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/x-pulsares-paths', JSON.stringify([path]));
+                e.dataTransfer.setData('text/plain', path);
+                e.dataTransfer.effectAllowed = 'copyMove';
+              }}
               onClick={() => {
                 setFocusedPath(path);
                 navigateTo(path);

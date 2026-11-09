@@ -6,6 +6,12 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Arrastar e Soltar (Drag & Drop) Fluido, Seguro e Funcional**:
+  - Eliminação da causa raiz de travamentos e congelamentos (*freezes*): remoção do atributo `draggable` global do container de painel em `App.tsx`, que interceptava cliques de seleção de arquivos e causava auto-drops involuntários.
+  - Implementação de arrastar e soltar granular em itens e linhas de pastas na visão detalhada (`DetailsView`), lista compacta, grade de cartões e colunas Miller (`AlternativeViews`).
+  - Suporte completo a soltar arquivos e pastas diretamente sobre subpastas nas listas ou sobre nós na árvore lateral de diretórios (`FolderTree`), com realce visual da pasta destino e auto-expansão ao pairar o cursor.
+  - Proteção inteligente no frontend contra auto-drops (mover um arquivo/pasta para onde ele já reside) e contra soltar pastas dentro de si mesmas ou de suas próprias subpastas.
+  - Proteção robusta no backend (`internal/ops/ops.go`): detecção determinística de movimentação para o mesmo diretório como no-op seguro e sem bloqueios na fila, prevenção de loops recursivos infinitos ao tentar mover ou copiar diretórios para seus descendentes (`isSameOrDescendant`), e criação automática com sufixo numérico exclusivo (`arquivo (1).ext`) ao duplicar arquivos no mesmo local.
 - **Barra Lateral com Activity Bar (estilo VS Code) e Flyout com Auto-Ocultar**:
   - Ao recolher o painel lateral (`Ctrl+B` ou botão na barra de navegação), o espaço de pastas abertas ganha foco total e surge uma **Activity Bar** vertical compacta com ícones rápidos para **Pastas**, **Favoritos**, **Recentes**, **Unidades/Volumes** e **SSH / SFTP**.
   - Abertura de gaveta flutuante (*Flyout*) com efeito de sobreposição ao clicar em qualquer ícone da barra, sem redimensionar ou mover os painéis de arquivos.

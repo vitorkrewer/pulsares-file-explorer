@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBrowserStore } from '../browser/store';
 import { usePreviewStore, GroupByOption } from './store';
-import { Entry, openPath, listDirectorySnapshot } from '../../lib/wails';
+import { Entry, openPath, listDirectorySnapshot, enqueueOperation } from '../../lib/wails';
 import { formatBytes, formatDate, getCollator } from '../../i18n/format';
 import { FileTypeIcon, getFileTypeVisual } from '../../ui/FileTypeIcon';
 import { isDatabaseFile, useDBStudioStore } from '../db-studio/store';
+import { useOperationsStore } from '../operations/store';
 
 function isImageEntry(name: string): boolean {
   const ext = name.split('.').pop()?.toLowerCase() || '';
@@ -50,7 +51,74 @@ export const AlternativeViews: React.FC = () => {
     sortDirection,
     selectItem,
     navigateTo,
+    refresh,
   } = useBrowserStore();
+
+  const [dragTargetFolder, setDragTargetFolder] = useState<string | null>(null);
+
+  const handleItemDragStart = (e: React.DragEvent, entry: Entry) => {
+    let pathsToDrag = Array.from(selectedPaths);
+    if (!selectedPaths.has(entry.location.path)) {
+      selectItem(entry.location.path, false, false);
+      pathsToDrag = [entry.location.path];
+    }
+    e.dataTransfer.setData('application/x-pulsares-paths', JSON.stringify(pathsToDrag));
+    e.dataTransfer.setData('text/plain', pathsToDrag.join('\n'));
+    e.dataTransfer.effectAllowed = 'copyMove';
+  };
+
+  const handleFolderDragOver = (e: React.DragEvent, targetDir: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
+    if (dragTargetFolder !== targetDir) {
+      setDragTargetFolder(targetDir);
+    }
+  };
+
+  const handleFolderDragLeave = (_e: React.DragEvent, targetDir: string) => {
+    if (dragTargetFolder === targetDir) {
+      setDragTargetFolder(null);
+    }
+  };
+
+  const handleFolderDrop = async (e: React.DragEvent, targetDir: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragTargetFolder(null);
+
+    const raw = e.dataTransfer.getData('application/x-pulsares-paths');
+    if (!raw) return;
+    try {
+      const paths = JSON.parse(raw) as string[];
+      if (!Array.isArray(paths) || paths.length === 0) return;
+
+      const normDest = targetDir.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      const validPaths = paths.filter((p) => {
+        const normSrc = p.replace(/\\/g, '/').toLowerCase();
+        if (normSrc === normDest) return false;
+        if (normDest.startsWith(normSrc + '/')) return false;
+        const normParent = normSrc.replace(/\/[^/]+$/, '');
+        if (normParent === normDest) return false;
+        return true;
+      });
+
+      if (validPaths.length === 0) return;
+
+      const kind = e.ctrlKey ? 'copy' : 'move';
+      useOperationsStore.getState().setPanelOpen(true);
+      await enqueueOperation(
+        kind,
+        validPaths,
+        targetDir,
+        'ask',
+        useOperationsStore.getState().verifyHash
+      );
+      refresh();
+    } catch {
+      // Ignorar payload inválido
+    }
+  };
   const {
     viewMode,
     gridSize,
@@ -163,10 +231,28 @@ export const AlternativeViews: React.FC = () => {
             <div style={styles.compactListGrid}>
               {group.items.map((entry) => {
                 const isSelected = selectedPaths.has(entry.location.path);
+                const isDragTarget = dragTargetFolder === entry.location.path;
                 return (
                   <div
                     key={entry.location.path}
                     data-entry-path={entry.location.path}
+                    draggable={true}
+                    onDragStart={(e) => handleItemDragStart(e, entry)}
+                    onDragOver={
+                      entry.kind === 'dir'
+                        ? (e) => handleFolderDragOver(e, entry.location.path)
+                        : undefined
+                    }
+                    onDragLeave={
+                      entry.kind === 'dir'
+                        ? (e) => handleFolderDragLeave(e, entry.location.path)
+                        : undefined
+                    }
+                    onDrop={
+                      entry.kind === 'dir'
+                        ? (e) => handleFolderDrop(e, entry.location.path)
+                        : undefined
+                    }
                     onClick={(e) =>
                       selectItem(entry.location.path, e.ctrlKey || e.metaKey, e.shiftKey)
                     }
@@ -175,6 +261,7 @@ export const AlternativeViews: React.FC = () => {
                       ...styles.compactListItem,
                       padding: rowPadding,
                       backgroundColor: isSelected ? 'var(--bg-selected)' : 'transparent',
+                      outline: isDragTarget ? '2px dashed var(--accent)' : 'none',
                     }}
                     title={entry.name}
                   >
@@ -209,6 +296,7 @@ export const AlternativeViews: React.FC = () => {
             >
               {group.items.map((entry) => {
                 const isSelected = selectedPaths.has(entry.location.path);
+                const isDragTarget = dragTargetFolder === entry.location.path;
                 const thumbKey = `${entry.location.path}:${dim}`;
                 const thumbUri = thumbnails[thumbKey];
 
@@ -216,6 +304,23 @@ export const AlternativeViews: React.FC = () => {
                   <div
                     key={entry.location.path}
                     data-entry-path={entry.location.path}
+                    draggable={true}
+                    onDragStart={(e) => handleItemDragStart(e, entry)}
+                    onDragOver={
+                      entry.kind === 'dir'
+                        ? (e) => handleFolderDragOver(e, entry.location.path)
+                        : undefined
+                    }
+                    onDragLeave={
+                      entry.kind === 'dir'
+                        ? (e) => handleFolderDragLeave(e, entry.location.path)
+                        : undefined
+                    }
+                    onDrop={
+                      entry.kind === 'dir'
+                        ? (e) => handleFolderDrop(e, entry.location.path)
+                        : undefined
+                    }
                     onClick={(e) =>
                       selectItem(entry.location.path, e.ctrlKey || e.metaKey, e.shiftKey)
                     }
@@ -223,7 +328,12 @@ export const AlternativeViews: React.FC = () => {
                     style={{
                       ...styles.gridCard,
                       backgroundColor: isSelected ? 'var(--bg-selected)' : 'var(--bg-surface)',
-                      borderColor: isSelected ? 'var(--accent)' : 'var(--border-subtle)',
+                      borderColor: isDragTarget
+                        ? 'var(--accent)'
+                        : isSelected
+                        ? 'var(--accent)'
+                        : 'var(--border-subtle)',
+                      boxShadow: isDragTarget ? '0 0 0 2px var(--accent)' : 'none',
                     }}
                     title={`${entry.name}\n${formatDate(entry.modTime, i18n.language)}`}
                   >
@@ -270,13 +380,18 @@ export const AlternativeViews: React.FC = () => {
               .filter((e) => e.kind === 'dir')
               .map((entry) => {
                 const isCurrent = entry.location.path === currentPath;
+                const isDragTarget = dragTargetFolder === entry.location.path;
                 return (
                   <div
                     key={entry.location.path}
                     onClick={() => navigateTo(entry.location.path)}
+                    onDragOver={(e) => handleFolderDragOver(e, entry.location.path)}
+                    onDragLeave={(e) => handleFolderDragLeave(e, entry.location.path)}
+                    onDrop={(e) => handleFolderDrop(e, entry.location.path)}
                     style={{
                       ...styles.millerRow,
                       backgroundColor: isCurrent ? 'var(--bg-selected)' : 'transparent',
+                      outline: isDragTarget ? '2px dashed var(--accent)' : 'none',
                     }}
                   >
                     {renderEntryIcon(entry, 14)}
@@ -295,10 +410,28 @@ export const AlternativeViews: React.FC = () => {
         <div style={styles.millerList}>
           {sortedEntries.map((entry) => {
             const isSelected = selectedPaths.has(entry.location.path);
+            const isDragTarget = dragTargetFolder === entry.location.path;
             return (
               <div
                 key={entry.location.path}
                 data-entry-path={entry.location.path}
+                draggable={true}
+                onDragStart={(e) => handleItemDragStart(e, entry)}
+                onDragOver={
+                  entry.kind === 'dir'
+                    ? (e) => handleFolderDragOver(e, entry.location.path)
+                    : undefined
+                }
+                onDragLeave={
+                  entry.kind === 'dir'
+                    ? (e) => handleFolderDragLeave(e, entry.location.path)
+                    : undefined
+                }
+                onDrop={
+                  entry.kind === 'dir'
+                    ? (e) => handleFolderDrop(e, entry.location.path)
+                    : undefined
+                }
                 onClick={(e) =>
                   selectItem(entry.location.path, e.ctrlKey || e.metaKey, e.shiftKey)
                 }
@@ -306,6 +439,7 @@ export const AlternativeViews: React.FC = () => {
                 style={{
                   ...styles.millerRow,
                   backgroundColor: isSelected ? 'var(--bg-selected)' : 'transparent',
+                  outline: isDragTarget ? '2px dashed var(--accent)' : 'none',
                 }}
               >
                 {renderEntryIcon(entry, 14)}
@@ -325,23 +459,46 @@ export const AlternativeViews: React.FC = () => {
             {childEntries.length === 0 ? (
               <div style={styles.millerEmpty}>{t('status.empty')}</div>
             ) : (
-              childEntries.map((sub) => (
-                <div
-                  key={sub.location.path}
-                  onClick={() => {
-                    if (sub.kind === 'dir') {
-                      navigateTo(sub.location.path);
-                    } else {
-                      void openPath(sub.location.path);
+              childEntries.map((sub) => {
+                const isDragTarget = dragTargetFolder === sub.location.path;
+                return (
+                  <div
+                    key={sub.location.path}
+                    draggable={true}
+                    onDragStart={(e) => handleItemDragStart(e, sub)}
+                    onDragOver={
+                      sub.kind === 'dir'
+                        ? (e) => handleFolderDragOver(e, sub.location.path)
+                        : undefined
                     }
-                  }}
-                  style={styles.millerRow}
-                >
-                  {renderEntryIcon(sub, 14)}
-                  <span style={styles.itemName}>{sub.name}</span>
-                  {sub.kind === 'dir' && <span style={styles.chevron}>›</span>}
-                </div>
-              ))
+                    onDragLeave={
+                      sub.kind === 'dir'
+                        ? (e) => handleFolderDragLeave(e, sub.location.path)
+                        : undefined
+                    }
+                    onDrop={
+                      sub.kind === 'dir'
+                        ? (e) => handleFolderDrop(e, sub.location.path)
+                        : undefined
+                    }
+                    onClick={() => {
+                      if (sub.kind === 'dir') {
+                        navigateTo(sub.location.path);
+                      } else {
+                        void openPath(sub.location.path);
+                      }
+                    }}
+                    style={{
+                      ...styles.millerRow,
+                      outline: isDragTarget ? '2px dashed var(--accent)' : 'none',
+                    }}
+                  >
+                    {renderEntryIcon(sub, 14)}
+                    <span style={styles.itemName}>{sub.name}</span>
+                    {sub.kind === 'dir' && <span style={styles.chevron}>›</span>}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

@@ -1,9 +1,10 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowUpDown } from 'lucide-react';
 import { useBrowserStore } from './store';
-import { Entry, openPath } from '../../lib/wails';
+import { useOperationsStore } from '../operations/store';
+import { Entry, openPath, enqueueOperation } from '../../lib/wails';
 import { formatBytes, formatDateTime, getCollator } from '../../i18n/format';
 import { FileTypeIcon, getFileTypeVisual } from '../../ui/FileTypeIcon';
 import { isDatabaseFile, useDBStudioStore } from '../db-studio/store';
@@ -23,7 +24,10 @@ export const DetailsView: React.FC = () => {
     setSort,
     selectItem,
     navigateTo,
+    refresh,
   } = useBrowserStore();
+
+  const [dragTargetFolder, setDragTargetFolder] = useState<string | null>(null);
 
   const locale = i18n.language || 'pt-BR';
   const collator = useMemo(() => getCollator(locale), [locale]);
@@ -141,19 +145,96 @@ export const DetailsView: React.FC = () => {
                 <div
                   key={item.location.path}
                   data-entry-path={item.location.path}
+                  draggable={true}
+                  onDragStart={(e) => {
+                    let pathsToDrag = Array.from(selectedPaths);
+                    if (!selectedPaths.has(item.location.path)) {
+                      selectItem(item.location.path, false, false);
+                      pathsToDrag = [item.location.path];
+                    }
+                    e.dataTransfer.setData(
+                      'application/x-pulsares-paths',
+                      JSON.stringify(pathsToDrag)
+                    );
+                    e.dataTransfer.setData('text/plain', pathsToDrag.join('\n'));
+                    e.dataTransfer.effectAllowed = 'copyMove';
+                  }}
+                  onDragOver={(e) => {
+                    if (item.kind !== 'dir') return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
+                    if (dragTargetFolder !== item.location.path) {
+                      setDragTargetFolder(item.location.path);
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (item.kind !== 'dir') return;
+                    if (dragTargetFolder === item.location.path) {
+                      setDragTargetFolder(null);
+                    }
+                  }}
+                  onDrop={async (e) => {
+                    if (item.kind !== 'dir') return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragTargetFolder(null);
+
+                    const raw = e.dataTransfer.getData('application/x-pulsares-paths');
+                    if (!raw) return;
+                    try {
+                      const paths = JSON.parse(raw) as string[];
+                      if (!Array.isArray(paths) || paths.length === 0) return;
+
+                      const destDir = item.location.path;
+                      const normDest = destDir.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
+                      // Validação estrita: não pode soltar uma pasta dentro de si mesma ou de suas subpastas
+                      const validPaths = paths.filter((p) => {
+                        const normSrc = p.replace(/\\/g, '/').toLowerCase();
+                        if (normSrc === normDest) return false;
+                        if (normDest.startsWith(normSrc + '/')) return false;
+                        const normParent = normSrc.replace(/\/[^/]+$/, '');
+                        if (normParent === normDest) return false;
+                        return true;
+                      });
+
+                      if (validPaths.length === 0) return;
+
+                      const kind = e.ctrlKey ? 'copy' : 'move';
+                      useOperationsStore.getState().setPanelOpen(true);
+                      await enqueueOperation(
+                        kind,
+                        validPaths,
+                        destDir,
+                        'ask',
+                        useOperationsStore.getState().verifyHash
+                      );
+                      refresh();
+                    } catch {
+                      // Ignorar payload inválido
+                    }
+                  }}
                   onClick={(e) => handleItemClick(e, item)}
                   onDoubleClick={() => handleItemDoubleClick(item)}
                   style={{
                     ...styles.row,
                     top: `${virtualRow.start}px`,
                     height: `${virtualRow.size}px`,
-                    backgroundColor: isSelected
+                    backgroundColor: dragTargetFolder === item.location.path
+                      ? 'var(--bg-selected, rgba(59, 130, 246, 0.25))'
+                      : isSelected
                       ? 'var(--accent-subtle)'
                       : virtualRow.index % 2 === 0
                       ? 'transparent'
                       : 'rgba(0,0,0,0.015)',
                     color: isSelected ? 'var(--accent-text)' : 'inherit',
                     opacity: item.attrs.hidden ? 0.6 : 1,
+                    outline: dragTargetFolder === item.location.path
+                      ? '2px dashed var(--accent)'
+                      : 'none',
+                    outlineOffset: '-2px',
+                    cursor: 'grab',
                   }}
                 >
                   <div style={{ ...styles.colName, ...styles.cell }}>

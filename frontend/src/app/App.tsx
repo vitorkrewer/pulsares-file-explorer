@@ -535,18 +535,27 @@ export const App: React.FC = () => {
     if (!raw || !currentPath) return;
     try {
       const paths = JSON.parse(raw) as string[];
-      if (Array.isArray(paths) && paths.length > 0) {
-        const kind = e.shiftKey ? 'move' : 'copy';
-        useOperationsStore.getState().setPanelOpen(true);
-        await enqueueOperation(
-          kind,
-          paths,
-          currentPath,
-          'ask',
-          useOperationsStore.getState().verifyHash
-        );
-        refresh();
-      }
+      if (!Array.isArray(paths) || paths.length === 0) return;
+
+      const normDest = currentPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      // Filtrar arquivos que já estejam nesta pasta para evitar operações redundantes e congelamentos
+      const validPaths = paths.filter((p) => {
+        const normParent = p.replace(/\\/g, '/').replace(/\/[^/]+$/, '').toLowerCase();
+        return normParent !== normDest;
+      });
+
+      if (validPaths.length === 0) return;
+
+      const kind = e.ctrlKey ? 'copy' : 'move';
+      useOperationsStore.getState().setPanelOpen(true);
+      await enqueueOperation(
+        kind,
+        validPaths,
+        currentPath,
+        'ask',
+        useOperationsStore.getState().verifyHash
+      );
+      refresh();
     } catch {
       // Ignorar payload inválido
     }
@@ -697,16 +706,10 @@ export const App: React.FC = () => {
                 onMouseDownCapture={handlePrimaryMouseDownCapture}
                 onClickCapture={handlePrimaryClickCapture}
                 onContextMenu={handlePrimaryContextMenu}
-                draggable={selectedPaths.size > 0}
-                onDragStart={(e) => {
-                  if (selectedPaths.size > 0) {
-                    e.dataTransfer.setData(
-                      'application/x-pulsares-paths',
-                      JSON.stringify(Array.from(selectedPaths))
-                    );
-                  }
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
                 }}
-                onDragOver={(e) => e.preventDefault()}
                 onDrop={handlePrimaryDrop}
                 style={{
                   ...styles.primaryPaneWrapper,

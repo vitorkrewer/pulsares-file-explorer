@@ -255,3 +255,69 @@ func TestLongPathSupport(t *testing.T) {
 	}
 }
 
+func TestMoveSameDirectoryIsNoOp(t *testing.T) {
+	mgr, updates := setupTestOpsManager(t)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "item.txt")
+	if err := os.WriteFile(file, []byte("conteudo-original"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	jobID := mgr.Enqueue(JobMove, []string{file}, dir, PolicyAsk, false)
+	waitForJobStatus(t, updates, jobID, StatusCompleted)
+
+	// O arquivo deve continuar intacto
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("file should still exist: %v", err)
+	}
+	if string(data) != "conteudo-original" {
+		t.Errorf("unexpected content %q", string(data))
+	}
+}
+
+func TestFolderCannotBeMovedOrCopiedIntoDescendant(t *testing.T) {
+	mgr, updates := setupTestOpsManager(t)
+	dir := t.TempDir()
+	parentFolder := filepath.Join(dir, "parent")
+	childFolder := filepath.Join(parentFolder, "child")
+	if err := os.MkdirAll(childFolder, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Mover parent para dentro de child deve falhar imediatamente
+	jobID1 := mgr.Enqueue(JobMove, []string{parentFolder}, childFolder, PolicyAsk, false)
+	waitForJobStatus(t, updates, jobID1, StatusFailed)
+
+	// Copiar parent para dentro de child deve falhar imediatamente
+	jobID2 := mgr.Enqueue(JobCopy, []string{parentFolder}, childFolder, PolicyAsk, false)
+	waitForJobStatus(t, updates, jobID2, StatusFailed)
+}
+
+func TestCopySameDirectoryCreatesUniqueName(t *testing.T) {
+	mgr, updates := setupTestOpsManager(t)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "documento.txt")
+	if err := os.WriteFile(file, []byte("texto-base"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	jobID := mgr.Enqueue(JobCopy, []string{file}, dir, PolicyAsk, false)
+	waitForJobStatus(t, updates, jobID, StatusCompleted)
+
+	// Arquivo original deve existir
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("original file must exist: %v", err)
+	}
+
+	// Cópia gerada deve se chamar "documento (1).txt"
+	copyFile := filepath.Join(dir, "documento (1).txt")
+	data, err := os.ReadFile(copyFile)
+	if err != nil {
+		t.Fatalf("copy file must exist: %v", err)
+	}
+	if string(data) != "texto-base" {
+		t.Errorf("unexpected content in copy %q", string(data))
+	}
+}
+

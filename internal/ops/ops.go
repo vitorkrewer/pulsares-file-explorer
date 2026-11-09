@@ -364,12 +364,55 @@ type plannedItem struct {
 	isLink  bool
 }
 
+func isSameOrDescendant(candidate, parent string) bool {
+	cClean := filepath.Clean(candidate)
+	pClean := filepath.Clean(parent)
+	if strings.EqualFold(cClean, pClean) {
+		return true
+	}
+	pWithSep := pClean
+	if !strings.HasSuffix(pWithSep, string(filepath.Separator)) {
+		pWithSep += string(filepath.Separator)
+	}
+	return strings.HasPrefix(strings.ToLower(cClean), strings.ToLower(pWithSep))
+}
+
 func (m *Manager) runJob(rj *runningJob) {
 	rj.mu.Lock()
 	rj.snapshot.Status = StatusPlanning
 	rj.startedAt = time.Now()
 	rj.mu.Unlock()
 	m.emitJobUpdate(rj)
+
+	destRoot := filepath.Clean(rj.snapshot.Destination)
+	if rj.snapshot.Kind == JobCopy || rj.snapshot.Kind == JobMove {
+		var activeSources []string
+		for _, src := range rj.snapshot.Sources {
+			cleanSrc := filepath.Clean(src)
+			info, err := os.Lstat(platform.NormalizeLongPath(cleanSrc))
+			if err != nil {
+				continue
+			}
+			if info.IsDir() && isSameOrDescendant(destRoot, cleanSrc) {
+				m.finishJob(rj, vfs.ErrInvalidPath)
+				return
+			}
+			if rj.snapshot.Kind == JobMove && strings.EqualFold(filepath.Dir(cleanSrc), destRoot) {
+				// Mover para o mesmo diretório onde o arquivo já reside é um no-op seguro
+				continue
+			}
+			activeSources = append(activeSources, cleanSrc)
+		}
+
+		if len(activeSources) == 0 {
+			// Todos os itens eram no-op (ex: arrastar arquivo para a mesma pasta)
+			m.finishJob(rj, nil)
+			return
+		}
+		rj.mu.Lock()
+		rj.snapshot.Sources = activeSources
+		rj.mu.Unlock()
+	}
 
 	items, totalBytes, err := m.planItems(rj.ctx, rj.snapshot.Sources)
 	if err != nil {
@@ -641,7 +684,9 @@ func (m *Manager) executeCopyOrMove(rj *runningJob, items []plannedItem, isMove 
 
 		// Verificar conflito em arquivo de destino
 		finalDst := dstPath
-		if dstInfo, err := os.Lstat(platform.NormalizeLongPath(finalDst)); err == nil {
+		if strings.EqualFold(item.srcPath, finalDst) {
+			finalDst = uniquePath(finalDst)
+		} else if dstInfo, err := os.Lstat(platform.NormalizeLongPath(finalDst)); err == nil {
 			pol, err := m.resolveFileConflict(rj, item.srcPath, finalDst, item.info, dstInfo)
 			if err != nil {
 				return err
