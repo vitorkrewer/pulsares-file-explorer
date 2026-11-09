@@ -16,6 +16,8 @@ function resolveLanguage(sysLang, prefLang) {
   if (lower.startsWith('de')) return 'de';
   if (lower.startsWith('fr')) return 'fr';
   if (lower.startsWith('it')) return 'it';
+  if (lower.startsWith('ja')) return 'ja';
+  if (lower.startsWith('zh')) return 'zh-CN';
   if (lower.startsWith('en')) return 'en';
   return 'en';
 }
@@ -27,6 +29,8 @@ assert.equal(resolveLanguage('en-US', 'auto'), 'en');
 assert.equal(resolveLanguage('fr-FR', 'auto'), 'fr');
 assert.equal(resolveLanguage('de-DE', undefined), 'de');
 assert.equal(resolveLanguage('it-IT', 'auto'), 'it');
+assert.equal(resolveLanguage('ja-JP', 'auto'), 'ja');
+assert.equal(resolveLanguage('zh-CN', 'auto'), 'zh-CN');
 assert.equal(resolveLanguage('nl-NL', 'auto'), 'en');
 assert.equal(resolveLanguage('en-US', 'es'), 'es');
 
@@ -80,7 +84,7 @@ const requiredProductivityKeys = [
 const requiredArchiveKeys = ['title', 'compressSelection', 'inspecting', 'extractHere'];
 const requiredRemoteKeys = ['title', 'hostPlaceholder', 'userPlaceholder', 'pathPlaceholder', 'saveProfile', 'empty'];
 
-for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it']) {
+for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it', 'ja', 'zh-CN']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
   const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   for (const errKey of requiredErrorKeys) {

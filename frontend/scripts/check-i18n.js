@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 const localesDir = path.resolve(__dirname, '../src/i18n/locales');
 
 const referenceLang = 'pt-BR';
-const targetLangs = ['en', 'es', 'de', 'fr', 'it'];
+const targetLangs = ['en', 'es', 'de', 'fr', 'it', 'ja', 'zh-CN'];
 
 function flattenKeys(obj, prefix = '') {
   let keys = [];
@@ -73,6 +73,6 @@ if (hasError) {
   console.error('\n[i18n:check] Falha na validação de traduções!');
   process.exit(1);
 } else {
-  console.log('[i18n:check] Todas as traduções (pt-BR, en, es, de, fr, it) estão 100% sincronizadas.');
+  console.log('[i18n:check] Todas as traduções (pt-BR, en, es, de, fr, it, ja, zh-CN) estão 100% sincronizadas.');
 }
 

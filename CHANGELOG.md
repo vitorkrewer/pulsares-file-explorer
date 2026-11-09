@@ -6,6 +6,12 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Suporte ao Idioma Japonês (日本語 - `ja`)**:
+  - Catálogo completo de internacionalização em japonês (`locales/ja/common.json`) cobrindo 100% dos termos e namespaces da interface (navegação, operações, terminal, busca, painéis, visualizador e configurações).
+  - Detecção automática de idioma do sistema (`resolveLanguage`) e opção de seleção manual no seletor de idiomas da barra de navegação (`AddressBar`).
+- **Suporte ao Idioma Chinês Simplificado (简体中文 - `zh-CN`)**:
+  - Catálogo completo de internacionalização em chinês simplificado (`locales/zh-CN/common.json`) com 100% de paridade com os catálogos existentes.
+  - Detecção automática de idioma do sistema (`resolveLanguage`) e inclusão no seletor de idiomas da interface.
 - **Suporte ao Idioma Italiano (Italiano - `it`)**:
   - Catálogo completo de internacionalização em italiano (`locales/it/common.json`) cobrindo 100% dos termos e namespaces da interface (navegação, operações, terminal, busca, painéis, visualizador e configurações).
   - Detecção automática de idioma do sistema com fallback inteligente (`resolveLanguage`) e opção de seleção manual no seletor de idiomas da barra de navegação (`AddressBar`), consolidando a cobertura do padrão EFIGS.
