@@ -273,12 +273,12 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
               width: 24,
               height: 24,
               borderRadius: 6,
-              background: 'linear-gradient(135deg, #059669 0%, #0284c7 100%)',
+              background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              boxShadow: '0 2px 6px rgba(5, 150, 105, 0.35)',
+              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.35)',
             }}
           >
             <Database size={13} color="#fff" />

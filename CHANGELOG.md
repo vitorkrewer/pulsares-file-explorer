@@ -6,6 +6,12 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Ícones Dedicados e Distinção de Janelas na Barra de Tarefas**:
+  - Criação de ícones oficiais padronizados com o fundo gradiente azul clássico do Pulsares Explorer (`#2563eb` a `#4f46e5`) para cada módulo autônomo:
+    - **Pulse DB Studio**: ícone com símbolo de cilindro/banco de dados SQLite em branco com cantos arredondados (`favicon-dbstudio.svg`).
+    - **Pulsares Studio Editor**: ícone com símbolo de código `< / >` em branco com cantos arredondados (`favicon-studio.svg`).
+  - Distinção nativa de processos na barra de tarefas do Windows: integração com a Win32 API (`SetCurrentProcessExplicitAppUserModelID`) no executável Go (`main.go`), atribuindo `AppUserModelID` (`Pulsares.Explorer`, `Pulsares.DBStudio`, `Pulsares.StudioEditor`) e `WindowClassName` independentes para cada janela. Isso impede que o Windows agrupe ou confunda os botões na barra de tarefas, permitindo alternar livremente entre Explorer, DB Studio e Editor com ícones distintos.
+  - Atualização dos emblemas de identificação nas barras de título frameless de ambos os utilitários e troca dinâmica de favicons na inicialização de cada janela autônoma.
 - **Janelas Independentes e Autônomas para o Pulse DB Studio e Pulsares Studio Editor**:
   - Restauração e reforço estrito da arquitetura desacoplada: tanto o **Pulse DB Studio** quanto o **Pulsares Studio Editor** operam exclusivamente como janelas independentes do sistema operacional, nunca acoplados ou sobrepostos aos arquivos do Pulsares Explorer.
   - O store de ambos os módulos mantém `preferSeparateWindow: true` por padrão, acionando as APIs nativas (`OpenDBStudioWindow` e `OpenStudioWindow`) que invocam os processos frameless autônomos (`--dbstudio` e `--studio`) com controles nativos de janela (minimizar, maximizar e fechar).

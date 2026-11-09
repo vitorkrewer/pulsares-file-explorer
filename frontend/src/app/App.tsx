@@ -146,6 +146,8 @@ export const App: React.FC = () => {
         setDedicatedDBStudioWindow(true);
         setIsDBStudioMode(true);
         document.title = 'Pulsares DB Studio';
+        const faviconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+        if (faviconLink) faviconLink.href = '/favicon-dbstudio.svg';
         if (state.dbStudioTarget) {
           void useDBStudioStore.getState().openDatabase(state.dbStudioTarget, { forceInline: true });
         }
@@ -154,6 +156,8 @@ export const App: React.FC = () => {
       if (state.studioMode || isStandaloneStudioWindow()) {
         setIsStudioMode(true);
         document.title = 'Pulsares Studio Editor';
+        const faviconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+        if (faviconLink) faviconLink.href = '/favicon-studio.svg';
         void useEditorStore.getState().hydrateStudioFromStorage(state.studioTarget, initialPath);
         return;
       }

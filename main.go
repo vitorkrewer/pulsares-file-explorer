@@ -4,10 +4,14 @@ import (
 	"embed"
 	"net/http"
 	"os"
+	"runtime"
+	"syscall"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"pulsares-file-explorer/internal/app"
 	"pulsares-file-explorer/internal/thumbs"
 )
@@ -22,19 +26,42 @@ func localMediaHandler() http.Handler {
 	return http.HandlerFunc(thumbs.ServeLocalMediaHTTP)
 }
 
+func setWindowsAppID(appID string) {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	shell32 := syscall.NewLazyDLL("shell32.dll")
+	proc := shell32.NewProc("SetCurrentProcessExplicitAppUserModelID")
+	if proc.Find() == nil {
+		ptr, err := syscall.UTF16PtrFromString(appID)
+		if err == nil {
+			_, _, _ = proc.Call(uintptr(unsafe.Pointer(ptr)))
+		}
+	}
+}
+
 func main() {
 	explorerApp := app.NewApp()
 	title := "Pulsares Explorer"
+	appID := "Pulsares.Explorer"
+	windowClass := "PulsaresExplorerWindow"
+
 	for _, arg := range os.Args[1:] {
 		if arg == "--studio" {
 			title = "Pulsares Studio Editor"
+			appID = "Pulsares.StudioEditor"
+			windowClass = "PulsaresStudioEditorWindow"
 			break
 		}
 		if arg == "--dbstudio" {
 			title = "Pulsares DB Studio"
+			appID = "Pulsares.DBStudio"
+			windowClass = "PulsaresDBStudioWindow"
 			break
 		}
 	}
+
+	setWindowsAppID(appID)
 
 	err := wails.Run(&options.App{
 		Title:     title,
@@ -50,6 +77,9 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 24, G: 24, B: 27, A: 1},
 		OnStartup:        explorerApp.Startup,
 		OnShutdown:       explorerApp.Shutdown,
+		Windows: &windows.Options{
+			WindowClassName: windowClass,
+		},
 		Bind: []interface{}{
 			explorerApp,
 		},

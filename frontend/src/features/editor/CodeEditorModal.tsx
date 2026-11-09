@@ -1276,12 +1276,12 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
               width: '22px',
               height: '22px',
               borderRadius: '6px',
-              background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+              background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              boxShadow: '0 2px 6px rgba(124, 58, 237, 0.35)',
+              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.35)',
             }}
           >
             <FileCode2 size={13} color="#ffffff" />
