@@ -91,7 +91,7 @@ export const useDBStudioStore = create<DBStudioState>((set, get) => ({
   isOpen: isStandaloneDBStudioWindow(),
   isMinimized: false,
   isMaximized: false,
-  preferSeparateWindow: false,
+  preferSeparateWindow: true,
   dbPath: '',
   schema: null,
   activeTable: '',
@@ -112,16 +112,17 @@ export const useDBStudioStore = create<DBStudioState>((set, get) => ({
 
   openDatabase: async (path: string, opts?: { forceInline?: boolean }) => {
     const cleanPath = (path || '').trim();
-    if (!cleanPath) {
-      set({ isOpen: true, isMinimized: false });
-      return;
-    }
 
     if (!opts?.forceInline && !isStandaloneDBStudioWindow() && get().preferSeparateWindow) {
       const openedNative = await openDBStudioWindowNative(cleanPath);
       if (openedNative) {
         return;
       }
+    }
+
+    if (!cleanPath) {
+      set({ isOpen: true, isMinimized: false, dbPath: '' });
+      return;
     }
 
     set({

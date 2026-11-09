@@ -219,8 +219,8 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
           zIndex: 9500,
           display: 'flex',
           flexDirection: 'column',
-          background: 'var(--bg-main)',
-          color: 'var(--text-main)',
+          backgroundColor: 'var(--bg-surface)',
+          color: 'var(--text-primary)',
           overflow: 'hidden',
         }
       : {
@@ -232,11 +232,11 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
           zIndex: 9500,
           display: 'flex',
           flexDirection: 'column',
-          background: 'var(--bg-main)',
-          color: 'var(--text-main)',
-          border: '1px solid var(--border)',
+          backgroundColor: 'var(--bg-surface)',
+          color: 'var(--text-primary)',
+          border: '1px solid var(--border-strong)',
           borderRadius: 10,
-          boxShadow: '0 22px 60px rgba(0, 0, 0, 0.48)',
+          boxShadow: '0 24px 70px rgba(0, 0, 0, 0.55)',
           overflow: 'hidden',
         };
 
@@ -258,8 +258,8 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
           justifyContent: 'space-between',
           padding: isDedicated ? '0 0 0 12px' : '6px 12px',
           height: isDedicated ? 40 : 44,
-          background: 'var(--bg-toolbar)',
-          borderBottom: '1px solid var(--border)',
+          backgroundColor: 'var(--bg-subtle)',
+          borderBottom: '1px solid var(--border-subtle)',
           cursor: isDedicated || isMaximized ? 'default' : 'move',
           userSelect: 'none',
           gap: 8,
@@ -756,7 +756,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                           flexShrink: 0,
                         }}
                       >
-                        {tbl.rowCount}
+                        {tbl.rowCount != null && tbl.rowCount >= 0 ? tbl.rowCount.toLocaleString('pt-BR') : '—'}
                       </span>
                     </div>
 
@@ -843,7 +843,9 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                             {vw.name}
                           </span>
                         </span>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{vw.rowCount}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          {vw.rowCount != null && vw.rowCount >= 0 ? vw.rowCount.toLocaleString('pt-BR') : '—'}
+                        </span>
                       </div>
                     );
                   })}
@@ -911,8 +913,8 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '8px 12px',
-                    borderBottom: '1px solid var(--border)',
-                    background: 'var(--bg-panel)',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    backgroundColor: 'var(--bg-surface)',
                     gap: 10,
                     flexWrap: 'wrap',
                   }}
@@ -972,14 +974,25 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
 
                   {/* Controles de Paginação */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5 }}>
-                    {tableData && (
-                      <span style={{ color: 'var(--text-muted)' }}>
-                        {tableData.totalRows === 0
-                          ? '0 registros'
-                          : `${pageOffset + 1}–${Math.min(pageOffset + tableData.rows.length, tableData.totalRows)} de ${tableData.totalRows}`}{' '}
-                        ({tableData.durationMs} ms)
-                      </span>
-                    )}
+                    {tableData && (() => {
+                      const total = Number(
+                        tableData.totalRows ??
+                        // @ts-expect-error fallback compat
+                        tableData.totalCount ??
+                        activeTableObj?.rowCount ??
+                        tableData.rows.length
+                      );
+                      const from = tableData.rows.length === 0 ? 0 : pageOffset + 1;
+                      const to = Math.min(pageOffset + tableData.rows.length, Math.max(total, pageOffset + tableData.rows.length));
+                      return (
+                        <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          {total === 0
+                            ? '0 registros'
+                            : `${from}–${to.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}`}{' '}
+                          ({tableData.durationMs} ms)
+                        </span>
+                      );
+                    })()}
                     <select
                       className="search-input"
                       value={pageLimit}
@@ -1004,7 +1017,18 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                     <button
                       type="button"
                       className="op-btn"
-                      disabled={!tableData || pageOffset + pageLimit >= tableData.totalRows || queryLoading}
+                      disabled={
+                        !tableData ||
+                        queryLoading ||
+                        pageOffset + pageLimit >=
+                          Number(
+                            tableData.totalRows ??
+                            // @ts-expect-error fallback
+                            tableData.totalCount ??
+                            activeTableObj?.rowCount ??
+                            tableData.rows.length
+                          )
+                      }
                       onClick={() => void setTablePage(pageOffset + pageLimit)}
                       style={{ padding: '4px 7px' }}
                       title="Próxima página"
@@ -1015,7 +1039,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                 </div>
 
                 {/* Grade de Dados da Tabela */}
-                <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+                <div style={{ flex: 1, overflow: 'auto', position: 'relative', backgroundColor: 'var(--bg-surface)' }}>
                   {queryLoading && (
                     <div
                       style={{
@@ -1061,15 +1085,15 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                         fontFamily: 'var(--font-mono, monospace)',
                       }}
                     >
-                      <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg-toolbar)' }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 2, backgroundColor: 'var(--bg-subtle)' }}>
                         <tr>
                           <th
                             style={{
                               width: 44,
                               padding: '7px 8px',
                               textAlign: 'right',
-                              borderBottom: '1px solid var(--border)',
-                              borderRight: '1px solid var(--border)',
+                              borderBottom: '1px solid var(--border-subtle)',
+                              borderRight: '1px solid var(--border-subtle)',
                               color: 'var(--text-muted)',
                               fontSize: 10.5,
                             }}
@@ -1086,18 +1110,18 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                                 style={{
                                   padding: '7px 10px',
                                   textAlign: 'left',
-                                  borderBottom: '1px solid var(--border)',
-                                  borderRight: '1px solid var(--border)',
+                                  borderBottom: '1px solid var(--border-subtle)',
+                                  borderRight: '1px solid var(--border-subtle)',
                                   cursor: 'pointer',
                                   userSelect: 'none',
                                   whiteSpace: 'nowrap',
-                                  background: isSorted ? 'var(--bg-selected)' : 'var(--bg-toolbar)',
+                                  backgroundColor: isSorted ? 'var(--bg-selected)' : 'var(--bg-subtle)',
                                 }}
                                 title="Clique para ordenar por esta coluna"
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                   {colMeta?.pk && <Key size={11} style={{ color: '#f59e0b' }} />}
-                                  <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{col}</span>
+                                  <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{col}</span>
                                   {colMeta?.type && (
                                     <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
                                       {colMeta.type}
@@ -1120,15 +1144,15 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                           <tr
                             key={rIdx}
                             style={{
-                              borderBottom: '1px solid var(--border)',
-                              background: rIdx % 2 === 1 ? 'rgba(128,128,128,0.03)' : 'transparent',
+                              borderBottom: '1px solid var(--border-subtle)',
+                              backgroundColor: rIdx % 2 === 1 ? 'var(--bg-subtle)' : 'var(--bg-surface)',
                             }}
                           >
                             <td
                               style={{
                                 padding: '5px 8px',
                                 textAlign: 'right',
-                                borderRight: '1px solid var(--border)',
+                                borderRight: '1px solid var(--border-subtle)',
                                 color: 'var(--text-muted)',
                                 fontSize: 10.5,
                               }}
@@ -1144,13 +1168,13 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                                   onClick={() => setSelectedCellValue({ col: colName, val: cell })}
                                   style={{
                                     padding: '5px 10px',
-                                    borderRight: '1px solid var(--border)',
+                                    borderRight: '1px solid var(--border-subtle)',
                                     maxWidth: 320,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
                                     cursor: 'pointer',
-                                    color: isNull ? 'var(--text-muted)' : 'var(--text-main)',
+                                    color: isNull ? 'var(--text-muted)' : 'var(--text-primary)',
                                     fontStyle: isNull ? 'italic' : 'normal',
                                   }}
                                   title={cell}
@@ -1422,15 +1446,15 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                         fontFamily: 'var(--font-mono, monospace)',
                       }}
                     >
-                      <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-toolbar)', zIndex: 2 }}>
+                      <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-subtle)', zIndex: 2 }}>
                         <tr>
                           <th
                             style={{
                               width: 44,
                               padding: '6px 8px',
                               textAlign: 'right',
-                              borderBottom: '1px solid var(--border)',
-                              borderRight: '1px solid var(--border)',
+                              borderBottom: '1px solid var(--border-subtle)',
+                              borderRight: '1px solid var(--border-subtle)',
                               color: 'var(--text-muted)',
                             }}
                           >
@@ -1442,9 +1466,10 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                               style={{
                                 padding: '6px 10px',
                                 textAlign: 'left',
-                                borderBottom: '1px solid var(--border)',
-                                borderRight: '1px solid var(--border)',
+                                borderBottom: '1px solid var(--border-subtle)',
+                                borderRight: '1px solid var(--border-subtle)',
                                 whiteSpace: 'nowrap',
+                                color: 'var(--text-primary)',
                               }}
                             >
                               {c}
@@ -1454,12 +1479,18 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                       </thead>
                       <tbody>
                         {queryResult.rows.map((r, rIdx) => (
-                          <tr key={rIdx} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <tr
+                            key={rIdx}
+                            style={{
+                              borderBottom: '1px solid var(--border-subtle)',
+                              backgroundColor: rIdx % 2 === 1 ? 'var(--bg-subtle)' : 'var(--bg-surface)',
+                            }}
+                          >
                             <td
                               style={{
                                 padding: '5px 8px',
                                 textAlign: 'right',
-                                borderRight: '1px solid var(--border)',
+                                borderRight: '1px solid var(--border-subtle)',
                                 color: 'var(--text-muted)',
                                 fontSize: 10.5,
                               }}
@@ -1471,11 +1502,12 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                                 key={cIdx}
                                 style={{
                                   padding: '5px 10px',
-                                  borderRight: '1px solid var(--border)',
+                                  borderRight: '1px solid var(--border-subtle)',
                                   maxWidth: 360,
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
                                   whiteSpace: 'nowrap',
+                                  color: 'var(--text-primary)',
                                 }}
                                 title={val}
                               >
@@ -1504,22 +1536,22 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                           width: '100%',
                           borderCollapse: 'collapse',
                           fontSize: 12,
-                          border: '1px solid var(--border)',
+                          border: '1px solid var(--border-subtle)',
                         }}
                       >
-                        <thead style={{ background: 'var(--bg-toolbar)' }}>
+                        <thead style={{ backgroundColor: 'var(--bg-subtle)' }}>
                           <tr>
-                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>#</th>
-                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>Coluna</th>
-                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>Tipo</th>
-                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>Chave Primária</th>
-                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>NOT NULL</th>
-                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>Valor Padrão</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>#</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>Coluna</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>Tipo</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>Chave Primária</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>NOT NULL</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>Valor Padrão</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(activeTableObj.columns || []).map((col) => (
-                            <tr key={col.cid} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <tr key={col.cid} style={{ borderBottom: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-surface)' }}>
                               <td style={{ padding: '6px 10px', color: 'var(--text-muted)' }}>{col.cid}</td>
                               <td style={{ padding: '6px 10px', fontWeight: 600 }}>{col.name}</td>
                               <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{col.type || 'ANY'}</td>

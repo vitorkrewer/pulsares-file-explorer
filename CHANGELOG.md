@@ -6,16 +6,18 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Janelas Independentes e Autônomas para o Pulse DB Studio e Pulsares Studio Editor**:
+  - Restauração e reforço estrito da arquitetura desacoplada: tanto o **Pulse DB Studio** quanto o **Pulsares Studio Editor** operam exclusivamente como janelas independentes do sistema operacional, nunca acoplados ou sobrepostos aos arquivos do Pulsares Explorer.
+  - O store de ambos os módulos mantém `preferSeparateWindow: true` por padrão, acionando as APIs nativas (`OpenDBStudioWindow` e `OpenStudioWindow`) que invocam os processos frameless autônomos (`--dbstudio` e `--studio`) com controles nativos de janela (minimizar, maximizar e fechar).
+  - Correção da inicialização de instâncias independentes mesmo quando nenhum arquivo prévio estiver selecionado, apresentando imediatamente a tela nativa dedicada de boas-vindas e seleção de arquivos.
+- **Correção da Opacidade, Camadas de Fundo e Bug de Paginação no Pulse DB Studio**:
+  - Correção das cores de fundo e tokens do design system (`--bg-surface`, `--bg-subtle`, `--border-subtle`, `--text-primary`), eliminando qualquer transparência e impedindo o vazamento visual de elementos e pastas situados em segundo plano.
+  - Correção do cálculo e exibição de paginação da grade (`1-NaN de undefined`): serialização unificada de `totalRows` e `totalCount` no backend Go e tratamento seguro de paginação no frontend com formatação numérica localizada em pt-BR.
+- **Otimização Extrema de Performance para Abertura e Leitura de Bancos de Dados SQLite Grandes**:
+  - Injeção de PRAGMAs de alta velocidade no SQLite (`cache_size = -64000`, `mmap_size = 268435456`, `temp_store = MEMORY`, `read_uncommitted = ON`), acelerando consultas e paginação através de memory-mapped I/O.
+  - Inspeção instantânea do esquema sem congelamentos: leitura O(1) de contagem via `sqlite_sequence` para tabelas autoincrement, timeout preventivo de 150ms por tabela para `SELECT COUNT(*)`, e contagem sob demanda para Views, garantindo abertura em milissegundos mesmo em bases com dezenas de tabelas e milhões de linhas.
+  - Otimização inteligente da primeira página de registros: quando o número retornado for inferior ao limite da página, o total é inferido imediatamente sem necessidade de varredura completa da tabela.
 - **Spinners e Indicadores de Carregamento Visuais em Todo o Explorer**:
-  - Inclusão de animações padronizadas de rotação contínua (`@keyframes pulsares-spin`, `.spin-animation`, `.pulsares-spin`) no design system (`tokens.css`).
-  - Indicadores centrais com spinner e texto informativo na visão detalhada (`DetailsView`) e visões alternativas (`AlternativeViews`: lista compacta, grade de cartões e colunas Miller) durante o carregamento inicial de pastas.
-  - Barra sutil de carregamento em segundo plano no topo das listas ao alternar diretórios, mantendo a experiência fluida sem saltos visuais.
-  - Indicador animado de atividade na barra de status inferior (`StatusBar`) com spinner e mensagem contextual de carregamento de diretório.
-  - Indicador de carregamento e spinner em tela cheia no Pulse DB Studio durante a leitura do banco de dados e execução de consultas SQL.
-- **Correção da Abertura do Pulse DB Studio na Barra de Ferramentas e Mensagens de Erro Transparentes**:
-  - Correção do botão do Pulse DB Studio na barra de ferramentas superior (`OperationsToolbar`), garantindo que a abertura ocorra sempre no modal integrado e fluido (`forceInline: true`), eliminando o problema de abertura em tela preta decorrente de janelas secundárias do WebView2 sem contexto.
-  - Validação estrita no backend Go (`openUserSQLite`) verificando a existência, diretório, tamanho mínimo (< 100 bytes) e verificação dos 16 bytes do cabeçalho mágico oficial (`SQLite format 3\000`), prevenindo falhas silenciosas ou erros de PRAGMA em arquivos não-SQLite ou corrompidos.
-  - Apresentação de mensagens claras, amigáveis e explicativas ao usuário quando um banco de dados ou arquivo não puder ser aberto, tanto no Pulse DB Studio quanto no Pulsares Studio Editor, com tela informativa de boas-vindas/erro e ações para tentar novamente ou criar novo documento.
 - **Criação Rápida de Banco de Dados SQLite a partir de Arquivos (CSV, TSV, JSON, JSONL)**:
   - Nova ação integrada no menu de contexto do navegador de arquivos para arquivos tabulares e semiestruturados (`.csv`, `.tsv`, `.tab`, `.json`, `.jsonl`, `.ndjson`): **"Criar Banco de Dados SQLite..."**.
   - **Mecanismo de Análise e Inferência Automática (`dbcreator`)**: detecção inteligente de delimitador (vírgula, ponto-e-vírgula, tabulação), cabeçalhos e inferência dinâmica de tipos (`INTEGER`, `REAL`, `BOOLEAN`, `TEXT`, `DATETIME`) a partir da amostragem dos dados.

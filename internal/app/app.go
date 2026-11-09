@@ -1224,6 +1224,7 @@ type DBSchemaInfo struct {
 type DBQueryResult struct {
 	Columns      []string   `json:"columns"`
 	Rows         [][]string `json:"rows"`
+	TotalRows    int64      `json:"totalRows"`
 	TotalCount   int64      `json:"totalCount"`
 	RowsAffected int64      `json:"rowsAffected"`
 	DurationMs   int64      `json:"durationMs"`
@@ -1269,6 +1270,15 @@ func openUserSQLite(dbPath string) (*sql.DB, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("falha ao inicializar conexão SQLite: %w", err)
 	}
+
+	// Otimizações de alta performance para bancos grandes (cache em memória e memory-mapped I/O)
+	_, _ = db.Exec(`
+		PRAGMA cache_size = -64000;
+		PRAGMA mmap_size = 268435456;
+		PRAGMA temp_store = MEMORY;
+		PRAGMA read_uncommitted = ON;
+	`)
+
 	return db, clean, nil
 }
 
@@ -1359,17 +1369,28 @@ func (a *App) DBInspectSchema(dbPath string) (DBSchemaInfo, error) {
 			Type: item.objType,
 			SQL:  item.sqlDef,
 		}
-		if item.objType == "table" || item.objType == "view" {
+		if item.objType == "table" {
 			obj.Columns = fetchTableColumns(db, item.name)
-			var cnt int64
-			if err := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", quoteSQLIdent(item.name))).Scan(&cnt); err == nil {
-				obj.RowCount = cnt
-			}
-			if item.objType == "table" {
-				schema.Tables = append(schema.Tables, obj)
+
+			// Contagem inteligente sem travar bancos gigantes:
+			var cnt int64 = -1
+			// 1. Verificar sqlite_sequence para leitura instantânea O(1)
+			var seq int64
+			if errSeq := db.QueryRow("SELECT seq FROM sqlite_sequence WHERE name = ?", item.name).Scan(&seq); errSeq == nil && seq >= 0 {
+				cnt = seq
 			} else {
-				schema.Views = append(schema.Views, obj)
+				// 2. Tentar SELECT COUNT(*) com timeout curto (150ms) por tabela
+				ctxCount, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+				_ = db.QueryRowContext(ctxCount, fmt.Sprintf("SELECT COUNT(*) FROM %s", quoteSQLIdent(item.name))).Scan(&cnt)
+				cancel()
 			}
+			obj.RowCount = cnt
+			schema.Tables = append(schema.Tables, obj)
+		} else if item.objType == "view" {
+			obj.Columns = fetchTableColumns(db, item.name)
+			// Views não executam count antecipado para não disparar joins pesados na inspeção do banco
+			obj.RowCount = -1
+			schema.Views = append(schema.Views, obj)
 		} else if item.objType == "index" {
 			schema.Indexes = append(schema.Indexes, obj)
 		}
@@ -1447,10 +1468,6 @@ func (a *App) DBQueryTable(dbPath string, tableName string, limit int, offset in
 		whereClause = " WHERE " + strings.Join(parts, " OR ")
 	}
 
-	var totalCount int64
-	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s%s", quotedTable, whereClause)
-	_ = db.QueryRow(countSQL, args...).Scan(&totalCount)
-
 	orderClause := ""
 	cleanSortCol := strings.TrimSpace(sortCol)
 	if cleanSortCol != "" {
@@ -1473,13 +1490,37 @@ func (a *App) DBQueryTable(dbPath string, tableName string, limit int, offset in
 		return DBQueryResult{}, err
 	}
 
+	var totalCount int64
+	// Se for primeira página sem filtro e retornou menos linhas que o limite, já temos o total exato
+	if offset == 0 && trimmedFilter == "" && len(dataRows) < limit {
+		totalCount = int64(len(dataRows))
+	} else {
+		counted := false
+		// Tentar sqlite_sequence se for sem filtro para resposta O(1)
+		if trimmedFilter == "" {
+			var seq int64
+			if errSeq := db.QueryRow("SELECT seq FROM sqlite_sequence WHERE name = ?", tableName).Scan(&seq); errSeq == nil && seq >= int64(offset+len(dataRows)) {
+				totalCount = seq
+				counted = true
+			}
+		}
+		if !counted {
+			countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s%s", quotedTable, whereClause)
+			_ = db.QueryRow(countSQL, args...).Scan(&totalCount)
+		}
+	}
+	if totalCount < int64(offset+len(dataRows)) {
+		totalCount = int64(offset + len(dataRows))
+	}
+
 	return DBQueryResult{
-		Columns:    cols,
-		Rows:       dataRows,
-		TotalCount: totalCount,
-		DurationMs: time.Since(start).Milliseconds(),
-		IsSelect:   true,
-		Message:    fmt.Sprintf("%d registro(s) carregado(s) de %d", len(dataRows), totalCount),
+		Columns:      cols,
+		Rows:         dataRows,
+		TotalRows:    totalCount,
+		TotalCount:   totalCount,
+		DurationMs:   time.Since(start).Milliseconds(),
+		IsSelect:     true,
+		Message:      fmt.Sprintf("%d registro(s) carregado(s) de %d", len(dataRows), totalCount),
 	}, nil
 }
 
@@ -1514,12 +1555,13 @@ func (a *App) DBExecuteSQL(dbPath string, query string) (DBQueryResult, error) {
 			return DBQueryResult{}, err
 		}
 		return DBQueryResult{
-			Columns:    cols,
-			Rows:       dataRows,
-			TotalCount: int64(len(dataRows)),
-			DurationMs: time.Since(start).Milliseconds(),
-			IsSelect:   true,
-			Message:    fmt.Sprintf("%d linha(s) retornada(s) em %d ms", len(dataRows), time.Since(start).Milliseconds()),
+			Columns:      cols,
+			Rows:         dataRows,
+			TotalRows:    int64(len(dataRows)),
+			TotalCount:   int64(len(dataRows)),
+			DurationMs:   time.Since(start).Milliseconds(),
+			IsSelect:     true,
+			Message:      fmt.Sprintf("%d linha(s) retornada(s) em %d ms", len(dataRows), time.Since(start).Milliseconds()),
 		}, nil
 	}
 
@@ -1532,6 +1574,7 @@ func (a *App) DBExecuteSQL(dbPath string, query string) (DBQueryResult, error) {
 	return DBQueryResult{
 		Columns:      []string{"Resultado", "Linhas Afetadas", "Tempo (ms)"},
 		Rows:         [][]string{{"Comando executado com sucesso", fmt.Sprintf("%d", affected), fmt.Sprintf("%d", dur)}},
+		TotalRows:    1,
 		TotalCount:   1,
 		RowsAffected: affected,
 		DurationMs:   dur,

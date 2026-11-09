@@ -722,7 +722,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   isMinimized: false,
   isMaximized: isStandaloneStudioWindow(),
   isDedicatedStudio: isStandaloneStudioWindow(),
-  preferSeparateWindow: false,
+  preferSeparateWindow: true,
   workspaceDir: '',
   tabs: [],
   activeTabId: null,

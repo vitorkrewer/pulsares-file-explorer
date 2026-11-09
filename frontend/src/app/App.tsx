@@ -805,8 +805,8 @@ export const App: React.FC = () => {
       </div>
       <SearchDrawer />
       <ProductivityModals />
-      <CodeEditorModal />
-      <DBStudioModal />
+      {!useEditorStore.getState().preferSeparateWindow && <CodeEditorModal />}
+      {!useDBStudioStore.getState().preferSeparateWindow && <DBStudioModal />}
       <DBCreatorModal />
       <FileContextMenu
         target={contextMenuTarget}
