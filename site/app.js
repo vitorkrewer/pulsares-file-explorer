@@ -1,15 +1,15 @@
 /**
- * Pulsares Explorer — GitHub Pages Interactive Logic
- * - OS Auto-detection & Dynamic Primary Download Button
- * - GitHub Releases API Integration
- * - Interactive Mockup Switcher
- * - Live UX Copy Demonstration
+ * Pulsares Explorer — Lógica interativa das páginas
+ * - Detecção de SO e botão de download principal
+ * - Versão mais recente via API do GitHub Releases
+ * - Alternância das abas da demonstração
  */
 
 document.addEventListener('DOMContentLoaded', () => {
   const REPO = 'vitorkrewer/pulsares-file-explorer';
-  const REPO_URL = `https://github.com/${REPO}`;
-  const BASE_RELEASE_URL = `${REPO_URL}/releases/latest/download`;
+  const BASE_RELEASE_URL = `https://github.com/${REPO}/releases/latest/download`;
+  const i18n = () => window.PulsaresI18n;
+  const tr = (key, vars) => (i18n() ? i18n().t(key, vars) : key);
 
   const ICONS = {
     windows: `<svg class="svg-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.551H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.951-1.801"/></svg>`,
@@ -20,141 +20,98 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const DOWNLOADS = {
-    windows: {
-      name: 'Windows (x64)',
-      iconSvg: ICONS.windows,
-      filename: 'Pulsares-Explorer-Windows-x64.exe',
-      url: `${BASE_RELEASE_URL}/Pulsares-Explorer-Windows-x64.exe`,
-      sub: 'Executável Portátil .exe • x64',
-      cardId: 'cardWindows',
-    },
-    linux: {
-      name: 'Linux (AppImage)',
-      iconSvg: ICONS.linux,
-      filename: 'Pulsares-Explorer-Linux-x64.AppImage',
-      url: `${BASE_RELEASE_URL}/Pulsares-Explorer-Linux-x64.AppImage`,
-      sub: 'Universal .AppImage • x64',
-      cardId: 'cardLinux',
-    },
-    mac: {
-      name: 'macOS Universal',
-      iconSvg: ICONS.mac,
-      filename: 'Pulsares-Explorer-macOS-universal.zip',
-      url: `${BASE_RELEASE_URL}/Pulsares-Explorer-macOS-universal.zip`,
-      sub: 'Binário Universal (Apple Silicon & Intel)',
-      cardId: 'cardMac',
-    },
+    windows: { name: 'Windows (x64)', icon: ICONS.windows, file: 'Pulsares-Explorer-Windows-x64.exe', sub: '.exe • x64', cardId: 'cardWindows' },
+    linux: { name: 'Linux (AppImage)', icon: ICONS.linux, file: 'Pulsares-Explorer-Linux-x64.AppImage', sub: '.AppImage • x64', cardId: 'cardLinux' },
+    mac: { name: 'macOS Universal', icon: ICONS.mac, file: 'Pulsares-Explorer-macOS-universal.zip', sub: 'Apple Silicon & Intel', cardId: 'cardMac' },
   };
 
-  // 1. Detect User's Operating System
   function detectOS() {
     const ua = navigator.userAgent || '';
     const platform = (navigator.userAgentData?.platform || navigator.platform || '').toLowerCase();
-
-    if (/win/i.test(platform) || /windows/i.test(ua)) {
-      return 'windows';
-    }
-    if (/mac/i.test(platform) || /macintosh|mac os x/i.test(ua)) {
-      return 'mac';
-    }
-    if (/linux/i.test(platform) || /linux|x11/i.test(ua)) {
-      return 'linux';
-    }
-    return 'windows'; // fallback padrão
+    if (/win/i.test(platform) || /windows/i.test(ua)) return 'windows';
+    if (/mac/i.test(platform) || /macintosh|mac os x/i.test(ua)) return 'mac';
+    if (/linux/i.test(platform) || /linux|x11/i.test(ua)) return 'linux';
+    return 'windows';
   }
 
-  const detectedOS = detectOS();
-  const primaryData = DOWNLOADS[detectedOS];
+  const primaryData = DOWNLOADS[detectOS()];
+  let latestTag = 'v1.1.1';
 
-  // 2. Configure Primary CTA Download Button
   const primaryBtn = document.getElementById('primaryDownloadBtn');
   const primaryLabel = document.getElementById('primaryDownloadLabel');
   const primarySub = document.getElementById('primaryDownloadSub');
   const primaryIcon = document.getElementById('primaryOsIcon');
+  const versionEl = document.getElementById('latestVersion');
+  const detectedCard = document.getElementById(primaryData.cardId);
 
-  if (primaryBtn && primaryData) {
-    primaryBtn.href = primaryData.url;
-    primaryLabel.textContent = `Baixar para ${primaryData.name}`;
-    primarySub.textContent = primaryData.sub;
-    if (primaryIcon) {
-      primaryIcon.innerHTML = primaryData.iconSvg;
-    }
-
-    // Destaca o card do sistema detectado na grade de downloads
-    const targetCard = document.getElementById(primaryData.cardId);
-    if (targetCard) {
-      targetCard.classList.add('card-highlight');
-    }
+  function renderDynamicTexts() {
+    if (primaryLabel) primaryLabel.textContent = tr('dl.for', { os: primaryData.name });
+    if (primarySub) primarySub.textContent = `${primaryData.sub} • ${latestTag}`;
+    if (versionEl) versionEl.textContent = latestTag;
+    if (detectedCard) detectedCard.setAttribute('data-label', tr('dl.detected'));
   }
 
-  // 3. Fetch Latest Release Data from GitHub API
-  async function fetchLatestRelease() {
-    try {
-      const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
-        headers: { Accept: 'application/vnd.github.v3+json' },
+  if (primaryBtn) {
+    primaryBtn.href = `${BASE_RELEASE_URL}/${primaryData.file}`;
+    if (primaryIcon) primaryIcon.innerHTML = primaryData.icon;
+  }
+  if (detectedCard) detectedCard.classList.add('card-highlight');
+
+  renderDynamicTexts();
+  document.addEventListener('pulsares:lang', renderDynamicTexts);
+
+  if (primaryBtn || versionEl) {
+    fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github.v3+json' } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((release) => {
+        if (release && release.tag_name) {
+          latestTag = release.tag_name;
+          renderDynamicTexts();
+        }
+      })
+      .catch(() => {
+        /* mantém a versão estática */
       });
-
-      if (!response.ok) return;
-      const release = await response.json();
-      const tagName = release.tag_name || 'v1.1.0';
-
-      const releaseBadge = document.getElementById('latestReleaseBadge');
-      if (releaseBadge) {
-        releaseBadge.textContent = `Versão ${tagName} Disponível • SSH/SFTP & DB Studio`;
-      }
-
-      if (primarySub && primaryData) {
-        primarySub.textContent = `${primaryData.sub} • ${tagName}`;
-      }
-    } catch {
-      // Ignora erro e mantém os links diretos para /releases/latest/download
-    }
   }
 
-  void fetchLatestRelease();
-
-  // 4. Interactive Window Mockup Tab Switching
+  // Abas da demonstração interativa
   const mockTabs = document.querySelectorAll('.mock-tab');
   const mockViews = document.querySelectorAll('.mock-view-content');
   const mockCurrentPath = document.getElementById('mockCurrentPath');
+  const mockAppWindowName = document.getElementById('mockAppWindowName');
+  const mockWindowBadge = document.getElementById('mockWindowBadge');
 
-  const PATH_BY_TAB = {
-    explorer: '~/projects/backend-service',
-    sftp: 'sftp://192.168.1.150/var/www/production',
-    editor: '~/projects/backend-service/main.go',
-    dbstudio: '~/projects/backend-service/analytics.sqlite3',
-    terminal: 'PS C:\\Users\\Vitor\\projects\\backend-service',
+  const META_BY_TAB = {
+    explorer: { appName: 'Pulsares Explorer', path: '~/projects/backend-service', badge: 'ACTIVITY BAR + FLYOUT' },
+    editor: { appName: 'Pulsares Studio Editor', path: '~/projects/web-dashboard/index.html', badge: 'LIVE WEB PREVIEW' },
+    dbstudio: { appName: 'Pulse DB Studio', path: '~/projects/backend-service/analytics.sqlite3', badge: 'ER MAP + SQL CONSOLE' },
+    dbcreator: { appName: 'Pulse DB Studio', path: '~/datasets/clientes-2026.csv → clientes.db', badge: 'BULK WAL IMPORT' },
+    sftp: { appName: 'Pulsares Explorer', path: 'sftp://192.168.1.150/var/www/production', badge: 'TOFU SHA-256' },
+    terminal: { appName: 'Pulsares Explorer', path: 'C:\\Users\\Vitor\\projects\\backend-service\\internal\\database', badge: 'FOLLOW-UP' },
   };
 
   mockTabs.forEach((tab) => {
     tab.addEventListener('click', () => {
-      const targetViewId = `view-${tab.dataset.tab}`;
-
-      mockTabs.forEach((t) => t.classList.remove('active'));
+      const key = tab.dataset.tab;
+      mockTabs.forEach((x) => x.classList.remove('active'));
       mockViews.forEach((v) => v.classList.remove('active'));
-
       tab.classList.add('active');
-      const targetView = document.getElementById(targetViewId);
-      if (targetView) {
-        targetView.classList.add('active');
-      }
-
-      if (mockCurrentPath && PATH_BY_TAB[tab.dataset.tab]) {
-        mockCurrentPath.textContent = PATH_BY_TAB[tab.dataset.tab];
+      const view = document.getElementById(`view-${key}`);
+      if (view) view.classList.add('active');
+      const meta = META_BY_TAB[key];
+      if (meta) {
+        if (mockAppWindowName) mockAppWindowName.textContent = meta.appName;
+        if (mockCurrentPath) mockCurrentPath.textContent = meta.path;
+        if (mockWindowBadge) mockWindowBadge.textContent = meta.badge;
       }
     });
   });
 
-  // 5. Interactive Copy Path Button Feedback Simulation
   const mockCopyBtn = document.getElementById('mockCopyBtn');
   if (mockCopyBtn) {
     mockCopyBtn.addEventListener('click', () => {
       mockCopyBtn.innerHTML = ICONS.check;
-
-      if (navigator.clipboard) {
-        void navigator.clipboard.writeText('/home/vitor/projects/backend-service');
-      }
-
+      if (navigator.clipboard) void navigator.clipboard.writeText('/home/vitor/projects/backend-service');
       setTimeout(() => {
         mockCopyBtn.innerHTML = ICONS.copy;
       }, 1600);

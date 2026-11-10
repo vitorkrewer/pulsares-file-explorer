@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Segurança — Pulsares Explorer</title>
+  <meta name="description" content="Modelo de segurança do Pulsares Explorer: TOFU SHA-256 para SSH, credenciais apenas em memória e zero telemetria." />
+  <meta name="theme-color" content="#090d16" />
+  <link rel="icon" type="image/png" href="appicon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="site-header"></div>
+
+  <main>
+    <section class="page-hero">
+      <div class="container">
+        <h1 class="page-title" data-title-source data-i18n="sec.title">Segurança e privacidade</h1>
+        <p class="page-subtitle" data-i18n="sec.subtitle">Projetado para dar controle total sobre credenciais e dados locais.</p>
+      </div>
+    </section>
+
+    <section class="security-section">
+      <div class="container">
+        <div class="security-box">
+          <div class="security-text">
+            <ul class="security-list">
+              <li data-i18n="sec.1"><strong>TOFU:</strong> chaves de hosts SSH são fixadas por SHA-256; se a chave mudar, a conexão é bloqueada.</li>
+              <li data-i18n="sec.2"><strong>Credenciais em RAM:</strong> senhas e passphrases nunca são gravadas em disco.</li>
+              <li data-i18n="sec.3"><strong>Offline e sem telemetria:</strong> nenhuma conta obrigatória nem envio de dados em segundo plano.</li>
+            </ul>
+          </div>
+          <div class="security-badge-card">
+            <div class="shield-big">
+              <svg class="svg-icon" viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="#10b981" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div class="shield-label" data-i18n="sec.badge">Segurança por design</div>
+            <div class="shield-sub">TOFU SHA-256 • RAM-only • Zero telemetry</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+  <script src="site.js"></script>
+</body>
+</html>
+
