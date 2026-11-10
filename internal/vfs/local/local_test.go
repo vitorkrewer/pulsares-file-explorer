@@ -48,19 +48,23 @@ func TestLocalFS_StatAndReadDir(t *testing.T) {
 	entriesChan, errChan := fs.ReadDir(ctx, dirLoc, 1) // batch size 1 para testar múltiplos lotes
 
 	var received []vfs.Entry
-	done := false
 
-	for !done {
+	for entriesChan != nil || errChan != nil {
 		select {
 		case batch, ok := <-entriesChan:
-			if ok {
-				received = append(received, batch...)
+			if !ok {
+				entriesChan = nil
+				continue
 			}
+			received = append(received, batch...)
 		case err, ok := <-errChan:
-			if ok && err != nil {
+			if !ok {
+				errChan = nil
+				continue
+			}
+			if err != nil {
 				t.Fatalf("readDir returned error: %v", err)
 			}
-			done = true
 		case <-time.After(3 * time.Second):
 			t.Fatal("timeout waiting for readDir")
 		}

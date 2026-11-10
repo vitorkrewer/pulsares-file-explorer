@@ -5,9 +5,6 @@ import (
 	"embed"
 	"net/http"
 	"os"
-	"runtime"
-	"syscall"
-	"unsafe"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -21,25 +18,11 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-var version = "1.0.0"
+var version = "1.1.1"
 
 // localMediaHandler serve arquivos locais de vídeo, áudio e PDF via HTTP Range Requests (206 Partial Content).
 func localMediaHandler() http.Handler {
 	return http.HandlerFunc(thumbs.ServeLocalMediaHTTP)
-}
-
-func setWindowsAppID(appID string) {
-	if runtime.GOOS != "windows" {
-		return
-	}
-	shell32 := syscall.NewLazyDLL("shell32.dll")
-	proc := shell32.NewProc("SetCurrentProcessExplicitAppUserModelID")
-	if proc.Find() == nil {
-		ptr, err := syscall.UTF16PtrFromString(appID)
-		if err == nil {
-			_, _, _ = proc.Call(uintptr(unsafe.Pointer(ptr)))
-		}
-	}
 }
 
 func main() {
@@ -66,7 +49,7 @@ func main() {
 		}
 	}
 
-	setWindowsAppID(appID)
+	platform.SetWindowsAppID(appID)
 
 	err := wails.Run(&options.App{
 		Title:     title,

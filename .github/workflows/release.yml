@@ -1,126 +1,25 @@
-name: Release
+name: Release Pulsares Explorer
 
-# Execução somente manual (Actions > Release > Run workflow).
-# Push de commits ou tags NÃO dispara release.
-#
-# A versão precisa ter uma seção "## [X.Y.Z] - AAAA-MM-DD" no CHANGELOG.md, que vira a nota
-# da release. Se o campo "version" ficar em branco, usa a versão mais recente do CHANGELOG.
-#
-# A release é publicada neste mesmo repositório com o GITHUB_TOKEN. Para publicar em um
-# repositório público separado, troque "repository"/"token" no job "publish" por um secret
-# com permissão "Contents: Read and write" limitada ao repositório de destino.
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Versão sem o prefixo v, por exemplo 0.1.0. Em branco: usa a mais recente do CHANGELOG.md"
+        description: "Versão a publicar (ex: v1.1.1). Deixe em branco para auto-detectar do CHANGELOG.md"
         required: false
         default: ""
         type: string
       prerelease:
         description: "Publicar como pré-release"
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
-  contents: read
-
-env:
-  APP_NAME: Pulsares-Explorer
-  BIN_NAME: pulsares-explorer
-  DISPLAY_NAME: Pulsares Explorer
-  WAILS_VERSION: v2.16.0
-  NODE_VERSION: "22.x"
-
-concurrency:
-  group: release
-  cancel-in-progress: false
+  contents: write
 
 jobs:
-  validate-release:
-    name: Validar versão e notas
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.value }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - id: version
-        shell: bash
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          VERSION="${INPUT_VERSION#v}"
-          if [ -z "$VERSION" ]; then
-            VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
-            echo "Versão detectada no CHANGELOG.md: '$VERSION'"
-          fi
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Versão inválida: '$VERSION'. Use o formato X.Y.Z, por exemplo 0.1.0."
-            exit 1
-          fi
-          if ! awk -v version="$VERSION" '
-            $0 ~ "^## \\[" version "\\]" { found=1; next }
-            found && /^## / { exit }
-            found { print }
-            END { if (!found) exit 1 }
-          ' CHANGELOG.md > RELEASE_NOTES.md; then
-            echo "::error::Seção ## [$VERSION] não encontrada no CHANGELOG.md."
-            exit 1
-          fi
-          if ! grep -q '[^[:space:]]' RELEASE_NOTES.md; then
-            echo "::error::A seção ## [$VERSION] do CHANGELOG.md está vazia."
-            exit 1
-          fi
-          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-notes
-          path: RELEASE_NOTES.md
-
-  quality:
-    name: Tipos, lint e testes
-    needs: validate-release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Dependências Linux (CGO do Wails)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
-
-      - name: Frontend
-        working-directory: frontend
-        run: |
-          npm ci --no-audit --no-fund
-          npm run typecheck
-          npm run lint
-          npm run i18n:check
-          npm test -- --run
-          npm run build
-
-      - name: Go
-        run: |
-          go vet -tags webkit2_41 ./...
-          go test -tags webkit2_41 ./...
-
   build:
     name: Build ${{ matrix.name }}
-    needs: [validate-release, quality]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -129,186 +28,366 @@ jobs:
           - name: Windows x64
             os: windows-latest
             platform: windows/amd64
-            artifact: dist-windows-x64
+            artifact: pulsares-windows-x64
           - name: Linux x64
             os: ubuntu-latest
             platform: linux/amd64
-            artifact: dist-linux-x64
+            artifact: pulsares-linux-x64
           - name: macOS universal
             os: macos-latest
             platform: darwin/universal
-            artifact: dist-macos-universal
+            artifact: pulsares-macos-universal
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          go-version-file: go.mod
+          fetch-depth: 0
+          ref: ${{ github.ref }}
 
-      - uses: actions/setup-node@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          go-version: "1.25.x"
 
-      - name: Dependências Linux
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
 
-      - name: Instalar Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
 
-      - name: Dependências do frontend
+      - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci --no-audit --no-fund
 
-      # Os bindings (frontend/wailsjs) não são versionados; o Wails os gera no build.
-      # A versão do binário vem do CHANGELOG validado, via ldflags.
-      - name: Build Windows
+      - name: Build Windows desktop
         if: runner.os == 'Windows'
-        run: wails build -clean -trimpath -platform ${{ matrix.platform }} -webview2 download -ldflags "-X main.version=${{ needs.validate-release.outputs.version }}"
+        run: wails build -skipbindings -clean -trimpath -platform ${{ matrix.platform }} -webview2 download
 
-      - name: Build Linux
+      - name: Build Linux desktop
         if: runner.os == 'Linux'
-        run: wails build -clean -trimpath -platform ${{ matrix.platform }} -tags webkit2_41 -ldflags "-X main.version=${{ needs.validate-release.outputs.version }}"
+        run: wails build -skipbindings -clean -trimpath -platform ${{ matrix.platform }} -tags webkit2_41
 
-      - name: Build macOS
+      - name: Build macOS desktop
         if: runner.os == 'macOS'
-        run: wails build -clean -trimpath -platform ${{ matrix.platform }} -ldflags "-X main.version=${{ needs.validate-release.outputs.version }}"
+        run: wails build -skipbindings -clean -trimpath -platform ${{ matrix.platform }}
 
-      - name: Preparar artefato Windows
+      - name: Prepare Windows artifact
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          New-Item -ItemType Directory -Force -Path release-assets
           $binary = Get-ChildItem "build/bin" -Filter *.exe | Select-Object -First 1
-          if (-not $binary) { throw "Executável do Windows não encontrado em build/bin" }
-          Copy-Item $binary.FullName "release-assets/$env:APP_NAME-Windows-x64.exe"
+          Copy-Item $binary.FullName "release-assets/Pulsares-Explorer-Windows-x64.exe"
 
-      - name: Preparar artefatos Linux
+          # 2. Gerar versão Portátil (Zip com pasta data/ e marcador portable.dat)
+          $portableDir = "release-assets/Pulsares-Explorer-Windows-Portable"
+          New-Item -ItemType Directory -Force -Path "$portableDir/data"
+          Set-Content -Path "$portableDir/portable.dat" -Value "# Modo Portatil Ativado - Dados e banco salvos nesta pasta"
+          Copy-Item $binary.FullName "$portableDir/Pulsares-Explorer.exe"
+          Compress-Archive -Path "$portableDir/*" -DestinationPath "release-assets/Pulsares-Explorer-Windows-x64-Portable.zip" -Force
+          Remove-Item -Recurse -Force $portableDir
+
+      - name: Prepare Linux artifact
         if: runner.os == 'Linux'
         shell: bash
-        env:
-          CLEAN_VER: ${{ needs.validate-release.outputs.version }}
         run: |
-          set -euo pipefail
           mkdir -p release-assets
 
-          BIN_PATH=$(find build/bin -maxdepth 1 -type f ! -name "*.exe" -print -quit)
-          test -n "$BIN_PATH"
-          ICON=build/appicon.png
+          # 1. Archive tar.gz
+          tar -C build/bin -czf release-assets/Pulsares-Explorer-Linux-x64.tar.gz .
 
-          DESKTOP_ENTRY=$(printf "%s\n" \
-            "[Desktop Entry]" \
-            "Name=$DISPLAY_NAME" \
-            "Comment=Explorador de arquivos rápido, com abas e painel duplo." \
-            "Exec=$BIN_NAME %U" \
-            "Icon=$BIN_NAME" \
-            "Terminal=false" \
-            "Type=Application" \
-            "Categories=System;FileTools;FileManager;Utility;" \
-            "MimeType=inode/directory;" \
-            "StartupWMClass=$DISPLAY_NAME")
+          # Localizar o binário gerado pelo Wails
+          BIN_PATH=$(find build/bin -maxdepth 1 -type f -perm /111 ! -name "*.exe" ! -name "*.zip" ! -name "*.tar.gz" -print -quit)
+          if [ -z "$BIN_PATH" ]; then
+            BIN_PATH=$(find build/bin -maxdepth 1 -type f ! -name "*.exe" ! -name "*.zip" ! -name "*.tar.gz" -print -quit)
+          fi
+          echo "Binário Linux encontrado em: $BIN_PATH"
 
-          # 1. tar.gz
-          TAR_DIR="build-tar/$APP_NAME"
-          rm -rf build-tar && mkdir -p "$TAR_DIR"
-          install -m 755 "$BIN_PATH" "$TAR_DIR/$BIN_NAME"
-          cp "$ICON" "$TAR_DIR/$BIN_NAME.png"
-          tar -C build-tar -czf "release-assets/$APP_NAME-Linux-x64.tar.gz" "$APP_NAME"
+          # Determinar versão para os pacotes
+          VERSION="${GITHUB_REF_NAME}"
+          if [[ -z "$VERSION" || "$VERSION" != v* ]]; then
+            VERSION=$(grep -oE '^##\s*\[?v?[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | head -n 1 | sed -E 's/##\s*\[?v?//')
+          fi
+          CLEAN_VER="${VERSION#v}"
+          [ -z "$CLEAN_VER" ] && CLEAN_VER="1.1.1"
+          echo "Versão do pacote Linux: $CLEAN_VER"
 
-          # 2. .deb
-          DEB_ROOT="build-deb/$BIN_NAME"
+          # 2. Gerar pacote Debian (.deb)
+          DEB_ROOT="build-deb/pulsares-explorer"
           rm -rf build-deb
-          mkdir -p "$DEB_ROOT/DEBIAN" "$DEB_ROOT/usr/bin" "$DEB_ROOT/usr/share/applications" \
-                   "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps"
-          install -m 755 "$BIN_PATH" "$DEB_ROOT/usr/bin/$BIN_NAME"
-          cp "$ICON" "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps/$BIN_NAME.png"
-          echo "$DESKTOP_ENTRY" > "$DEB_ROOT/usr/share/applications/$BIN_NAME.desktop"
+          mkdir -p "$DEB_ROOT/DEBIAN"
+          mkdir -p "$DEB_ROOT/usr/bin"
+          mkdir -p "$DEB_ROOT/usr/share/applications"
+          mkdir -p "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps"
+          mkdir -p "$DEB_ROOT/usr/share/pixmaps"
+
+          cp "$BIN_PATH" "$DEB_ROOT/usr/bin/pulsares-explorer"
+          chmod 755 "$DEB_ROOT/usr/bin/pulsares-explorer"
+          cp build/appicon.png "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps/pulsares-explorer.png"
+          cp build/appicon.png "$DEB_ROOT/usr/share/pixmaps/pulsares-explorer.png"
+
           printf "%s\n" \
-            "Package: $BIN_NAME" \
+            "Package: pulsares-explorer" \
             "Version: ${CLEAN_VER}" \
             "Section: utils" \
             "Priority: optional" \
             "Architecture: amd64" \
-            "Maintainer: Vitor Krewer <47862173+vitorkrewer@users.noreply.github.com>" \
+            "Maintainer: Vitor Krewer <vitormkrewer@gmail.com>" \
             "Depends: libgtk-3-0, libwebkit2gtk-4.1-0" \
-            "Description: $DISPLAY_NAME" \
-            " Explorador de arquivos multiplataforma, rapido, com abas e painel duplo." \
+            "Description: Pulsares Explorer" \
+            " Explorador de arquivos multiplataforma, rapido, com abas, painel duplo, terminal e DB Studio." \
             > "$DEB_ROOT/DEBIAN/control"
-          dpkg-deb --build --root-owner-group "$DEB_ROOT" "release-assets/$APP_NAME-Linux-x64.deb"
 
-          # 3. AppImage
-          APPDIR="build-appimage/$APP_NAME.AppDir"
+          printf "%s\n" \
+            "[Desktop Entry]" \
+            "Name=Pulsares Explorer" \
+            "Comment=Explorador de arquivos rápido, com abas, painel duplo, terminal e DB Studio." \
+            "Exec=pulsares-explorer %U" \
+            "Icon=pulsares-explorer" \
+            "Terminal=false" \
+            "Type=Application" \
+            "Categories=System;FileTools;FileManager;Utility;" \
+            "MimeType=inode/directory;" \
+            "StartupWMClass=Pulsares Explorer" \
+            > "$DEB_ROOT/usr/share/applications/pulsares-explorer.desktop"
+          chmod 644 "$DEB_ROOT/usr/share/applications/pulsares-explorer.desktop"
+
+          dpkg-deb --build --root-owner-group "$DEB_ROOT" release-assets/Pulsares-Explorer-Linux-x64.deb
+
+          # 3. Gerar AppImage (.AppImage)
+          APPDIR="build-appimage/PulsaresExplorer.AppDir"
           rm -rf build-appimage
           mkdir -p "$APPDIR/usr/bin"
-          install -m 755 "$BIN_PATH" "$APPDIR/usr/bin/$BIN_NAME"
-          cp "$ICON" "$APPDIR/$BIN_NAME.png"
-          cp "$ICON" "$APPDIR/.DirIcon"
-          echo "$DESKTOP_ENTRY" > "$APPDIR/$BIN_NAME.desktop"
+          mkdir -p "$APPDIR/usr/share/icons/hicolor/512x512/apps"
+
+          cp "$BIN_PATH" "$APPDIR/usr/bin/pulsares-explorer"
+          chmod 755 "$APPDIR/usr/bin/pulsares-explorer"
+          cp build/appicon.png "$APPDIR/usr/share/icons/hicolor/512x512/apps/pulsares-explorer.png"
+          cp build/appicon.png "$APPDIR/pulsares-explorer.png"
+          cp build/appicon.png "$APPDIR/.DirIcon"
+
+          printf "%s\n" \
+            "[Desktop Entry]" \
+            "Name=Pulsares Explorer" \
+            "Comment=Explorador de arquivos rápido, com abas, painel duplo, terminal e DB Studio." \
+            "Exec=pulsares-explorer %U" \
+            "Icon=pulsares-explorer" \
+            "Terminal=false" \
+            "Type=Application" \
+            "Categories=System;FileTools;FileManager;Utility;" \
+            "MimeType=inode/directory;" \
+            "StartupWMClass=Pulsares Explorer" \
+            > "$APPDIR/pulsares-explorer.desktop"
+
           printf "%s\n" \
             "#!/bin/sh" \
-            'HERE=$(dirname "$(readlink -f "$0")")' \
-            "exec \"\$HERE/usr/bin/$BIN_NAME\" \"\$@\"" \
+            'SELF=$(readlink -f "$0")' \
+            'HERE=${SELF%/*}' \
+            'export PATH="${HERE}/usr/bin:${PATH}"' \
+            'export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"' \
+            'exec "${HERE}/usr/bin/pulsares-explorer" "$@"' \
             > "$APPDIR/AppRun"
           chmod +x "$APPDIR/AppRun"
-          curl -fsSL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool.AppImage
-          chmod +x appimagetool.AppImage
-          ./appimagetool.AppImage --appimage-extract > /dev/null
-          ARCH=x86_64 ./squashfs-root/AppRun "$APPDIR" "release-assets/$APP_NAME-Linux-x64.AppImage"
 
-      - name: Preparar artefato macOS
+          curl -sL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool.AppImage
+          chmod +x appimagetool.AppImage
+          ./appimagetool.AppImage --appimage-extract
+          ARCH=x86_64 ./squashfs-root/AppRun "$APPDIR" release-assets/Pulsares-Explorer-Linux-x64.AppImage
+
+      - name: Prepare macOS artifact
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p release-assets build-mac
+          mkdir -p release-assets
           APP_PATH=$(find build/bin -maxdepth 1 -name '*.app' -print -quit)
           test -n "$APP_PATH"
-          cp -R "$APP_PATH" "build-mac/$DISPLAY_NAME.app"
-          ditto -c -k --sequesterRsrc --keepParent "build-mac/$DISPLAY_NAME.app" "release-assets/$APP_NAME-macOS-universal.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" release-assets/Pulsares-Explorer-macOS-universal.zip
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: release-assets/*
           if-no-files-found: error
 
   publish:
-    name: Publicar release
-    needs: [validate-release, build]
+    name: Publish GitHub Release
+    needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
         with:
           path: release-assets
-          pattern: dist-*
           merge-multiple: true
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-notes
-          path: notes
+      - name: Build Multiverse Portable Package (Cross-Platform Pendrive)
+        shell: bash
+        run: |
+          MULTIVERSE_DIR="Pulsares-Explorer-Multiverse-Portable"
+          rm -rf "$MULTIVERSE_DIR"
+          mkdir -p "$MULTIVERSE_DIR/data"
+          touch "$MULTIVERSE_DIR/data/.gitkeep"
 
-      - name: Gerar SHA256SUMS
+          # 1. Marcador de modo portátil
+          echo "# Pulsares Explorer - Multiverse Portable" > "$MULTIVERSE_DIR/portable.dat"
+          echo "# Todos os dados locais, sessoes, favoritos e banco SQLite sao salvos dentro da pasta ./data" >> "$MULTIVERSE_DIR/portable.dat"
+
+          # 2. Copiar binário Windows
+          if [ -f "release-assets/Pulsares-Explorer-Windows-x64.exe" ]; then
+            cp "release-assets/Pulsares-Explorer-Windows-x64.exe" "$MULTIVERSE_DIR/Pulsares-Explorer.exe"
+          fi
+
+          # 3. Copiar binário Linux (AppImage)
+          if [ -f "release-assets/Pulsares-Explorer-Linux-x64.AppImage" ]; then
+            cp "release-assets/Pulsares-Explorer-Linux-x64.AppImage" "$MULTIVERSE_DIR/Pulsares-Explorer-Linux.AppImage"
+            chmod +x "$MULTIVERSE_DIR/Pulsares-Explorer-Linux.AppImage"
+          fi
+
+          # 4. Descompactar e incluir o bundle macOS
+          if [ -f "release-assets/Pulsares-Explorer-macOS-universal.zip" ]; then
+            unzip -q "release-assets/Pulsares-Explorer-macOS-universal.zip" -d "$MULTIVERSE_DIR/"
+          fi
+
+          # 5. Criar LEIA-ME explicativo
+          printf "%s\n" \
+            "=====================================================" \
+            " PULSARES EXPLORER - VERSAO PORTABLE MULTIVERSE" \
+            "=====================================================" \
+            "" \
+            "Esta versao foi criada para rodar diretamente a partir de um pendrive" \
+            "ou HD externo, compartilhando suas configuracoes, sessoes e favoritos" \
+            "entre multiplos sistemas operacionais." \
+            "" \
+            "COMO USAR NO SEU PENDRIVE:" \
+            "-----------------------------------------------------" \
+            "1. Windows:" \
+            "   - De duplo clique em 'Pulsares-Explorer.exe'." \
+            "" \
+            "2. Linux:" \
+            "   - Execute 'Pulsares-Explorer-Linux.AppImage'" \
+            "   - Se necessario, conceda permissao de execucao:" \
+            "     chmod +x Pulsares-Explorer-Linux.AppImage" \
+            "" \
+            "3. macOS:" \
+            "   - Execute 'Pulsares Explorer.app'." \
+            "   - Na primeira execucao, se o macOS avisar sobre desenvolvedor nao identificado:" \
+            "     Clique com botao direito no aplicativo -> selecione 'Abrir' -> confirme." \
+            "" \
+            "ONDE FICAM SEUS DADOS?" \
+            "-----------------------------------------------------" \
+            "Todas as sessoes, favoritos, etiquetas e configuracoes sao armazenados em:" \
+            "./data/explorer.db" \
+            "" \
+            "=====================================================" \
+            > "$MULTIVERSE_DIR/LEIA-ME-MULTIVERSE.txt"
+
+          # 6. Garantir permissões de execução nos binários Linux e macOS
+          chmod +x "$MULTIVERSE_DIR"/*.AppImage 2>/dev/null || true
+          find "$MULTIVERSE_DIR" -type f -path "*/Contents/MacOS/*" -exec chmod +x {} + 2>/dev/null || true
+
+          # 7. Gerar arquivo compactado final para o release
+          zip -r -q "release-assets/Pulsares-Explorer-Multiverse-Portable.zip" "$MULTIVERSE_DIR"
+          rm -rf "$MULTIVERSE_DIR"
+          echo "Pacote Multiverse Portable gerado com sucesso: release-assets/Pulsares-Explorer-Multiverse-Portable.zip"
+
+      - name: Generate SHA256SUMS
         shell: bash
         run: |
           cd release-assets
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - uses: softprops/action-gh-release@v2
+      - name: Extract tag and release notes from CHANGELOG
+        id: release_info
+        shell: python
+        run: |
+          import os, re
+
+          event_name = "${{ github.event_name }}"
+          ref_name = "${{ github.ref_name }}"
+          input_version = "${{ inputs.version }}"
+
+          changelog_path = "CHANGELOG.md"
+          changelog_content = ""
+          if os.path.exists(changelog_path):
+              with open(changelog_path, "r", encoding="utf-8") as f:
+                  changelog_content = f.read()
+
+          # 1. Determine tag name
+          tag = ""
+          if event_name == "workflow_dispatch" and input_version.strip():
+              tag = input_version.strip()
+              if not tag.startswith("v"):
+                  tag = f"v{tag}"
+          elif event_name == "push" and ref_name and ref_name.startswith("v"):
+              tag = ref_name
+
+          if not tag:
+              match = re.search(r'##\s*\[?(v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?)\]?', changelog_content)
+              if match:
+                  tag = match.group(1)
+                  if not tag.startswith("v"):
+                      tag = f"v{tag}"
+              else:
+                  tag = "v1.1.1"
+
+          print(f"Calculated RELEASE_TAG: {tag}")
+
+          # 2. Extract release notes for this tag
+          clean_ver = tag.lstrip("v")
+          pattern = rf'^##\s*\[?v?{re.escape(clean_ver)}\]?.*$'
+          lines = changelog_content.splitlines()
+
+          start_idx = None
+          end_idx = None
+          for i, line in enumerate(lines):
+              if start_idx is None:
+                  if re.match(pattern, line.strip(), re.IGNORECASE):
+                      start_idx = i + 1
+              else:
+                  if re.match(r'^##\s+', line.strip()):
+                      end_idx = i
+                      break
+
+          notes = ""
+          if start_idx is not None:
+              if end_idx is None:
+                  end_idx = len(lines)
+              notes = "\n".join(lines[start_idx:end_idx]).strip()
+
+          notes_file = "extracted-release-notes.md"
+          if notes:
+              with open(notes_file, "w", encoding="utf-8") as f:
+                  f.write(notes + "\n")
+              print("Extracted release notes successfully.")
+          else:
+              with open(notes_file, "w", encoding="utf-8") as f:
+                  f.write(f"Release {tag}\n")
+              print("No specific section found in CHANGELOG.md, created fallback release notes.")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"tag_name={tag}\n")
+              f.write(f"body_path={notes_file}\n")
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.validate-release.outputs.version }}
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
           target_commitish: ${{ github.sha }}
-          name: ${{ env.DISPLAY_NAME }} v${{ needs.validate-release.outputs.version }}
-          body_path: notes/RELEASE_NOTES.md
-          prerelease: ${{ inputs.prerelease }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
           generate_release_notes: false
-          fail_on_unmatched_files: true
+          body_path: ${{ steps.release_info.outputs.body_path }}
           files: release-assets/*

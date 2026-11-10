@@ -22,6 +22,7 @@ var iconStudioICO []byte
 
 var (
 	user32Win                    = syscall.NewLazyDLL("user32.dll")
+	shell32Win                   = syscall.NewLazyDLL("shell32.dll")
 	procFindWindowW              = user32Win.NewProc("FindWindowW")
 	procEnumWindows              = user32Win.NewProc("EnumWindows")
 	procGetWindowThreadProcessId = user32Win.NewProc("GetWindowThreadProcessId")
@@ -30,7 +31,18 @@ var (
 	procLoadImageW               = user32Win.NewProc("LoadImageW")
 	procGetSystemMetrics         = user32Win.NewProc("GetSystemMetrics")
 	procSetClassLongPtrW         = user32Win.NewProc("SetClassLongPtrW")
+	procSetAppUserModelID        = shell32Win.NewProc("SetCurrentProcessExplicitAppUserModelID")
 )
+
+// SetWindowsAppID define o AppUserModelID explícito do processo no Windows.
+func SetWindowsAppID(appID string) {
+	if procSetAppUserModelID.Find() == nil {
+		ptr, err := syscall.UTF16PtrFromString(appID)
+		if err == nil {
+			_, _, _ = procSetAppUserModelID.Call(uintptr(unsafe.Pointer(ptr)))
+		}
+	}
+}
 
 const (
 	imageIcon      = 1
