@@ -50,6 +50,7 @@ const DEFAULT_SHORTCUTS: ShortcutBinding[] = [
   { id: 'quickLook', labelKey: 'preview.quickLook', defaultKey: 'Space', currentKey: 'Space' },
   { id: 'toggleTerminal', labelKey: 'terminal.togglePanel', defaultKey: 'Ctrl+`', currentKey: 'Ctrl+`' },
   { id: 'toggleSidebar', labelKey: 'nav.toggleSidebar', defaultKey: 'Ctrl+B', currentKey: 'Ctrl+B' },
+  { id: 'clipboardHistory', labelKey: 'clipboardHistory.title', defaultKey: 'Alt+V', currentKey: 'Alt+V' },
 ];
 
 const DEFAULT_BATCH_OPTIONS: BatchRenameOptions = {

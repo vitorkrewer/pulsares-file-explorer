@@ -27,6 +27,7 @@ import { useOperationsStore } from '../operations/store';
 import { useDualPaneStore } from '../panes/store';
 import { useTerminalStore } from '../terminal/store';
 import { useSearchStore } from '../search/store';
+import { useClipboardHistoryStore } from '../clipboard/store';
 import { formatBytes } from '../../i18n/format';
 
 export const ProductivityModals: React.FC = () => {
@@ -127,6 +128,12 @@ export const ProductivityModals: React.FC = () => {
 
   const commands = useMemo(
     () => [
+      {
+        id: 'clipboard-history',
+        label: t('clipboardHistory.title'),
+        shortcut: 'Alt+V / Ctrl+Shift+V',
+        run: () => useClipboardHistoryStore.getState().toggleDrawer(),
+      },
       {
         id: 'archive-manager',
         label: t('archive.title'),

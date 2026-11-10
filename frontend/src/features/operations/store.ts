@@ -19,6 +19,8 @@ import {
   getItemProperties,
   openWithDialog,
   subscribeEvent,
+  setNativeClipboardFiles,
+  getNativeClipboardFiles,
 } from '../../lib/wails';
 import { useBrowserStore } from '../browser/store';
 
@@ -57,6 +59,7 @@ interface OperationsState {
   copySelection: () => void;
   cutSelection: () => void;
   pasteIntoCurrent: () => Promise<void>;
+  syncClipboardFromOS: () => Promise<void>;
   trashSelection: () => Promise<void>;
   requestPermanentDelete: () => void;
   requestRenameSelection: () => void;
@@ -164,23 +167,61 @@ export const useOperationsStore = create<OperationsState>((set, get) => ({
     const selected = Array.from(useBrowserStore.getState().selectedPaths);
     if (selected.length === 0) return;
     set({ clipboard: { paths: selected, mode: 'copy' } });
+    void setNativeClipboardFiles(selected, false);
   },
 
   cutSelection: () => {
     const selected = Array.from(useBrowserStore.getState().selectedPaths);
     if (selected.length === 0) return;
     set({ clipboard: { paths: selected, mode: 'cut' } });
+    void setNativeClipboardFiles(selected, true);
+  },
+
+  syncClipboardFromOS: async () => {
+    try {
+      const osFiles = await getNativeClipboardFiles();
+      if (osFiles.paths.length > 0) {
+        const cur = get().clipboard;
+        const same =
+          cur &&
+          cur.mode === osFiles.mode &&
+          cur.paths.length === osFiles.paths.length &&
+          cur.paths.every((p, idx) => p === osFiles.paths[idx]);
+        if (!same) {
+          set({ clipboard: { paths: osFiles.paths, mode: osFiles.mode } });
+        }
+      }
+    } catch {
+      // ignore
+    }
   },
 
   pasteIntoCurrent: async () => {
-    const { clipboard, verifyHash } = get();
+    const { verifyHash } = get();
     const currentPath = useBrowserStore.getState().currentPath;
-    if (!clipboard || clipboard.paths.length === 0 || !currentPath) return;
+    if (!currentPath) return;
 
-    const kind = clipboard.mode === 'cut' ? 'move' : 'copy';
+    let activeClip = get().clipboard;
+    const isInternalSftp = activeClip?.paths.some((p) => p.startsWith('sftp://'));
+
+    if (!isInternalSftp) {
+      try {
+        const osFiles = await getNativeClipboardFiles();
+        if (osFiles.paths.length > 0) {
+          activeClip = { paths: osFiles.paths, mode: osFiles.mode };
+          set({ clipboard: activeClip });
+        }
+      } catch {
+        // fallback to internal clipboard
+      }
+    }
+
+    if (!activeClip || activeClip.paths.length === 0) return;
+
+    const kind = activeClip.mode === 'cut' ? 'move' : 'copy';
     set({ panelOpen: true });
-    await enqueueOperation(kind, clipboard.paths, currentPath, 'ask', verifyHash);
-    if (clipboard.mode === 'cut') {
+    await enqueueOperation(kind, activeClip.paths, currentPath, 'ask', verifyHash);
+    if (activeClip.mode === 'cut') {
       set({ clipboard: null });
     }
   },

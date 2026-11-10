@@ -2,6 +2,29 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [1.2.0] - 2026-11-10
+
+### Adicionado
+
+- **Integração Nativa Bidirecional da Área de Transferência de Arquivos e Imagens com o Sistema Operacional (`internal/platform/clipboard_windows.go` e `clipboard_unix.go`)**:
+  - **Pulsares Explorer ⇄ Windows Explorer / Linux / macOS**: copiar (`Ctrl + C`) ou recortar (`Ctrl + X`) arquivos e pastas dentro do Pulsares Explorer agora grava nativamente os arquivos no clipboard do sistema operacional (`CF_HDROP` + `Preferred DropEffect` no Windows, `x-special/gnome-copied-files` no Linux Wayland/X11 e `POSIX file` no macOS), permitindo colar diretamente no Windows Explorer, Área de Trabalho, VS Code, mensageiros e navegadores.
+  - **Caminho inverso (SO → Pulsares)**: copiar ou recortar arquivos no Explorador de Arquivos do sistema habilita automaticamente o botão **Colar** na barra de ferramentas e no menu de contexto do Pulsares Explorer e permite colar com `Ctrl + V` na pasta ativa.
+  - **Captura nativa de Prints e Imagens (`CF_DIB` / `PNG`)**: monitoramento leve por `GetClipboardSequenceNumber()` no Win32 detectando instantaneamente capturas de tela (`Win + Shift + S` / `PrtSc`), imagens e arquivos copiados fora do aplicativo sem exigir permissões de navegador.
+- **Gerenciador de Histórico da Área de Transferência Multiplataforma (`Alt + V` / `Ctrl + Shift + V`)**:
+  - Novo botão **Histórico do Clipboard** (`ClipboardList`) na barra superior (`AddressBar.tsx`) ao lado do alternador de tema claro/escuro, com indicador dinâmico da quantidade de itens armazenados.
+  - Atalhos globais **`Alt + V`** (ergonômico e livre de conflito com o `Win + V` reservado pelo Windows) e **`Ctrl + Shift + V`** (além de integração na Paleta de Comandos `Ctrl + Shift + P`), abrindo um **painel lateral à direita (`ClipboardHistoryDrawer.tsx`)**.
+  - **Capacidade inteligente de 20 itens recentes + itens fixados ilimitados**:
+    - Armazena automaticamente os **últimos 20 itens não fixados** em banco SQLite local (`clipboard_history` em `internal/storage/clipboard.go`) com deduplicação por hash SHA-256 (`content_hash`).
+    - Permite **fixar ("Manter no histórico")** itens importantes para que nunca sejam descartados quando novos itens entrarem na fila.
+  - **Suporte multimídia e integração direta com a pasta aberta no explorador**:
+    - **Textos e Snippets**: visualização rápida em fonte monoespaçada, cópia com 1 clique e botão para **salvar diretamente como arquivo `.txt` na pasta aberta atual** (com escrita atômica via arquivo temporário + rename).
+    - **Imagens e Prints (`PNG`)**: captura de imagens copiadas/coladas da área de transferência com miniatura visual e dimensões, cópia rápida de volta para o clipboard do sistema e botão para **salvar o print diretamente como arquivo `.png` na pasta aberta atual**.
+    - **Lotes de Arquivos Copiados/Recortados (`Ctrl + C` / `Ctrl + X`)**: registra os conjuntos de arquivos copiados ou recortados no Pulsares Explorer permitindo **colar novamente na pasta atual** a qualquer momento sem perder seleções anteriores.
+  - **Controles de Privacidade e Filtros**:
+    - Botão **Pausar / Retomar captura** para suspender o monitoramento quando estiver lidando com dados sensíveis.
+    - Busca instantânea no histórico, filtros por categoria (*Todos*, *Texto*, *Imagens*, *Arquivos*, *Fixados*) e botão para limpar itens não fixados em um clique.
+    - Internacionalização completa nos **10 idiomas** suportados (`pt-BR`, `en`, `es`, `de`, `fr`, `it`, `ja`, `zh-CN`, `tr`, `sv`).
+
 ## [1.1.1] - 2026-11-09
 
 ### Adicionado

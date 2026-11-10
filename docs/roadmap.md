@@ -17,6 +17,7 @@ Cada etapa é registrada no [`CHANGELOG.md`](../CHANGELOG.md). A ordem reflete a
 | 1.0.0 | Estabilização e distribuição | Concluída |
 | 1.1.0 | Conexões SSH/SFTP (TOFU), DB Studio, Studio Editor, streaming HTTP 206 e slides | Concluída |
 | 1.1.1 | Mapa ER, Criador SQLite, Live Web Preview, Terminal Follow-up, Activity Bar e 10 idiomas | Concluída |
+| 1.2.0 | Histórico da Área de Transferência (`Alt+V`) e Clipboard Nativo de Arquivos/Imagens com o SO | Concluída |
 
 ---
 
@@ -118,6 +119,14 @@ Cada etapa é registrada no [`CHANGELOG.md`](../CHANGELOG.md). A ordem reflete a
 - **Terminal Follow-up & Activity Bar**: botão *Follow-up* sincronizando `cd` (cliente + backend) com a aba ativa e barra lateral retrátil com Activity Bar + Flyout auto-ocultável.
 - **Drag & Drop granular** sem congelamentos, spinners de carregamento e expansão para **10 idiomas** (`pt-BR`, `en`, `es`, `de`, `fr`, `it`, `ja`, `zh-CN`, `tr`, `sv`).
 - **Distribuição Portátil**: modo portátil em `./data/explorer.db` (`getPortableDataDir`) com novos pacotes `Windows-x64-Portable.zip` e `Multiverse-Portable.zip`.
+
+## 1.2.0 — Histórico da Área de Transferência (`Alt + V`) e Interação Nativa com o SO
+
+- **Clipboard Nativo Bidirecional com o SO (`internal/platform/clipboard_windows.go` e `clipboard_unix.go`)**: cópia e recorte reais de arquivos (`CF_HDROP` + `Preferred DropEffect` no Windows, `x-special/gnome-copied-files` no Linux e `POSIX file` no macOS) permitindo copiar/colar livremente entre o Pulsares Explorer e o Explorador do Sistema, além de leitura/escrita nativa de imagens (`CF_DIB` / `PNG`).
+- **Painel lateral direito de Histórico do Clipboard (`ClipboardHistoryDrawer.tsx`)**: acionado pelo botão na `AddressBar` (ao lado do alternador de tema) ou pelos atalhos `Alt + V` e `Ctrl + Shift + V`.
+- **Persistência SQLite (`internal/storage/clipboard.go`)**: armazenamento dos últimos **20 itens não fixados** + itens **fixados ("Manter no histórico")** com deduplicação por hash SHA-256.
+- **Textos, Imagens (`PNG`) e Lotes de Arquivos (`Ctrl+C`/`Ctrl+X`)**: prévia visual de prints e textos, restauração rápida para o clipboard do sistema, colagem direta de lotes de arquivos e salvamento atômico de imagens (`.png`) e snippets (`.txt`) diretamente na pasta aberta no explorador.
+- **Privacidade e Filtros**: pausa de captura com 1 clique, busca instantânea, filtros por categoria e tradução completa nos 10 idiomas.
 
 ## Pendências sem etapa definida
 

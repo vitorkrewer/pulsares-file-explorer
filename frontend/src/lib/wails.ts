@@ -569,6 +569,29 @@ declare global {
           ShowSaveFileDialog?: (opts: SaveFileDialogOptions) => Promise<string>;
           DBCreatorInspectSource?: (sourcePath: string) => Promise<DBCreatorInspection>;
           DBCreatorExecute?: (req: DBCreatorRequest) => Promise<DBCreatorResult>;
+          ListClipboardHistory?: () => Promise<ClipboardHistoryItem[]>;
+          AddClipboardHistoryItem?: (
+            kind: string,
+            content: string,
+            preview: string,
+            width: number,
+            height: number
+          ) => Promise<ClipboardHistoryItem[]>;
+          TogglePinClipboardItem?: (id: number) => Promise<ClipboardHistoryItem[]>;
+          DeleteClipboardItem?: (id: number) => Promise<ClipboardHistoryItem[]>;
+          ClearUnpinnedClipboardHistory?: () => Promise<ClipboardHistoryItem[]>;
+          SaveClipboardItemToFolder?: (
+            id: number,
+            targetDir: string,
+            customName: string
+          ) => Promise<string>;
+          ReadNativeClipboardText?: () => Promise<string>;
+          WriteNativeClipboardText?: (text: string) => Promise<void>;
+          SetNativeClipboardFiles?: (paths: string[], cut: boolean) => Promise<void>;
+          GetNativeClipboardFiles?: () => Promise<NativeClipboardFiles>;
+          SetNativeClipboardImage?: (dataUrl: string) => Promise<void>;
+          GetClipboardSequenceNumber?: () => Promise<number>;
+          ReadSystemClipboardSnapshot?: () => Promise<SystemClipboardSnapshot>;
         };
       };
     };
@@ -1602,4 +1625,155 @@ export async function dbCreatorExecute(req: DBCreatorRequest): Promise<DBCreator
   }
   throw new Error('DBCreatorExecute indisponível no ambiente atual');
 }
+
+export type ClipboardItemKind = 'text' | 'image' | 'files';
+
+export interface ClipboardHistoryItem {
+  id: number;
+  kind: ClipboardItemKind;
+  content: string;
+  preview: string;
+  contentHash: string;
+  byteSize: number;
+  width?: number;
+  height?: number;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listClipboardHistory(): Promise<ClipboardHistoryItem[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ListClipboardHistory === 'function') {
+    const res = await window.go.app.App.ListClipboardHistory();
+    return res || [];
+  }
+  return [];
+}
+
+export async function addClipboardHistoryItem(
+  kind: ClipboardItemKind,
+  content: string,
+  preview = '',
+  width = 0,
+  height = 0
+): Promise<ClipboardHistoryItem[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.AddClipboardHistoryItem === 'function') {
+    const res = await window.go.app.App.AddClipboardHistoryItem(kind, content, preview, width, height);
+    return res || [];
+  }
+  return [];
+}
+
+export async function togglePinClipboardItem(id: number): Promise<ClipboardHistoryItem[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.TogglePinClipboardItem === 'function') {
+    const res = await window.go.app.App.TogglePinClipboardItem(id);
+    return res || [];
+  }
+  return [];
+}
+
+export async function deleteClipboardItem(id: number): Promise<ClipboardHistoryItem[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.DeleteClipboardItem === 'function') {
+    const res = await window.go.app.App.DeleteClipboardItem(id);
+    return res || [];
+  }
+  return [];
+}
+
+export async function clearUnpinnedClipboardHistory(): Promise<ClipboardHistoryItem[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ClearUnpinnedClipboardHistory === 'function') {
+    const res = await window.go.app.App.ClearUnpinnedClipboardHistory();
+    return res || [];
+  }
+  return [];
+}
+
+export async function saveClipboardItemToFolder(
+  id: number,
+  targetDir: string,
+  customName = ''
+): Promise<string> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.SaveClipboardItemToFolder === 'function') {
+    return await window.go.app.App.SaveClipboardItemToFolder(id, targetDir, customName);
+  }
+  throw new Error('SaveClipboardItemToFolder indisponível no ambiente atual');
+}
+
+export async function readNativeClipboardText(): Promise<string> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ReadNativeClipboardText === 'function') {
+    return (await window.go.app.App.ReadNativeClipboardText()) || '';
+  }
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+    try {
+      return await navigator.clipboard.readText();
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+export async function writeNativeClipboardText(text: string): Promise<void> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.WriteNativeClipboardText === 'function') {
+    await window.go.app.App.WriteNativeClipboardText(text);
+    return;
+  }
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+  }
+}
+
+export interface NativeClipboardFiles {
+  paths: string[];
+  mode: 'copy' | 'cut';
+}
+
+export interface SystemClipboardSnapshot {
+  sequence: number;
+  kind: 'files' | 'image' | 'text' | '';
+  text?: string;
+  paths?: string[];
+  cut?: boolean;
+  imageB64?: string;
+  width?: number;
+  height?: number;
+}
+
+export async function setNativeClipboardFiles(paths: string[], cut: boolean): Promise<void> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.SetNativeClipboardFiles === 'function') {
+    await window.go.app.App.SetNativeClipboardFiles(paths, cut);
+  }
+}
+
+export async function getNativeClipboardFiles(): Promise<NativeClipboardFiles> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.GetNativeClipboardFiles === 'function') {
+    const res = await window.go.app.App.GetNativeClipboardFiles();
+    return {
+      paths: res?.paths || [],
+      mode: res?.mode === 'cut' ? 'cut' : 'copy',
+    };
+  }
+  return { paths: [], mode: 'copy' };
+}
+
+export async function setNativeClipboardImage(dataUrl: string): Promise<void> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.SetNativeClipboardImage === 'function') {
+    await window.go.app.App.SetNativeClipboardImage(dataUrl);
+  }
+}
+
+export async function getClipboardSequenceNumber(): Promise<number> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.GetClipboardSequenceNumber === 'function') {
+    return (await window.go.app.App.GetClipboardSequenceNumber()) || 0;
+  }
+  return 0;
+}
+
+export async function readSystemClipboardSnapshot(): Promise<SystemClipboardSnapshot | null> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ReadSystemClipboardSnapshot === 'function') {
+    return await window.go.app.App.ReadSystemClipboardSnapshot();
+  }
+  return null;
+}
+
 

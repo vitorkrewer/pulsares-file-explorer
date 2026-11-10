@@ -268,6 +268,9 @@ func (db *DB) migrate() error {
 	_, _ = db.Exec("ALTER TABLE remote_profiles ADD COLUMN auth_type TEXT NOT NULL DEFAULT 'key'")
 	_, _ = db.Exec("ALTER TABLE remote_profiles ADD COLUMN key_path TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE remote_profiles ADD COLUMN host_key_fp TEXT NOT NULL DEFAULT ''")
+	if err := db.migrateClipboard(); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -15,10 +15,12 @@ import {
   Copy,
   Check,
   Server,
+  ClipboardList,
 } from 'lucide-react';
 import { useBrowserStore } from '../browser/store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { useProductivityStore } from '../productivity/store';
+import { useClipboardHistoryStore } from '../clipboard/store';
 import { saveSetting, expandPath, autocompletePath } from '../../lib/wails';
 
 interface AddressBarProps {
@@ -43,6 +45,11 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
   } = useBrowserStore();
   const { visible: sidebarVisible, toggleSidebar } = useFolderTreeStore();
   const { remoteProfiles } = useProductivityStore();
+  const {
+    drawerOpen: clipboardOpen,
+    items: clipboardItems,
+    toggleDrawer: toggleClipboardDrawer,
+  } = useClipboardHistoryStore();
 
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(currentPath);
@@ -341,6 +348,49 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
             <option value="tr">Türkçe</option>
           </select>
         </div>
+
+        {/* Histórico da Área de Transferência (Win + V / Ctrl + Shift + V) */}
+        <button
+          style={{
+            ...styles.btn,
+            position: 'relative',
+            ...(clipboardOpen
+              ? {
+                  backgroundColor: 'var(--accent-subtle)',
+                  color: 'var(--accent)',
+                }
+              : {}),
+          }}
+          onClick={toggleClipboardDrawer}
+          title={t('clipboardHistory.toggleTooltip')}
+          aria-label={t('clipboardHistory.title')}
+          data-testid="clipboard-history-toggle"
+        >
+          <ClipboardList size={16} />
+          {clipboardItems.length > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: 2,
+                right: 2,
+                minWidth: 13,
+                height: 13,
+                padding: '0 3px',
+                borderRadius: 999,
+                backgroundColor: 'var(--accent)',
+                color: '#ffffff',
+                fontSize: 9,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+              }}
+            >
+              {clipboardItems.length > 20 ? '20+' : clipboardItems.length}
+            </span>
+          )}
+        </button>
 
         {/* Alternador de Tema */}
         <button style={styles.btn} onClick={toggleTheme} title={t('settings.theme')}>

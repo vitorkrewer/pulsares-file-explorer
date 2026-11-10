@@ -31,11 +31,13 @@ import {
 } from '../features/db-studio/store';
 import { DBStudioModal } from '../features/db-studio/DBStudioModal';
 import { DBCreatorModal } from '../features/db-creator/DBCreatorModal';
+import { ClipboardHistoryDrawer } from '../features/clipboard/ClipboardHistoryDrawer';
+import { useClipboardHistoryStore } from '../features/clipboard/store';
 import {
   FileContextMenu,
   ContextMenuTarget,
 } from '../features/context-menu/FileContextMenu';
-import { Entry, getInitialState, enqueueOperation, openPath } from '../lib/wails';
+import { Entry, getInitialState, enqueueOperation, openPath, writeNativeClipboardText } from '../lib/wails';
 import { resolveLanguage } from '../i18n/config';
 
 export const App: React.FC = () => {
@@ -124,6 +126,7 @@ export const App: React.FC = () => {
     const cleanupBrowser = initListener();
     const cleanupOps = initOpsListeners();
     const cleanupSecondary = initSecondaryListeners();
+    const cleanupClipboard = useClipboardHistoryStore.getState().initClipboardMonitor();
     void loadTags();
 
     getInitialState().then((state) => {
@@ -176,6 +179,7 @@ export const App: React.FC = () => {
       cleanupBrowser();
       cleanupOps();
       cleanupSecondary();
+      cleanupClipboard();
     };
   }, [hydrateSession, hydrateSidebar, initListener, initOpsListeners, initSecondaryListeners, i18n]);
 
@@ -219,6 +223,16 @@ export const App: React.FC = () => {
       if (mod && e.shiftKey && key === 's') {
         e.preventDefault();
         toggleSearchDrawer();
+        return;
+      }
+
+      // Histórico da Área de Transferência: Alt+V ou Ctrl+Shift+V
+      if (
+        (e.altKey && !mod && !e.shiftKey && (key === 'v' || e.code === 'KeyV')) ||
+        (mod && e.shiftKey && (key === 'v' || e.code === 'KeyV'))
+      ) {
+        e.preventDefault();
+        useClipboardHistoryStore.getState().toggleDrawer();
         return;
       }
 
@@ -286,6 +300,8 @@ export const App: React.FC = () => {
         if (e.key === 'Escape') {
           if (quickLookOpen) {
             closeQuickLook();
+          } else if (useClipboardHistoryStore.getState().drawerOpen) {
+            useClipboardHistoryStore.getState().setDrawerOpen(false);
           } else if (useBrowserStore.getState().filterQuery) {
             useBrowserStore.getState().setFilterQuery('');
           } else {
@@ -413,7 +429,13 @@ export const App: React.FC = () => {
         selectAll();
       } else if (key === 'c') {
         e.preventDefault();
-        copySelection();
+        const selText = window.getSelection()?.toString()?.trim() || '';
+        if (selText) {
+          void writeNativeClipboardText(selText);
+          void useClipboardHistoryStore.getState().addItem('text', selText);
+        } else {
+          copySelection();
+        }
       } else if (key === 'x') {
         e.preventDefault();
         cutSelection();
@@ -805,6 +827,7 @@ export const App: React.FC = () => {
               )}
             </div>
             <PreviewPanel />
+            <ClipboardHistoryDrawer />
           </div>
           <TerminalPanel />
         </div>

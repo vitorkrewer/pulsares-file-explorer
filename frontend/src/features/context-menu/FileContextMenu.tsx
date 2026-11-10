@@ -87,6 +87,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
 
   useEffect(() => {
     if (!target) return;
+    void useOperationsStore.getState().syncClipboardFromOS();
     const handlePointerDown = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose();

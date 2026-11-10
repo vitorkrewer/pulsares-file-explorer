@@ -87,6 +87,14 @@ const requiredProductivityKeys = [
 ];
 const requiredArchiveKeys = ['title', 'compressSelection', 'inspecting', 'extractHere'];
 const requiredRemoteKeys = ['title', 'hostPlaceholder', 'userPlaceholder', 'pathPlaceholder', 'saveProfile', 'empty'];
+const requiredClipboardKeys = [
+  'title', 'toggleTooltip', 'capacityInfo', 'pinnedLower', 'shortcutHint',
+  'close', 'syncNow', 'pauseCapture', 'resumeCapture', 'clearUnpinned',
+  'searchPlaceholder', 'filterAll', 'filterText', 'filterImages', 'filterFiles',
+  'filterPinned', 'pausedNotice', 'emptyTitle', 'emptyDesc', 'kindImage',
+  'kindText', 'kindFilesCopy', 'kindFilesCut', 'copyAction', 'saveImageToFolder',
+  'saveTextToFolder', 'pasteFilesHere', 'pinAction', 'unpinAction', 'deleteAction'
+];
 
 for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it', 'ja', 'zh-CN', 'sv', 'tr']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
@@ -132,6 +140,9 @@ for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it', 'ja', 'zh-CN', 'sv', 
   }
   for (const remKey of requiredRemoteKeys) {
     assert.ok(typeof data.remote?.[remKey] === 'string' && data.remote[remKey].length > 0);
+  }
+  for (const clipKey of requiredClipboardKeys) {
+    assert.ok(typeof data.clipboardHistory?.[clipKey] === 'string' && data.clipboardHistory[clipKey].length > 0);
   }
 }
 
@@ -199,4 +210,32 @@ assert.equal(
   'C:\\Users\\Vitor\\Downloads'
 );
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.0.0 + ERD + Studio Web Preview + Terminal Follow-up) passaram com sucesso.');
+// 7. Testar política de retenção de 20 itens não fixados + itens fixados do Histórico do Clipboard (v1.2.0)
+function enforceClipboardLimit(items, maxUnpinned = 20) {
+  const pinned = items
+    .filter((i) => i.pinned)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id);
+  const unpinned = items
+    .filter((i) => !i.pinned)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id)
+    .slice(0, maxUnpinned);
+  return [...pinned, ...unpinned];
+}
+
+const mockClipItems = [];
+for (let i = 1; i <= 25; i++) {
+  mockClipItems.push({
+    id: i,
+    kind: i % 3 === 0 ? 'image' : 'text',
+    content: `item-${i}`,
+    pinned: i === 2, // item 2 é fixado
+    updatedAt: `2026-11-10T15:${String(i).padStart(2, '0')}:00Z`,
+  });
+}
+const prunedClip = enforceClipboardLimit(mockClipItems, 20);
+assert.equal(prunedClip.length, 21); // 1 fixado + 20 não fixados
+assert.equal(prunedClip[0].id, 2);
+assert.equal(prunedClip[0].pinned, true);
+assert.equal(prunedClip[1].id, 25);
+
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + Studio Web Preview + Terminal Follow-up + Clipboard History) passaram com sucesso.');
