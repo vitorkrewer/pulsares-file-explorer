@@ -18,13 +18,14 @@ import {
   PanelLeftOpen,
   PanelLeftClose,
   Pin,
+  Globe,
 } from 'lucide-react';
 import { useFolderTreeStore } from './folder-tree/store';
 import { FolderTree } from './folder-tree/FolderTree';
 import { useBrowserStore, getTabLabel } from '../browser/store';
 import { useProductivityStore } from '../productivity/store';
 import { formatBytes } from '../../i18n/format';
-import { ejectDrive } from '../../lib/wails';
+import { ejectDrive, connectNetworkDrive, SavedNetworkDrive } from '../../lib/wails';
 
 type SidebarSection = 'tree' | 'favorites' | 'recent' | 'drives' | 'ssh';
 
@@ -43,6 +44,10 @@ export const Sidebar: React.FC = () => {
     collapseAll,
     loadRoots,
     refreshSidebarMeta,
+    savedNetworkDrives,
+    openNetworkModal,
+    removeSavedNetworkDrive,
+    disconnectMountedNetworkDrive,
     toggleFavorite,
   } = useFolderTreeStore();
   const { navigateTo, newTab, currentPath } = useBrowserStore();
@@ -57,7 +62,7 @@ export const Sidebar: React.FC = () => {
 
   const [favOpen, setFavOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(false);
-  const [drivesOpen, setDrivesOpen] = useState(false);
+  const [drivesOpen, setDrivesOpen] = useState(true);
   const [sshOpen, setSshOpen] = useState(true);
 
   // Estado para o modo recolhido (Activity Bar tipo VS Code)
@@ -249,6 +254,48 @@ export const Sidebar: React.FC = () => {
     </div>
   );
 
+  const handleSavedNetworkClick = async (
+    item: SavedNetworkDrive,
+    openInNewTab = false,
+    onItemClick?: () => void
+  ) => {
+    try {
+      const res = await connectNetworkDrive(
+        {
+          address: item.address,
+          label: item.label,
+          username: item.username,
+          domain: item.domain,
+          password: '',
+          driveLetter: item.driveLetter,
+          persistent: false,
+        },
+        false
+      );
+      await refreshSidebarMeta();
+      if (res?.connectedPath) {
+        if (openInNewTab) {
+          newTab(res.connectedPath);
+        } else {
+          navigateTo(res.connectedPath);
+        }
+        onItemClick?.();
+      }
+    } catch {
+      void openNetworkModal(item);
+      onItemClick?.();
+    }
+  };
+
+  const unmountedSavedDrives = savedNetworkDrives.filter((saved) => {
+    const normSaved = saved.address.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    return !drives.some((d) => {
+      const normPath = d.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      const normRemote = (d.remoteTarget || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      return normPath === normSaved || (normRemote !== '' && normRemote === normSaved);
+    });
+  });
+
   const renderDrives = (onItemClick?: () => void) => (
     <div style={{ ...styles.sectionBody, maxHeight: 240, overflowY: 'auto' }}>
       {drives.map((d) => {
@@ -274,8 +321,25 @@ export const Sidebar: React.FC = () => {
             }}
           >
             <div style={styles.driveTop}>
-              <HardDrive size={13} style={{ color: 'var(--text-secondary)' }} />
+              {d.isNetwork ? (
+                <Globe size={13} style={{ color: '#10b981', flexShrink: 0 }} />
+              ) : (
+                <HardDrive size={13} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+              )}
               <span style={{ ...styles.driveLabel, flex: 1 }}>{d.label || d.path}</span>
+              {d.isNetwork && (
+                <button
+                  type="button"
+                  style={styles.removeBtn}
+                  title={t('networkDrive.disconnect')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void disconnectMountedNetworkDrive(d.path);
+                  }}
+                >
+                  <Unplug size={11} />
+                </button>
+              )}
               {d.isRemovable && (
                 <button
                   type="button"
@@ -306,6 +370,51 @@ export const Sidebar: React.FC = () => {
           </div>
         );
       })}
+      {unmountedSavedDrives.map((saved) => {
+        const isCurrent =
+          currentPath.replace(/\\/g, '/').toLowerCase() ===
+          saved.address.replace(/\\/g, '/').toLowerCase();
+        return (
+          <div
+            key={`saved-net-${saved.id}`}
+            style={{
+              ...styles.itemRow,
+              ...(isCurrent ? styles.itemActive : {}),
+            }}
+            onClick={() => void handleSavedNetworkClick(saved, false, onItemClick)}
+            onAuxClick={(e) => {
+              if (e.button === 1) {
+                e.preventDefault();
+                void handleSavedNetworkClick(saved, true, onItemClick);
+              }
+            }}
+            title={saved.address}
+          >
+            <Globe size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <span style={styles.itemText}>{saved.label || saved.address}</span>
+            <button
+              type="button"
+              style={styles.removeBtn}
+              title={t('networkDrive.removeShortcut')}
+              onClick={(e) => {
+                e.stopPropagation();
+                void removeSavedNetworkDrive(saved.id);
+              }}
+            >
+              <X size={11} />
+            </button>
+          </div>
+        );
+      })}
+      <div
+        style={{ ...styles.emptyHint, cursor: 'default', color: 'var(--accent)', paddingTop: 6 }}
+        onClick={() => {
+          void openNetworkModal();
+          onItemClick?.();
+        }}
+      >
+        + {t('networkDrive.connectButton')}
+      </div>
     </div>
   );
 
@@ -518,6 +627,21 @@ export const Sidebar: React.FC = () => {
                 <span style={styles.flyoutTitle}>{getSectionInfo(activeFlyout).title}</span>
               </div>
               <div style={styles.flyoutActions}>
+                {activeFlyout === 'drives' && (
+                  <button
+                    type="button"
+                    style={styles.iconBtn}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void openNetworkModal();
+                      setActiveFlyout(null);
+                    }}
+                    title={t('networkDrive.connectTitle')}
+                    aria-label={t('networkDrive.connectTitle')}
+                  >
+                    <Plus size={13} />
+                  </button>
+                )}
                 {activeFlyout === 'ssh' && (
                   <button
                     type="button"
@@ -599,6 +723,18 @@ export const Sidebar: React.FC = () => {
           {drivesOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           <HardDrive size={12} style={{ color: 'var(--accent)' }} />
           <span style={styles.title}>{t('sidebar.drives')}</span>
+          <button
+            type="button"
+            style={{ ...styles.iconBtn, marginLeft: 'auto' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              void openNetworkModal();
+            }}
+            title={t('networkDrive.connectTitle')}
+            aria-label={t('networkDrive.connectTitle')}
+          >
+            <Plus size={12} />
+          </button>
         </div>
       </div>
       {drivesOpen && renderDrives()}
@@ -780,6 +916,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 5,
+    flex: 1,
+    minWidth: 0,
     color: 'var(--text-secondary)',
   },
   sectionBody: {

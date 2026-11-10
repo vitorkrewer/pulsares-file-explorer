@@ -163,6 +163,11 @@ export function getTabLabel(path: string): string {
     const seg = sub.split('/').filter(Boolean).pop();
     return seg ? `SSH:${seg}` : `SSH #${sftpMatch[1]}`;
   }
+  const smbMatch = normalized.match(/^(smb|cifs|nfs):\/\/([^/]+)(\/.*)?$/i);
+  if (smbMatch) {
+    const segs = (smbMatch[3] || '').split('/').filter(Boolean);
+    return segs.length > 0 ? segs[segs.length - 1] : smbMatch[2];
+  }
   if (normalized === '/') return '/';
   const parts = normalized.split('/').filter(Boolean);
   if (parts.length === 0) return path;
@@ -371,16 +376,32 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       return;
     }
 
+    const smbMatch = normalized.match(/^(smb|cifs|nfs):\/\/([^/]+)(\/.*)?$/i);
+    if (smbMatch) {
+      const scheme = smbMatch[1].toLowerCase();
+      const host = smbMatch[2];
+      const segs = (smbMatch[3] || '').split('/').filter(Boolean);
+      if (segs.length > 0) {
+        segs.pop();
+        const nextUrl = segs.length > 0 ? `${scheme}://${host}/${segs.join('/')}` : `${scheme}://${host}`;
+        navigateTo(nextUrl);
+      }
+      return;
+    }
+
     const parts = normalized.split('/').filter(Boolean);
 
     if (parts.length > 1) {
       parts.pop();
-      const isWindows = /^[a-zA-Z]:/.test(normalized);
-      const parent = isWindows
-        ? parts.length === 1
-          ? `${parts[0]}\\`
-          : parts.join('\\')
-        : '/' + parts.join('/');
+      const isUNC = currentPath.startsWith('\\\\') || currentPath.startsWith('//');
+      const isWindows = !isUNC && /^[a-zA-Z]:/.test(normalized);
+      const parent = isUNC
+        ? '\\\\' + parts.join('\\')
+        : isWindows
+          ? parts.length === 1
+            ? `${parts[0]}\\`
+            : parts.join('\\')
+          : '/' + parts.join('/');
       navigateTo(parent);
     }
   },

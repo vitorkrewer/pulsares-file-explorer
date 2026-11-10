@@ -149,10 +149,15 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
   const sftpProfileId = sftpMatch ? Number(sftpMatch[1]) : 0;
   const sftpProfile = isSFTP ? remoteProfiles.find((p) => p.id === sftpProfileId) : undefined;
   const sftpRemoteSub = sftpMatch ? (sftpMatch[2] || '/') : '';
-  const isWindows = !isSFTP && /^[a-zA-Z]:/.test(normalized);
+  const smbMatch = !isSFTP ? normalized.match(/^(smb|cifs|nfs):\/\/([^/]+)(\/.*)?$/i) : null;
+  const isSMBUrl = Boolean(smbMatch);
+  const isUNC = !isSFTP && !isSMBUrl && (currentPath.startsWith('\\\\') || currentPath.startsWith('//'));
+  const isWindows = !isSFTP && !isSMBUrl && !isUNC && /^[a-zA-Z]:/.test(normalized);
   const parts = isSFTP
     ? sftpRemoteSub.split('/').filter(Boolean)
-    : normalized.split('/').filter(Boolean);
+    : isSMBUrl
+      ? [smbMatch![2], ...(smbMatch![3] || '').split('/').filter(Boolean)]
+      : normalized.split('/').filter(Boolean);
 
   const handleCopyPath = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -250,6 +255,9 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
                   )}
                 </>
               )}
+              {(isUNC || isSMBUrl) && (
+                <Globe size={12} style={{ color: 'var(--accent)', marginRight: 2, flexShrink: 0 }} />
+              )}
               {parts.map((part, index) => {
                 const fullTillNow = isSFTP
                   ? `sftp://${sftpProfileId}/` + parts.slice(0, index + 1).join('/')
@@ -257,7 +265,11 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
                     ? index === 0
                       ? `${part}\\`
                       : parts.slice(0, index + 1).join('\\')
-                    : '/' + parts.slice(0, index + 1).join('/');
+                    : isUNC
+                      ? '\\\\' + parts.slice(0, index + 1).join('\\')
+                      : isSMBUrl
+                        ? `${smbMatch![1].toLowerCase()}://` + parts.slice(0, index + 1).join('/')
+                        : '/' + parts.slice(0, index + 1).join('/');
 
                 return (
                   <React.Fragment key={fullTillNow}>

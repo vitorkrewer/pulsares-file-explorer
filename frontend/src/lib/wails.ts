@@ -38,6 +38,43 @@ export interface DriveInfo {
   freeBytes?: number;
   totalBytes?: number;
   isRemovable?: boolean;
+  isNetwork?: boolean;
+  remoteTarget?: string;
+}
+
+export interface SavedNetworkDrive {
+  id: number;
+  label: string;
+  address: string;
+  protocol: string;
+  username: string;
+  domain: string;
+  driveLetter: string;
+  createdAt?: string;
+}
+
+export interface NetworkShareInfo {
+  name: string;
+  path: string;
+  remark?: string;
+}
+
+export interface NetworkMountRequest {
+  address: string;
+  label: string;
+  username: string;
+  domain: string;
+  password: string;
+  driveLetter: string;
+  persistent: boolean;
+}
+
+export interface NetworkMountResult {
+  connectedPath: string;
+  mappedDrive?: string;
+  remoteTarget?: string;
+  isServerRoot?: boolean;
+  shares?: NetworkShareInfo[];
 }
 
 export interface FavoriteItem {
@@ -165,6 +202,7 @@ export interface InitialState {
   drives: DriveInfo[];
   favorites?: FavoriteItem[];
   recent?: RecentItem[];
+  savedNetworkDrives?: SavedNetworkDrive[];
   language: string;
   theme: string;
   sessionData?: string;
@@ -592,6 +630,15 @@ declare global {
           SetNativeClipboardImage?: (dataUrl: string) => Promise<void>;
           GetClipboardSequenceNumber?: () => Promise<number>;
           ReadSystemClipboardSnapshot?: () => Promise<SystemClipboardSnapshot>;
+          GetAvailableDriveLetters?: () => Promise<string[]>;
+          ListSavedNetworkDrives?: () => Promise<SavedNetworkDrive[]>;
+          SaveNetworkDrive?: (d: SavedNetworkDrive) => Promise<number>;
+          DeleteSavedNetworkDrive?: (id: number) => Promise<void>;
+          ConnectNetworkDrive?: (
+            req: NetworkMountRequest,
+            saveShortcut: boolean
+          ) => Promise<NetworkMountResult>;
+          DisconnectNetworkDrive?: (target: string) => Promise<void>;
         };
       };
     };
@@ -1774,6 +1821,49 @@ export async function readSystemClipboardSnapshot(): Promise<SystemClipboardSnap
     return await window.go.app.App.ReadSystemClipboardSnapshot();
   }
   return null;
+}
+
+export async function getAvailableDriveLetters(): Promise<string[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.GetAvailableDriveLetters === 'function') {
+    return (await window.go.app.App.GetAvailableDriveLetters()) || [];
+  }
+  return [];
+}
+
+export async function listSavedNetworkDrives(): Promise<SavedNetworkDrive[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ListSavedNetworkDrives === 'function') {
+    return (await window.go.app.App.ListSavedNetworkDrives()) || [];
+  }
+  return [];
+}
+
+export async function saveNetworkDrive(d: SavedNetworkDrive): Promise<number> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.SaveNetworkDrive === 'function') {
+    return await window.go.app.App.SaveNetworkDrive(d);
+  }
+  return 0;
+}
+
+export async function deleteSavedNetworkDrive(id: number): Promise<void> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.DeleteSavedNetworkDrive === 'function') {
+    await window.go.app.App.DeleteSavedNetworkDrive(id);
+  }
+}
+
+export async function connectNetworkDrive(
+  req: NetworkMountRequest,
+  saveShortcut: boolean
+): Promise<NetworkMountResult> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ConnectNetworkDrive === 'function') {
+    return await window.go.app.App.ConnectNetworkDrive(req, saveShortcut);
+  }
+  throw new Error('ConnectNetworkDrive indisponível no ambiente atual');
+}
+
+export async function disconnectNetworkDrive(target: string): Promise<void> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.DisconnectNetworkDrive === 'function') {
+    await window.go.app.App.DisconnectNetworkDrive(target);
+  }
 }
 
 

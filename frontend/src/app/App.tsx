@@ -33,6 +33,7 @@ import { DBStudioModal } from '../features/db-studio/DBStudioModal';
 import { DBCreatorModal } from '../features/db-creator/DBCreatorModal';
 import { ClipboardHistoryDrawer } from '../features/clipboard/ClipboardHistoryDrawer';
 import { useClipboardHistoryStore } from '../features/clipboard/store';
+import { NetworkDriveModal } from '../features/sidebar/NetworkDriveModal';
 import {
   FileContextMenu,
   ContextMenuTarget,
@@ -171,7 +172,8 @@ export const App: React.FC = () => {
         lang,
         state.drives,
         state.favorites || [],
-        state.recent || []
+        state.recent || [],
+        state.savedNetworkDrives || []
       );
     });
 
@@ -837,6 +839,7 @@ export const App: React.FC = () => {
       {!useEditorStore.getState().preferSeparateWindow && <CodeEditorModal />}
       {!useDBStudioStore.getState().preferSeparateWindow && <DBStudioModal />}
       <DBCreatorModal />
+      <NetworkDriveModal />
       <FileContextMenu
         target={contextMenuTarget}
         onClose={() => setContextMenuTarget(null)}

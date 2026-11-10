@@ -95,6 +95,13 @@ const requiredClipboardKeys = [
   'kindText', 'kindFilesCopy', 'kindFilesCut', 'copyAction', 'saveImageToFolder',
   'saveTextToFolder', 'pasteFilesHere', 'pinAction', 'unpinAction', 'deleteAction'
 ];
+const requiredNetworkDriveKeys = [
+  'connectTitle', 'connectButton', 'addressLabel', 'addressPlaceholder', 'addressHint',
+  'addressRequired', 'aliasLabel', 'aliasPlaceholder', 'driveLetterLabel', 'noDriveLetter',
+  'persistentLabel', 'useCredentials', 'usernameLabel', 'usernamePlaceholder', 'domainLabel',
+  'passwordLabel', 'securityNote', 'saveShortcut', 'cancel', 'connectAction', 'connecting',
+  'connectError', 'disconnect', 'removeShortcut'
+];
 
 for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it', 'ja', 'zh-CN', 'sv', 'tr']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
@@ -143,6 +150,9 @@ for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it', 'ja', 'zh-CN', 'sv', 
   }
   for (const clipKey of requiredClipboardKeys) {
     assert.ok(typeof data.clipboardHistory?.[clipKey] === 'string' && data.clipboardHistory[clipKey].length > 0);
+  }
+  for (const netKey of requiredNetworkDriveKeys) {
+    assert.ok(typeof data.networkDrive?.[netKey] === 'string' && data.networkDrive[netKey].length > 0);
   }
 }
 
@@ -238,4 +248,37 @@ assert.equal(prunedClip[0].id, 2);
 assert.equal(prunedClip[0].pinned, true);
 assert.equal(prunedClip[1].id, 25);
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + Studio Web Preview + Terminal Follow-up + Clipboard History) passaram com sucesso.');
+// 8. Testar resolução de caminhos de rede UNC / SMB (goUp e breadcrumbs — v1.2.0)
+function resolveNetworkParent(currentPath) {
+  const normalized = currentPath.replace(/\\/g, '/');
+  const smbMatch = normalized.match(/^(smb|cifs|nfs):\/\/([^/]+)(\/.*)?$/i);
+  if (smbMatch) {
+    const scheme = smbMatch[1].toLowerCase();
+    const host = smbMatch[2];
+    const segs = (smbMatch[3] || '').split('/').filter(Boolean);
+    if (segs.length === 0) return null;
+    segs.pop();
+    return segs.length > 0 ? `${scheme}://${host}/${segs.join('/')}` : `${scheme}://${host}`;
+  }
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.length <= 1) return null;
+  parts.pop();
+  const isUNC = currentPath.startsWith('\\\\') || currentPath.startsWith('//');
+  const isWindows = !isUNC && /^[a-zA-Z]:/.test(normalized);
+  return isUNC
+    ? '\\\\' + parts.join('\\')
+    : isWindows
+      ? parts.length === 1
+        ? `${parts[0]}\\`
+        : parts.join('\\')
+      : '/' + parts.join('/');
+}
+
+assert.equal(resolveNetworkParent('\\\\192.168.10.195\\Publico\\Docs'), '\\\\192.168.10.195\\Publico');
+assert.equal(resolveNetworkParent('\\\\192.168.10.195\\Publico'), '\\\\192.168.10.195');
+assert.equal(resolveNetworkParent('\\\\192.168.10.195'), null);
+assert.equal(resolveNetworkParent('smb://192.168.10.195/Publico/Docs'), 'smb://192.168.10.195/Publico');
+assert.equal(resolveNetworkParent('smb://192.168.10.195/Publico'), 'smb://192.168.10.195');
+assert.equal(resolveNetworkParent('smb://192.168.10.195'), null);
+
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + Studio Web Preview + Terminal Follow-up + Clipboard History + Network Drives) passaram com sucesso.');

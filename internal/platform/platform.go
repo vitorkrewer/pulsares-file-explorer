@@ -5,11 +5,13 @@ import (
 )
 
 type DriveInfo struct {
-	Path       string `json:"path"`
-	Label      string `json:"label"`
-	FreeBytes  uint64 `json:"freeBytes"`
-	TotalBytes uint64 `json:"totalBytes"`
-	IsRemovable bool  `json:"isRemovable"`
+	Path         string `json:"path"`
+	Label        string `json:"label"`
+	FreeBytes    uint64 `json:"freeBytes"`
+	TotalBytes   uint64 `json:"totalBytes"`
+	IsRemovable  bool   `json:"isRemovable"`
+	IsNetwork    bool   `json:"isNetwork,omitempty"`
+	RemoteTarget string `json:"remoteTarget,omitempty"`
 }
 
 func GetHomeDir() string {
@@ -19,4 +21,3 @@ func GetHomeDir() string {
 	}
 	return home
 }
-

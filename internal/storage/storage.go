@@ -271,6 +271,9 @@ func (db *DB) migrate() error {
 	if err := db.migrateClipboard(); err != nil {
 		return err
 	}
+	if err := db.migrateNetworkDrives(); err != nil {
+		return err
+	}
 	return nil
 }
 

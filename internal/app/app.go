@@ -56,8 +56,9 @@ type InitialState struct {
 	SystemLanguage string                 `json:"systemLanguage"`
 	HomeDir        string                 `json:"homeDir"`
 	Drives         []platform.DriveInfo   `json:"drives"`
-	Favorites      []storage.FavoriteItem `json:"favorites"`
-	Recent         []storage.RecentItem   `json:"recent"`
+	Favorites          []storage.FavoriteItem      `json:"favorites"`
+	Recent             []storage.RecentItem        `json:"recent"`
+	SavedNetworkDrives []storage.SavedNetworkDrive `json:"savedNetworkDrives,omitempty"`
 	Language       string                 `json:"language"`
 	Theme          string                 `json:"theme"`
 	SessionData    string                 `json:"sessionData,omitempty"`
@@ -141,6 +142,7 @@ func (a *App) GetInitialState() InitialState {
 	sessionData := ""
 	var favorites []storage.FavoriteItem
 	var recent []storage.RecentItem
+	var savedNetDrives []storage.SavedNetworkDrive
 
 	if a.storage != nil {
 		if l, _ := a.storage.GetSetting("language"); l != "" {
@@ -154,6 +156,7 @@ func (a *App) GetInitialState() InitialState {
 		}
 		favorites, _ = a.storage.ListFavorites()
 		recent, _ = a.storage.ListRecent(12)
+		savedNetDrives, _ = a.storage.ListSavedNetworkDrives()
 	}
 
 	studioMode := false
@@ -194,8 +197,9 @@ func (a *App) GetInitialState() InitialState {
 		SystemLanguage: sysLang,
 		HomeDir:        home,
 		Drives:         drives,
-		Favorites:      favorites,
-		Recent:         recent,
+		Favorites:          favorites,
+		Recent:             recent,
+		SavedNetworkDrives: savedNetDrives,
 		Language:       lang,
 		Theme:          theme,
 		SessionData:    sessionData,
@@ -226,7 +230,9 @@ func (a *App) ListDirectory(tabID string, requestID string, path string) {
 		_ = a.storage.RecordVisit(resolved)
 	}
 	if a.watch != nil {
-		a.watch.Watch(resolved)
+		if _, isNetRoot := platform.IsNetworkServerRoot(resolved); !isNetRoot {
+			a.watch.Watch(resolved)
+		}
 	}
 	loc := vfs.Location{
 		Provider: "local",

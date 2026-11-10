@@ -70,6 +70,9 @@ func GetDrives() []DriveInfo {
 			u16, err := syscall.UTF16PtrFromString(driveLetter)
 			var freeBytes, totalBytes uint64
 			isRemovable := false
+			isNetwork := false
+			remoteTarget := ""
+			label := driveLetter
 
 			if err == nil {
 				_, _, _ = procGetDiskFreeSpaceExW.Call(
@@ -80,14 +83,23 @@ func GetDrives() []DriveInfo {
 				)
 				dt, _, _ := procGetDriveTypeW.Call(uintptr(unsafe.Pointer(u16)))
 				isRemovable = dt == driveRemovable
+				isNetwork = dt == driveRemote
+				if isNetwork {
+					remoteTarget = getUNCForMappedDrive(driveLetter)
+					if remoteTarget != "" {
+						label = fmt.Sprintf("%s (%s)", driveLetter, remoteTarget)
+					}
+				}
 			}
 
 			drives = append(drives, DriveInfo{
-				Path:        driveLetter,
-				Label:       driveLetter,
-				FreeBytes:   freeBytes,
-				TotalBytes:  totalBytes,
-				IsRemovable: isRemovable,
+				Path:         driveLetter,
+				Label:        label,
+				FreeBytes:    freeBytes,
+				TotalBytes:   totalBytes,
+				IsRemovable:  isRemovable,
+				IsNetwork:    isNetwork,
+				RemoteTarget: remoteTarget,
 			})
 		}
 	}

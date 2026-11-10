@@ -17,7 +17,7 @@ Cada etapa é registrada no [`CHANGELOG.md`](../CHANGELOG.md). A ordem reflete a
 | 1.0.0 | Estabilização e distribuição | Concluída |
 | 1.1.0 | Conexões SSH/SFTP (TOFU), DB Studio, Studio Editor, streaming HTTP 206 e slides | Concluída |
 | 1.1.1 | Mapa ER, Criador SQLite, Live Web Preview, Terminal Follow-up, Activity Bar e 10 idiomas | Concluída |
-| 1.2.0 | Histórico da Área de Transferência (`Alt+V`) e Clipboard Nativo de Arquivos/Imagens com o SO | Concluída |
+| 1.2.0 | Unidades de Rede (`\\IP\`, `smb://`), Histórico do Clipboard (`Alt+V`) e Clipboard Nativo com o SO | Concluída |
 
 ---
 
@@ -120,7 +120,9 @@ Cada etapa é registrada no [`CHANGELOG.md`](../CHANGELOG.md). A ordem reflete a
 - **Drag & Drop granular** sem congelamentos, spinners de carregamento e expansão para **10 idiomas** (`pt-BR`, `en`, `es`, `de`, `fr`, `it`, `ja`, `zh-CN`, `tr`, `sv`).
 - **Distribuição Portátil**: modo portátil em `./data/explorer.db` (`getPortableDataDir`) com novos pacotes `Windows-x64-Portable.zip` e `Multiverse-Portable.zip`.
 
-## 1.2.0 — Histórico da Área de Transferência (`Alt + V`) e Interação Nativa com o SO
+## 1.2.0 — Unidades de Rede Multiplataforma, Histórico do Clipboard (`Alt + V`) e Interação Nativa com o SO
+
+- **Conexão de Unidades e Compartilhamentos de Rede (`internal/platform/netdrive_*.go`, `NetworkDriveModal.tsx` e `Sidebar.tsx`)**: botão `+` em **Unidades e Volumes** e navegação direta na barra de endereço (`\\192.168.10.195\`, `smb://...`, `nfs://...`), listagem de pastas compartilhadas na raiz do servidor (`NetShareEnum` / `smbclient` / `smbutil`), autenticação opcional sem salvar senhas em texto puro, mapeamento de letra de unidade no Windows (`WNetAddConnection2W`), montagem nativa no Linux (GVFS `/proc/mounts`) e macOS (`/Volumes`), desconexão rápida e atalhos salvos em SQLite (`saved_network_drives`).
 
 - **Clipboard Nativo Bidirecional com o SO (`internal/platform/clipboard_windows.go` e `clipboard_unix.go`)**: cópia e recorte reais de arquivos (`CF_HDROP` + `Preferred DropEffect` no Windows, `x-special/gnome-copied-files` no Linux e `POSIX file` no macOS) permitindo copiar/colar livremente entre o Pulsares Explorer e o Explorador do Sistema, além de leitura/escrita nativa de imagens (`CF_DIB` / `PNG`).
 - **Painel lateral direito de Histórico do Clipboard (`ClipboardHistoryDrawer.tsx`)**: acionado pelo botão na `AddressBar` (ao lado do alternador de tema) ou pelos atalhos `Alt + V` e `Ctrl + Shift + V`.

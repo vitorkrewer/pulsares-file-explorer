@@ -28,6 +28,7 @@ import { useDualPaneStore } from '../panes/store';
 import { useTerminalStore } from '../terminal/store';
 import { useSearchStore } from '../search/store';
 import { useClipboardHistoryStore } from '../clipboard/store';
+import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { formatBytes } from '../../i18n/format';
 
 export const ProductivityModals: React.FC = () => {
@@ -128,6 +129,12 @@ export const ProductivityModals: React.FC = () => {
 
   const commands = useMemo(
     () => [
+      {
+        id: 'connect-network-drive',
+        label: t('networkDrive.connectTitle'),
+        shortcut: '',
+        run: () => void useFolderTreeStore.getState().openNetworkModal(),
+      },
       {
         id: 'clipboard-history',
         label: t('clipboardHistory.title'),

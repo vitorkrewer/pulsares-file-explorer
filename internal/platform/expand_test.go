@@ -52,3 +52,22 @@ func TestAutocompleteDirs(t *testing.T) {
 	}
 }
 
+func TestParseNetworkAddressAndExpandUNC(t *testing.T) {
+	proto, host, share, sub := ParseNetworkAddress(`\\192.168.10.195\`)
+	if proto != "smb" || host != "192.168.10.195" || share != "" || sub != "" {
+		t.Fatalf("unexpected ParseNetworkAddress for bare UNC: proto=%q host=%q share=%q sub=%q", proto, host, share, sub)
+	}
+
+	proto, host, share, sub = ParseNetworkAddress(`smb://192.168.10.195/Publico/Docs`)
+	if proto != "smb" || host != "192.168.10.195" || share != "Publico" || sub != "Docs" {
+		t.Fatalf("unexpected ParseNetworkAddress for smb URL: proto=%q host=%q share=%q sub=%q", proto, host, share, sub)
+	}
+
+	if gotHost, ok := IsNetworkServerRoot(`\\192.168.10.195\`); !ok || gotHost != "192.168.10.195" {
+		t.Fatalf("expected IsNetworkServerRoot true for \\\\192.168.10.195\\, got ok=%v host=%q", ok, gotHost)
+	}
+	if _, ok := IsNetworkServerRoot(`\\192.168.10.195\Publico`); ok {
+		t.Fatalf("expected IsNetworkServerRoot false when share is present")
+	}
+}
+

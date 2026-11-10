@@ -4,6 +4,7 @@ import {
   DriveInfo,
   FavoriteItem,
   RecentItem,
+  SavedNetworkDrive,
   treeRoots,
   treeChildren,
   listFavorites,
@@ -11,6 +12,10 @@ import {
   removeFavorite,
   listRecent,
   getDrives,
+  listSavedNetworkDrives,
+  deleteSavedNetworkDrive,
+  disconnectNetworkDrive,
+  getAvailableDriveLetters,
 } from '../../../lib/wails';
 import { getCollator } from '../../../i18n/format';
 import { registerSidebarStateGetter, triggerSessionSave } from '../../browser/store';
@@ -38,6 +43,10 @@ interface FolderTreeState {
   drives: DriveInfo[];
   favorites: FavoriteItem[];
   recent: RecentItem[];
+  savedNetworkDrives: SavedNetworkDrive[];
+  availableDriveLetters: string[];
+  networkModalOpen: boolean;
+  networkModalPrefill: Partial<SavedNetworkDrive> | null;
   nodesByPath: Record<string, NodeCacheEntry>;
   focusedPath: string | null;
 
@@ -48,6 +57,10 @@ interface FolderTreeState {
   setFocusedPath: (path: string | null) => void;
   loadRoots: () => Promise<void>;
   refreshSidebarMeta: () => Promise<void>;
+  openNetworkModal: (prefill?: Partial<SavedNetworkDrive>) => Promise<void>;
+  closeNetworkModal: () => void;
+  removeSavedNetworkDrive: (id: number) => Promise<void>;
+  disconnectMountedNetworkDrive: (target: string) => Promise<void>;
   toggleFavorite: (path: string, label?: string) => Promise<void>;
   toggleExpand: (node: TreeNode, showHidden: boolean, locale: string) => Promise<void>;
   expandLevel: (node: TreeNode, showHidden: boolean, locale: string) => Promise<void>;
@@ -63,7 +76,8 @@ interface FolderTreeState {
     locale?: string,
     initialDrives?: DriveInfo[],
     initialFavorites?: FavoriteItem[],
-    initialRecent?: RecentItem[]
+    initialRecent?: RecentItem[],
+    initialSavedNetworkDrives?: SavedNetworkDrive[]
   ) => Promise<void>;
 }
 
@@ -77,6 +91,10 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
   drives: [],
   favorites: [],
   recent: [],
+  savedNetworkDrives: [],
+  availableDriveLetters: [],
+  networkModalOpen: false,
+  networkModalPrefill: null,
   nodesByPath: {},
   focusedPath: null,
 
@@ -118,12 +136,37 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
   },
 
   refreshSidebarMeta: async () => {
-    const [drives, favorites, recent] = await Promise.all([
+    const [drives, favorites, recent, savedNetworkDrives] = await Promise.all([
       getDrives(),
       listFavorites(),
       listRecent(),
+      listSavedNetworkDrives(),
     ]);
-    set({ drives, favorites, recent });
+    set({ drives, favorites, recent, savedNetworkDrives });
+  },
+
+  openNetworkModal: async (prefill) => {
+    const letters = await getAvailableDriveLetters();
+    set({
+      availableDriveLetters: letters,
+      networkModalPrefill: prefill || null,
+      networkModalOpen: true,
+    });
+  },
+
+  closeNetworkModal: () => {
+    set({ networkModalOpen: false, networkModalPrefill: null });
+  },
+
+  removeSavedNetworkDrive: async (id: number) => {
+    await deleteSavedNetworkDrive(id);
+    const savedNetworkDrives = await listSavedNetworkDrives();
+    set({ savedNetworkDrives });
+  },
+
+  disconnectMountedNetworkDrive: async (target: string) => {
+    await disconnectNetworkDrive(target);
+    await get().refreshSidebarMeta();
   },
 
   toggleFavorite: async (path: string, label = '') => {
@@ -296,12 +339,14 @@ export const useFolderTreeStore = create<FolderTreeState>((set, get) => ({
     locale = 'pt-BR',
     initialDrives = [],
     initialFavorites = [],
-    initialRecent = []
+    initialRecent = [],
+    initialSavedNetworkDrives = []
   ) => {
     set({
       drives: initialDrives,
       favorites: initialFavorites,
       recent: initialRecent,
+      savedNetworkDrives: initialSavedNetworkDrives,
     });
     await get().loadRoots();
     if (!saved) return;

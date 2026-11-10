@@ -6,7 +6,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
+	"pulsares-file-explorer/internal/platform"
 	"pulsares-file-explorer/internal/vfs"
 )
 
@@ -17,6 +20,15 @@ func New() *LocalFS {
 }
 
 func (fs *LocalFS) Stat(ctx context.Context, loc vfs.Location) (vfs.Entry, error) {
+	if host, ok := platform.IsNetworkServerRoot(loc.Path); ok {
+		return vfs.Entry{
+			Name:     host,
+			Location: loc,
+			Kind:     vfs.KindDir,
+			ModTime:  time.Now(),
+		}, nil
+	}
+
 	fullPath := filepath.Clean(loc.Path)
 	info, err := os.Lstat(fullPath)
 	if err != nil {
@@ -48,6 +60,43 @@ func (fs *LocalFS) ReadDir(ctx context.Context, loc vfs.Location, batch int) (<-
 	go func() {
 		defer close(outChan)
 		defer close(errChan)
+
+		// Se o caminho aponta para a raiz de um servidor de rede (ex: \\192.168.10.195),
+		// enumera as pastas compartilhadas (SMB/CIFS) como subdiretórios navegáveis.
+		if host, ok := platform.IsNetworkServerRoot(loc.Path); ok {
+			shares, err := platform.ListServerShares(host, true)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			now := time.Now()
+			entries := make([]vfs.Entry, 0, len(shares))
+			for _, sh := range shares {
+				entryLoc := vfs.Location{
+					Provider: "local",
+					Root:     loc.Path,
+					Path:     sh.Path,
+				}
+				entries = append(entries, vfs.Entry{
+					Name:     sh.Name,
+					Location: entryLoc,
+					Kind:     vfs.KindDir,
+					ModTime:  now,
+					Attrs: vfs.Attrs{
+						Hidden: strings.HasSuffix(sh.Name, "$"),
+					},
+				})
+			}
+			if len(entries) > 0 {
+				select {
+				case <-ctx.Done():
+					errChan <- ctx.Err()
+					return
+				case outChan <- entries:
+				}
+			}
+			return
+		}
 
 		fullPath := filepath.Clean(loc.Path)
 		dir, err := os.Open(fullPath)
@@ -140,4 +189,3 @@ func (fs *LocalFS) toEntry(loc vfs.Location, path string, info os.FileInfo) vfs.
 		Target:   target,
 	}
 }
-

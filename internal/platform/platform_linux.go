@@ -32,7 +32,7 @@ func GetDrives() []DriveInfo {
 		freeBytes = st.Bavail * uint64(st.Bsize)
 		totalBytes = st.Blocks * uint64(st.Bsize)
 	}
-	return []DriveInfo{
+	drives := []DriveInfo{
 		{
 			Path:       "/",
 			Label:      "/",
@@ -40,6 +40,7 @@ func GetDrives() []DriveInfo {
 			TotalBytes: totalBytes,
 		},
 	}
+	return append(drives, listUnixMountedNetworkDrives()...)
 }
 
 // MoveToSystemTrash implementa a especificação FreeDesktop.org Trash.
