@@ -485,7 +485,7 @@ export const DBCreatorModal: React.FC = () => {
                   onClick={() => handleOpenInDBStudio(result.destinationPath)}
                   style={styles.primaryActionButton}
                 >
-                  <Database size={16} /> Abrir no Pulse DB Studio
+                  <Database size={16} /> Abrir no Pulsares DB Studio
                 </button>
                 <button
                   type="button"

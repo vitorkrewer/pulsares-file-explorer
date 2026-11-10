@@ -33,7 +33,7 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
     - Habilitação de `sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"` no iframe de prévia para execução fiel de animações, bibliotecas externas (Anime.js, Xterm.js, FontAwesome, Google Fonts) e scripts do projeto.
   - **Prévia Web Renderizada no Painel de Prévia do Pulsares Explorer (`PreviewPanel.tsx`)**:
     - Ao selecionar um arquivo `.html`/`.htm` e abrir a Prévia, exibe por padrão a página web totalmente estilizada e conectada aos arquivos `.css` e `.js` da pasta, com seletor rápido para alternar entre **"Prévia Web Renderizada"** e **"Código HTML"**.
-- **Mapa de Entidade-Relacionamento (ERD / Diagrama Interativo no Estilo React Flow) no Pulse DB Studio**:
+- **Mapa de Entidade-Relacionamento (ERD / Diagrama Interativo no Estilo React Flow) no Pulsares DB Studio**:
   - Nova aba dedicada **"Mapa ER (Diagrama)"** na barra de ferramentas superior do DB Studio para visualização interativa do grafo de entidades e chaves do banco de dados.
   - **Mapeamento e Extração de Chaves no SQLite (`internal/app/app.go`)**:
     - Inspeção nativa via `PRAGMA foreign_key_list(tabela)` para mapear chaves estrangeiras (FK), tabela destino, coluna referenciada (PK), regras de integridade referencial (`ON UPDATE`, `ON DELETE`).
@@ -51,17 +51,17 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
       - **Exportação para SVG Vetorial**: gera e baixa arquivo `.svg` autônomo com design de alta fidelidade para documentação técnica.
   - Geração de pacotes de ícones `.ico` e `.png` multi-resolução (16x16 até 256x256 com High-DPI) padronizados com o gradiente azul clássico do Pulsares (`#2563eb` a `#4f46e5`), squircle com cantos arredondados, iluminação interna e sombra suave:
     - **Pulsares Explorer**: ícone da pasta branca moderna.
-    - **Pulse DB Studio**: ícone do cilindro de banco de dados SQLite em branco (`build/windows/icon-dbstudio.ico` e `favicon-dbstudio.svg`).
+    - **Pulsares DB Studio**: ícone do cilindro de banco de dados SQLite em branco (`build/windows/icon-dbstudio.ico` e `favicon-dbstudio.svg`).
     - **Pulsares Studio Editor**: ícone com os símbolos de código `< / >` em branco (`build/windows/icon-studio.ico` e `favicon-studio.svg`).
   - **Injeção de Ícone Nativo em Janelas Win32 (`internal/platform/window_icon_windows.go`)**:
     - Integração de inicialização via `WM_SETICON` (`ICON_BIG` e `ICON_SMALL`) e `SetClassLongPtrW` (`GCLP_HICON` e `GCLP_HICONSM`) no runtime Go (`main.go`).
     - Identificação precisa da janela pelo identificador de classe (`WindowClassName`) e PID do processo com carregamento automático de `HICON` nativo via `LoadImageW` (`LR_LOADFROMFILE`).
     - Atribuição de `AppUserModelID` dedicado (`Pulsares.Explorer`, `Pulsares.DBStudio`, `Pulsares.StudioEditor`) impedindo o agrupamento incorreto no Windows e garantindo que cada botão na barra de tarefas exiba seu respectivo ícone individualizado e nítido.
-- **Janelas Independentes e Autônomas para o Pulse DB Studio e Pulsares Studio Editor**:
-  - Restauração e reforço estrito da arquitetura desacoplada: tanto o **Pulse DB Studio** quanto o **Pulsares Studio Editor** operam exclusivamente como janelas independentes do sistema operacional, nunca acoplados ou sobrepostos aos arquivos do Pulsares Explorer.
+- **Janelas Independentes e Autônomas para o Pulsares DB Studio e Pulsares Studio Editor**:
+  - Restauração e reforço estrito da arquitetura desacoplada: tanto o **Pulsares DB Studio** quanto o **Pulsares Studio Editor** operam exclusivamente como janelas independentes do sistema operacional, nunca acoplados ou sobrepostos aos arquivos do Pulsares Explorer.
   - O store de ambos os módulos mantém `preferSeparateWindow: true` por padrão, acionando as APIs nativas (`OpenDBStudioWindow` e `OpenStudioWindow`) que invocam os processos frameless autônomos (`--dbstudio` e `--studio`) com controles nativos de janela (minimizar, maximizar e fechar).
   - Correção da inicialização de instâncias independentes mesmo quando nenhum arquivo prévio estiver selecionado, apresentando imediatamente a tela nativa dedicada de boas-vindas e seleção de arquivos.
-- **Correção da Opacidade, Camadas de Fundo e Bug de Paginação no Pulse DB Studio**:
+- **Correção da Opacidade, Camadas de Fundo e Bug de Paginação no Pulsares DB Studio**:
   - Correção das cores de fundo e tokens do design system (`--bg-surface`, `--bg-subtle`, `--border-subtle`, `--text-primary`), eliminando qualquer transparência e impedindo o vazamento visual de elementos e pastas situados em segundo plano.
   - Correção do cálculo e exibição de paginação da grade (`1-NaN de undefined`): serialização unificada de `totalRows` e `totalCount` no backend Go e tratamento seguro de paginação no frontend com formatação numérica localizada em pt-BR.
 - **Otimização Extrema de Performance para Abertura e Leitura de Bancos de Dados SQLite Grandes**:
@@ -78,8 +78,8 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
   - **Injeção de Alta Performance com Streaming de Progresso**:
     - Transações SQLite em massa com otimização de PRAGMAs (`synchronous=OFF`, `journal_mode=MEMORY` e restauração segura para `WAL`), atingindo dezenas de milhares de inserções por segundo.
     - Barra de progresso percentual, métricas em tempo real (linhas injetadas, velocidade em linhas/s, tempo decorrido) e console interativo com logs de transações para desenvolvedores.
-  - **Integração Direta com o Pulse DB Studio**: botão imediato ao finalizar para abrir e consultar o novo banco SQLite diretamente na interface do DB Studio, além de atalho para revelar o arquivo `.db` na pasta.
-- **Diálogo Nativo de Salvamento na Exportação do Pulse DB Studio**:
+  - **Integração Direta com o Pulsares DB Studio**: botão imediato ao finalizar para abrir e consultar o novo banco SQLite diretamente na interface do DB Studio, além de atalho para revelar o arquivo `.db` na pasta.
+- **Diálogo Nativo de Salvamento na Exportação do Pulsares DB Studio**:
   - Ao clicar para exportar dados para **CSV** ou **JSON** no Pulse DB Studio, agora é aberta a janela nativa de diálogo de salvamento do sistema operacional (`ShowSaveFileDialog` via Wails runtime / `SaveFileDialog`).
   - O diálogo sugere automaticamente o nome do arquivo com base na tabela ativa (`<tabela>_export.<csv|json>`), a pasta do banco de dados inspecionado como diretório inicial padrão, e filtros de arquivo específicos (`*.csv` e `*.json`).
   - Suporte resiliente com cancelamento limpo (não salva nada e não exibe erro se o usuário cancelar) e fallback automático para a File System Access API do navegador (`showSaveFilePicker`) ou download direto quando em ambiente web puro.

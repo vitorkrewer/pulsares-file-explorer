@@ -84,8 +84,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const META_BY_TAB = {
     explorer: { appName: 'Pulsares Explorer', path: '~/projects/backend-service', badge: 'ACTIVITY BAR + FLYOUT' },
     editor: { appName: 'Pulsares Studio Editor', path: '~/projects/web-dashboard/index.html', badge: 'LIVE WEB PREVIEW' },
-    dbstudio: { appName: 'Pulse DB Studio', path: '~/projects/backend-service/analytics.sqlite3', badge: 'ER MAP + SQL CONSOLE' },
-    dbcreator: { appName: 'Pulse DB Studio', path: '~/datasets/clientes-2026.csv → clientes.db', badge: 'BULK WAL IMPORT' },
+    dbstudio: { appName: 'Pulsares DB Studio', path: '~/projects/backend-service/analytics.sqlite3', badge: 'ER MAP + SQL CONSOLE' },
+    dbcreator: { appName: 'Pulsares DB Studio', path: '~/datasets/clientes-2026.csv → clientes.db', badge: 'BULK WAL IMPORT' },
     sftp: { appName: 'Pulsares Explorer', path: 'sftp://192.168.1.150/var/www/production', badge: 'TOFU SHA-256' },
     terminal: { appName: 'Pulsares Explorer', path: 'C:\\Users\\Vitor\\projects\\backend-service\\internal\\database', badge: 'FOLLOW-UP' },
   };

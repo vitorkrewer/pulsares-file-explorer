@@ -102,7 +102,7 @@ Construído com núcleo em **Go** e interface em **React + TypeScript**, o proje
   - Prévia Web conectada em tempo real para projetos HTML, CSS e JavaScript locais.
   - Quebra automática de linhas (`Alt+Z`) e formatação para JSON, CSV, Markdown, TypeScript, JavaScript, Go e SQL.
   - Salvamento direto em arquivos locais e remotos via SFTP.
-- **Pulse DB Studio (integrado ou janela independente)**:
+- **Pulsares DB Studio (integrado ou janela independente)**:
   - Visualizador, criador de tabelas e console SQL para bancos de dados **SQLite** (`.db`, `.sqlite`, `.sqlite3`) e **DuckDB**.
   - **Mapa ER (Diagrama de Entidade-Relacionamento)**: visualização interativa de tabelas, chaves primárias (PK) e chaves estrangeiras (FK) com auto-layout, busca, minimapa e exportação em SVG.
   - Inspeção de esquemas, paginação de registros, edição inline e exportação de resultados.

@@ -139,7 +139,7 @@
     { file: 'shot-5-ermap.jpg', key: 'g5', pt: 'Mapa ER interativo com MiniMap e exportação SVG' },
     { file: 'shot-8-studio-preview.jpg', key: 'g8', pt: 'Prévia web em tempo real ao lado do código' },
     { file: 'shot-3-context-db.png', key: 'g3', pt: 'Menu de contexto com ações para banco de dados SQLite' },
-    { file: 'shot-4-dbstudio.jpg', key: 'g4', pt: 'Pulse DB Studio: navegue por tabelas e dados' },
+    { file: 'shot-4-dbstudio.jpg', key: 'g4', pt: 'Pulsares DB Studio: navegue por tabelas e dados' },
     { file: 'shot-6-context-folder.jpg', key: 'g6', pt: 'Menu de contexto da pasta: abrir no Studio Editor e terminal' },
     { file: 'shot-7-studio.jpg', key: 'g7', pt: 'Pulsares Studio Editor com árvore de projeto' },
   ];
