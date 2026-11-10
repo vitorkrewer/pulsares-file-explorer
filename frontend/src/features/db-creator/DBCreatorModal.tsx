@@ -605,7 +605,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     backgroundColor: 'transparent',
     color: 'var(--text-muted)',
-    cursor: 'pointer',
+    cursor: 'default',
     transition: 'all 0.15s ease',
   },
   modeButtonActive: {
@@ -615,7 +615,7 @@ const styles: Record<string, React.CSSProperties> = {
   closeButton: {
     background: 'transparent',
     border: 'none',
-    cursor: 'pointer',
+    cursor: 'default',
     color: 'var(--text-muted)',
     display: 'flex',
     alignItems: 'center',
@@ -717,7 +717,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 7,
     fontSize: 12,
     color: 'var(--text-secondary)',
-    cursor: 'pointer',
+    cursor: 'default',
     userSelect: 'none',
   },
   tagsContainer: {
@@ -960,7 +960,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     fontWeight: 600,
     fontSize: 13,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   secondaryActionButton: {
     display: 'flex',
@@ -973,7 +973,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     fontWeight: 500,
     fontSize: 12.5,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   footer: {
     padding: '12px 18px',
@@ -994,7 +994,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     fontWeight: 600,
     fontSize: 12.5,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   secondaryBtn: {
     display: 'flex',
@@ -1006,7 +1006,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--text-primary)',
     borderRadius: 6,
     fontSize: 12,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   centerLoading: {
     flex: 1,

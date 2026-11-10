@@ -768,7 +768,7 @@ export const App: React.FC = () => {
                         color: '#ffffff',
                         fontSize: '11px',
                         fontWeight: 600,
-                        cursor: 'pointer',
+                        cursor: 'default',
                       }}
                     >
                       Busca Avançada
@@ -780,7 +780,7 @@ export const App: React.FC = () => {
                       style={{
                         color: 'var(--text-muted)',
                         fontSize: '11px',
-                        cursor: 'pointer',
+                        cursor: 'default',
                         padding: '0 4px',
                       }}
                     >

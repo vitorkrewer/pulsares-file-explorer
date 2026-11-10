@@ -273,7 +273,7 @@ const MediaPlayerSection: React.FC<{ data: PreviewData }> = ({ data }) => {
               border: '1px solid var(--border-subtle)',
               background: speed === rate ? 'var(--accent-primary)' : 'var(--bg-elevated)',
               color: speed === rate ? '#fff' : 'var(--text-secondary)',
-              cursor: 'pointer',
+              cursor: 'default',
               fontWeight: speed === rate ? 700 : 500,
             }}
           >
@@ -295,7 +295,7 @@ const MediaPlayerSection: React.FC<{ data: PreviewData }> = ({ data }) => {
             border: '1px solid var(--border-subtle)',
             background: loop ? 'var(--accent-primary)' : 'var(--bg-elevated)',
             color: loop ? '#fff' : 'var(--text-secondary)',
-            cursor: 'pointer',
+            cursor: 'default',
           }}
         >
           <Repeat size={11} /> Loop
@@ -316,7 +316,7 @@ const MediaPlayerSection: React.FC<{ data: PreviewData }> = ({ data }) => {
               border: '1px solid var(--border-subtle)',
               background: 'var(--bg-elevated)',
               color: 'var(--text-secondary)',
-              cursor: 'pointer',
+              cursor: 'default',
             }}
           >
             <PictureInPicture2 size={11} /> PiP
@@ -456,7 +456,7 @@ const PresentationPreviewSection: React.FC<{ data: PreviewData }> = ({ data }) =
               border: '1px solid var(--border-subtle)',
               backgroundColor: viewMode === 'slide' ? 'var(--accent-primary)' : 'transparent',
               color: viewMode === 'slide' ? '#fff' : 'var(--text-secondary)',
-              cursor: 'pointer',
+              cursor: 'default',
             }}
           >
             <MonitorPlay size={11} />
@@ -477,7 +477,7 @@ const PresentationPreviewSection: React.FC<{ data: PreviewData }> = ({ data }) =
               border: '1px solid var(--border-subtle)',
               backgroundColor: viewMode === 'outline' ? 'var(--accent-primary)' : 'transparent',
               color: viewMode === 'outline' ? '#fff' : 'var(--text-secondary)',
-              cursor: 'pointer',
+              cursor: 'default',
             }}
           >
             <List size={11} />
@@ -669,7 +669,7 @@ const PresentationPreviewSection: React.FC<{ data: PreviewData }> = ({ data }) =
                 color: safeIdx <= 0 ? 'var(--text-muted)' : 'var(--text-primary)',
                 fontSize: 11,
                 fontWeight: 600,
-                cursor: safeIdx <= 0 ? 'not-allowed' : 'pointer',
+                cursor: safeIdx <= 0 ? 'not-allowed' : 'default',
                 opacity: safeIdx <= 0 ? 0.5 : 1,
               }}
             >
@@ -697,7 +697,7 @@ const PresentationPreviewSection: React.FC<{ data: PreviewData }> = ({ data }) =
                   safeIdx >= slides.length - 1 ? 'var(--text-muted)' : 'var(--text-primary)',
                 fontSize: 11,
                 fontWeight: 600,
-                cursor: safeIdx >= slides.length - 1 ? 'not-allowed' : 'pointer',
+                cursor: safeIdx >= slides.length - 1 ? 'not-allowed' : 'default',
                 opacity: safeIdx >= slides.length - 1 ? 0.5 : 1,
               }}
             >
@@ -738,7 +738,7 @@ const PresentationPreviewSection: React.FC<{ data: PreviewData }> = ({ data }) =
                       color: active ? '#ea580c' : 'var(--text-secondary)',
                       fontSize: 10.5,
                       fontWeight: active ? 700 : 500,
-                      cursor: 'pointer',
+                      cursor: 'default',
                       flexShrink: 0,
                     }}
                   >
@@ -832,7 +832,7 @@ const PresentationPreviewSection: React.FC<{ data: PreviewData }> = ({ data }) =
                 borderRadius: 6,
                 border: '1px solid var(--border-subtle)',
                 backgroundColor: 'var(--bg-elevated)',
-                cursor: 'pointer',
+                cursor: 'default',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 4,
@@ -988,7 +988,7 @@ const PreviewBody: React.FC<{
                 color: 'var(--accent-text)',
                 fontSize: 11,
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: 'default',
                 flexShrink: 0,
               }}
             >
@@ -1012,7 +1012,7 @@ const PreviewBody: React.FC<{
                 color: '#10b981',
                 fontSize: 11,
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: 'default',
                 flexShrink: 0,
               }}
             >
@@ -1110,7 +1110,7 @@ const PreviewBody: React.FC<{
                     backgroundColor:
                       htmlViewMode === 'web' ? 'var(--accent-primary)' : 'var(--bg-subtle)',
                     color: htmlViewMode === 'web' ? '#ffffff' : 'var(--text-secondary)',
-                    cursor: 'pointer',
+                    cursor: 'default',
                   }}
                 >
                   Prévia Web Renderizada
@@ -1127,7 +1127,7 @@ const PreviewBody: React.FC<{
                     backgroundColor:
                       htmlViewMode === 'code' ? 'var(--accent-primary)' : 'var(--bg-subtle)',
                     color: htmlViewMode === 'code' ? '#ffffff' : 'var(--text-secondary)',
-                    cursor: 'pointer',
+                    cursor: 'default',
                   }}
                 >
                   Código HTML
@@ -1218,7 +1218,7 @@ const PreviewBody: React.FC<{
                 color: '#fff',
                 fontSize: 12,
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: 'default',
                 boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
               }}
             >
@@ -1470,7 +1470,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--border-subtle)',
     color: 'var(--text-primary)',
     fontSize: 12,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   iconBtn: {
     display: 'flex',
@@ -1480,7 +1480,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: 24,
     borderRadius: 4,
     color: 'var(--text-secondary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   quickLookBackdrop: {
     position: 'fixed',

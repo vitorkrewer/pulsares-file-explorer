@@ -616,7 +616,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     color: 'var(--text-muted)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   btn: {
     display: 'flex',
@@ -627,7 +627,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     fontSize: 12,
     color: 'var(--text-primary)',
-    cursor: 'pointer',
+    cursor: 'default',
     whiteSpace: 'nowrap',
     flexShrink: 0,
   },

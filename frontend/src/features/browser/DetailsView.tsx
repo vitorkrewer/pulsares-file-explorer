@@ -247,7 +247,7 @@ export const DetailsView: React.FC = () => {
                       ? '2px dashed var(--accent)'
                       : 'none',
                     outlineOffset: '-2px',
-                    cursor: 'grab',
+                    cursor: 'default',
                   }}
                 >
                   <div style={{ ...styles.colName, ...styles.cell }}>
@@ -296,7 +296,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 4,
     padding: '0 8px',
-    cursor: 'pointer',
+    cursor: 'default',
     userSelect: 'none',
   },
   list: {

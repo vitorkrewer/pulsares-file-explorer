@@ -313,7 +313,7 @@ export const Sidebar: React.FC = () => {
     <div style={{ ...styles.sectionBody, maxHeight: 240, overflowY: 'auto' }}>
       {remoteProfiles.length === 0 ? (
         <div
-          style={{ ...styles.emptyHint, cursor: 'pointer', color: 'var(--accent)' }}
+          style={{ ...styles.emptyHint, cursor: 'default', color: 'var(--accent)' }}
           onClick={() => {
             void openRemoteModal();
             onItemClick?.();
@@ -696,7 +696,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'pointer',
+    cursor: 'default',
     transition: 'all 0.15s ease',
   },
   activityBtnActive: {
@@ -773,7 +773,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: 28,
     padding: '0 8px',
     borderBottom: '1px solid var(--border-subtle)',
-    cursor: 'pointer',
+    cursor: 'default',
     flexShrink: 0,
   },
   sectionTitleRow: {
@@ -803,7 +803,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     fontSize: 12,
     color: 'var(--text-primary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   itemActive: {
     backgroundColor: 'var(--bg-selected, rgba(59, 130, 246, 0.18))',
@@ -822,7 +822,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: 16,
     height: 16,
     color: 'var(--text-muted)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   driveCard: {
     display: 'flex',
@@ -830,7 +830,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 4,
     padding: '5px 6px',
     borderRadius: 5,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   driveTop: {
     display: 'flex',
@@ -891,7 +891,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--text-secondary)',
     backgroundColor: 'transparent',
     border: 'none',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   resizer: {
     position: 'absolute',

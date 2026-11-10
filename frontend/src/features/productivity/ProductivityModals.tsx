@@ -1295,7 +1295,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     fontSize: 12,
     color: 'var(--text-primary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   paletteItemActive: {
     backgroundColor: 'rgba(59, 130, 246, 0.16)',
@@ -1430,7 +1430,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     fontSize: 12,
     fontWeight: 500,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   secondaryBtn: {
     padding: '6px 12px',
@@ -1439,7 +1439,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--border-subtle)',
     color: 'var(--text-primary)',
     fontSize: 12,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   iconBtn: {
     display: 'flex',
@@ -1447,6 +1447,6 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     padding: 4,
     color: 'var(--text-secondary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
 };

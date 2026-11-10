@@ -455,7 +455,7 @@ const styles: Record<string, React.CSSProperties> = {
     paddingRight: 8,
     fontSize: 12,
     color: 'var(--text-primary)',
-    cursor: 'pointer',
+    cursor: 'default',
     boxSizing: 'border-box',
   },
   activeRow: {
@@ -508,6 +508,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--text-primary)',
     textAlign: 'left',
     width: '100%',
-    cursor: 'pointer',
+    cursor: 'default',
   },
 };

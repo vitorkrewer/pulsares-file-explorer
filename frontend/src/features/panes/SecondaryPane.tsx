@@ -245,7 +245,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: 24,
     borderRadius: 4,
     color: 'var(--text-secondary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   pathText: {
     flex: 1,
@@ -272,7 +272,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0 12px',
     fontSize: 12,
     color: 'var(--text-primary)',
-    cursor: 'pointer',
+    cursor: 'default',
     boxSizing: 'border-box',
   },
   selectedRow: {

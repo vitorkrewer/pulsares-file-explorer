@@ -169,7 +169,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
           border: '1px solid var(--accent)',
           borderRadius: 8,
           boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-          cursor: 'pointer',
+          cursor: 'default',
           color: 'var(--text-main)',
           fontSize: 12,
           fontWeight: 600,
@@ -437,7 +437,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'pointer',
+                  cursor: 'default',
                 }}
               >
                 <Minus size={14} />
@@ -454,7 +454,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'pointer',
+                  cursor: 'default',
                 }}
               >
                 <Square size={12} />
@@ -471,7 +471,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'pointer',
+                  cursor: 'default',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = '#dc2626';
@@ -734,7 +734,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '5px 10px',
-                        cursor: 'pointer',
+                        cursor: 'default',
                         fontSize: 12,
                         background: isSelected ? 'var(--bg-selected)' : 'transparent',
                         color: isSelected ? 'var(--accent)' : 'var(--text-main)',
@@ -842,7 +842,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           padding: '5px 10px 5px 16px',
-                          cursor: 'pointer',
+                          cursor: 'default',
                           fontSize: 12,
                           background: isSelected ? 'var(--bg-selected)' : 'transparent',
                           color: isSelected ? 'var(--accent)' : 'var(--text-main)',
@@ -894,7 +894,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '4px 10px 4px 16px',
-                        cursor: 'pointer',
+                        cursor: 'default',
                         fontSize: 11,
                         color: 'var(--text-muted)',
                       }}
@@ -966,7 +966,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                             border: 'none',
                             background: 'transparent',
                             color: 'var(--text-muted)',
-                            cursor: 'pointer',
+                            cursor: 'default',
                           }}
                         >
                           <X size={12} />
@@ -1123,7 +1123,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                                   textAlign: 'left',
                                   borderBottom: '1px solid var(--border-subtle)',
                                   borderRight: '1px solid var(--border-subtle)',
-                                  cursor: 'pointer',
+                                  cursor: 'default',
                                   userSelect: 'none',
                                   whiteSpace: 'nowrap',
                                   backgroundColor: isSorted ? 'var(--bg-selected)' : 'var(--bg-subtle)',
@@ -1184,7 +1184,7 @@ export const DBStudioModal: React.FC<DBStudioModalProps> = ({ standalone = false
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
-                                    cursor: 'pointer',
+                                    cursor: 'default',
                                     color: isNull ? 'var(--text-muted)' : 'var(--text-primary)',
                                     fontStyle: isNull ? 'italic' : 'normal',
                                   }}

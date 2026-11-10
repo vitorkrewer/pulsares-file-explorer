@@ -566,7 +566,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 8,
     borderRadius: 4,
-    cursor: 'pointer',
+    cursor: 'default',
     fontSize: 13,
   },
   itemName: {
@@ -582,7 +582,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 8,
     borderRadius: 6,
     border: '1px solid var(--border-subtle)',
-    cursor: 'pointer',
+    cursor: 'default',
     gap: 6,
   },
   thumbBox: {
@@ -644,7 +644,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     padding: '5px 8px',
     borderRadius: 4,
-    cursor: 'pointer',
+    cursor: 'default',
     fontSize: 12,
   },
   chevron: {

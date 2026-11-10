@@ -562,7 +562,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: 'var(--bg-app)',
     color: 'var(--text-primary)',
     fontSize: 12,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   extSection: {
     display: 'flex',
@@ -581,7 +581,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--border-subtle)',
     backgroundColor: 'var(--bg-app)',
     color: 'var(--text-secondary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   extChipActive: {
     borderColor: 'var(--accent)',
@@ -605,7 +605,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     fontSize: 12,
     fontWeight: 500,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   secondaryBtn: {
     padding: '6px 12px',
@@ -614,7 +614,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--border-subtle)',
     color: 'var(--text-primary)',
     fontSize: 12,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   conflictBox: {
     display: 'flex',
@@ -645,7 +645,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
     fontSize: 12,
     color: 'var(--text-secondary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   conflictButtons: {
     display: 'flex',
@@ -752,7 +752,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: 22,
     borderRadius: 4,
     color: 'var(--text-secondary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
 };
 

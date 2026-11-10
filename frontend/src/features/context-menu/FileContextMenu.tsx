@@ -622,7 +622,7 @@ const MenuItem: React.FC<{
         border: 'none',
         backgroundColor: hovered ? 'var(--bg-surface-hover)' : 'transparent',
         color: danger ? 'var(--status-danger)' : 'var(--text-primary)',
-        cursor: 'pointer',
+        cursor: 'default',
         textAlign: 'left',
         fontSize: '12px',
       }}

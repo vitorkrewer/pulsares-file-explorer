@@ -248,7 +248,7 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
               border: 'none',
               display: 'inline-flex',
               alignItems: 'center',
-              cursor: 'pointer',
+              cursor: 'default',
             }}
           >
             <ExternalLink size={12} />
@@ -267,7 +267,7 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
               border: 'none',
               display: 'inline-flex',
               alignItems: 'center',
-              cursor: 'pointer',
+              cursor: 'default',
             }}
           >
             <Folder size={12} />
@@ -364,7 +364,7 @@ const TerminalViewport: React.FC<PaneViewProps> = ({
                     : '1px solid var(--border-subtle)',
                   backgroundColor: active ? 'var(--accent-subtle)' : 'var(--bg-surface)',
                   color: active ? 'var(--accent-text)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
+                  cursor: 'default',
                   fontFamily: 'var(--font-mono)',
                   fontSize: '11px',
                   whiteSpace: 'nowrap',
@@ -629,7 +629,7 @@ export const TerminalPanel: React.FC = () => {
               border: '1px solid var(--border-subtle)',
               backgroundColor: 'var(--bg-surface)',
               color: 'var(--text-secondary)',
-              cursor: 'pointer',
+              cursor: 'default',
             }}
           >
             {profiles.map((p) => (
@@ -822,7 +822,7 @@ export const TerminalPanel: React.FC = () => {
               background: 'none',
               border: 'none',
               color: 'var(--text-secondary)',
-              cursor: 'pointer',
+              cursor: 'default',
               display: 'inline-flex',
               alignItems: 'center',
             }}
@@ -920,7 +920,7 @@ export const TerminalPanel: React.FC = () => {
                     padding: '2px',
                     borderRadius: '4px',
                     color: 'var(--text-muted)',
-                    cursor: 'pointer',
+                    cursor: 'default',
                   }}
                 >
                   <Trash2 size={12} />
@@ -937,7 +937,7 @@ export const TerminalPanel: React.FC = () => {
                   padding: '2px',
                   borderRadius: '4px',
                   color: 'var(--text-secondary)',
-                  cursor: 'pointer',
+                  cursor: 'default',
                 }}
               >
                 <Plus size={13} />
@@ -977,7 +977,7 @@ export const TerminalPanel: React.FC = () => {
                     padding: '5px 8px',
                     borderRadius: 'var(--radius-sm)',
                     fontSize: '12px',
-                    cursor: 'pointer',
+                    cursor: 'default',
                     backgroundColor: isActive
                       ? 'var(--bg-selected)'
                       : isSplit
@@ -1199,7 +1199,7 @@ const termActionBtnStyle: React.CSSProperties = {
   backgroundColor: 'var(--bg-surface)',
   color: 'var(--text-secondary)',
   fontSize: '11px',
-  cursor: 'pointer',
+  cursor: 'default',
 };
 
 const sideItemIconBtnStyle: React.CSSProperties = {
@@ -1211,7 +1211,7 @@ const sideItemIconBtnStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',
   color: 'var(--text-muted)',
-  cursor: 'pointer',
+  cursor: 'default',
 };
 
 

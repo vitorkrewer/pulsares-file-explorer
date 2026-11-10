@@ -418,7 +418,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '2px 4px',
     borderRadius: 3,
     color: 'var(--text-primary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   separator: {
     color: 'var(--text-muted)',
@@ -443,7 +443,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     flexShrink: 0,
     marginLeft: 4,
-    cursor: 'pointer',
+    cursor: 'default',
     opacity: 0.78,
     transition: 'opacity 0.15s, color 0.15s, background-color 0.15s',
   },
@@ -469,7 +469,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     fontSize: 12,
     color: 'var(--text-primary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   suggestionItemActive: {
     backgroundColor: 'var(--bg-selected, rgba(59, 130, 246, 0.2))',
@@ -497,7 +497,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     color: 'var(--text-primary)',
     fontSize: 11,
-    cursor: 'pointer',
+    cursor: 'default',
     outline: 'none',
   },
 };

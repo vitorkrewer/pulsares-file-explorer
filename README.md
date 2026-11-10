@@ -5,13 +5,13 @@
 </p>
 
 <p align="center">
-  <strong>Explorador de arquivos desktop moderno, ultrarrápido e orientado a teclado.</strong><br>
+  <strong>Explorador de arquivos multiplataforma com ferramentas integradas para desenvolvedores e fluxos técnicos.</strong><br>
   Desenvolvido em Go (Wails v2) + React 18 + TypeScript para Windows, Linux e macOS.
 </p>
 
 <p align="center">
   <a href="https://vitorkrewer.github.io/pulsares-file-explorer/"><img src="https://img.shields.io/badge/Site%20Oficial-GitHub%20Pages-informational?style=for-the-badge&logo=githubpages&logoColor=white" alt="Site Oficial" /></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versão-v1.1.0-blue?style=for-the-badge&logo=semver" alt="Versão v1.1.0" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versão-v1.1.1-blue?style=for-the-badge&logo=semver" alt="Versão v1.1.1" /></a>
   <img src="https://img.shields.io/badge/plataforma-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Plataformas Suportadas" />
   <img src="https://img.shields.io/badge/Wails-v2.11+-DF0000?style=for-the-badge&logo=wails&logoColor=white" alt="Wails v2" />
   <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.24+" />
@@ -47,9 +47,9 @@
 
 ## Visão Geral
 
-O **Pulsares Explorer** foi projetado para suprir as carências dos exploradores tradicionais de desktop (como o Windows Explorer ou Nautilus), que costumam ser lentos com pastas massivas, carecem de painel duplo fluido, sofrem com cópias descontroladas de arquivos e não atendem ao fluxo de trabalho de desenvolvedores e administradores de sistemas.
+O **Pulsares Explorer** é uma alternativa multiplataforma para organização e navegação de arquivos que reúne, em um único ambiente local, recursos voltados ao dia a dia de desenvolvedores, analistas de dados e usuários técnicos.
 
-O Pulsares une a performance nativa em **Go**, uma interface fluida e moderna com **React**, virtualização em listas gigantes e suporte de primeira classe a fluxos de desenvolvimento (terminal, editor integrado, visualizador SQLite e conexões remotas seguras).
+Construído com núcleo em **Go** e interface em **React + TypeScript**, o projeto combina gerenciamento de arquivos em múltiplas abas e painel duplo com ferramentas integradas que evitam a troca constante de aplicativos: **Terminal Multi-Shell**, **Pulsares Studio Editor** (com prévia web ao vivo), **Pulsares DB Studio** (inspeção de bancos SQLite/DuckDB e diagramas de entidade-relacionamento), **cliente SFTP nativo** e utilitários de verificação e comparação.
 
 ---
 
@@ -97,28 +97,29 @@ O Pulsares une a performance nativa em **Go**, uma interface fluida e moderna co
   - Pressione a tecla `Espaço` em qualquer item selecionado para abrir a pré-visualização instantânea em tela cheia.
 
 ### 4. Pulsares Studio Editor & DB Studio
-- **Pulsares Studio Editor (`Ctrl+E`)**:
-  - Editor embutido de código e texto com suporte a múltiplas abas.
-  - Quebra automática de linhas (`Alt+Z`).
-  - Formatação com um clique para JSON, CSV, Markdown, TypeScript, JavaScript, Go, etc.
+- **Pulsares Studio Editor (`Ctrl+E` ou janela independente)**:
+  - Editor de código e texto com múltiplas abas, árvore de arquivos do projeto e operações completas de arquivo pelo menu de contexto.
+  - Prévia Web conectada em tempo real para projetos HTML, CSS e JavaScript locais.
+  - Quebra automática de linhas (`Alt+Z`) e formatação para JSON, CSV, Markdown, TypeScript, JavaScript, Go e SQL.
   - Salvamento direto em arquivos locais e remotos via SFTP.
-- **Pulsares DB Studio**:
-  - Visualizador e console SQL integrado para bancos de dados **SQLite** (`.db`, `.sqlite`, `.sqlite3`) e **DuckDB**.
-  - Inspeção de esquemas de tabelas, contagem de registros, paginação e execução de comandos SQL personalizados.
+- **Pulse DB Studio (integrado ou janela independente)**:
+  - Visualizador, criador de tabelas e console SQL para bancos de dados **SQLite** (`.db`, `.sqlite`, `.sqlite3`) e **DuckDB**.
+  - **Mapa ER (Diagrama de Entidade-Relacionamento)**: visualização interativa de tabelas, chaves primárias (PK) e chaves estrangeiras (FK) com auto-layout, busca, minimapa e exportação em SVG.
+  - Inspeção de esquemas, paginação de registros, edição inline e exportação de resultados.
 
 ### 5. Busca Recursiva e Pesquisa de Conteúdo
 - **Busca Avançada (`SearchDrawer`, `Ctrl+Shift+S`)**:
   - Pesquisa recursiva por padrão *glob* (`*.go`), expressões regulares (Regex), faixa de tamanho e intervalo de datas.
   - **Busca no Conteúdo dos Arquivos (Content Search)**: localiza palavras ou frases dentro de arquivos de texto e código, exibindo a linha de contexto (*snippet*).
-  - **Streaming Otimizado**: os primeiros resultados surgem imediatamente, seguidos por lotes progressivos a cada 50ms, eliminando esperas silenciosas.
-  - Indexação opcional em SQLite para buscas instantâneas por nome em pastas cadastradas.
+  - **Streaming Progressivo**: resultados exibidos em lotes conforme são encontrados, com cancelamento imediato.
+  - Indexação opcional em SQLite para buscas rápidas por nome em pastas cadastradas.
 
 ### 6. Terminal Integrado Multi-Shell
 - **Painel Inferior Estilo VS Code (`` Ctrl+` ``)**:
   - Detecção automática de shells: PowerShell 7, Windows PowerShell, CMD, Git Bash, WSL, Bash, Zsh, Fish.
   - Abas independentes, renomeação inline, divisão horizontal e redimensionamento suave.
-  - Sincronização automática do diretório de trabalho com a pasta da aba ativa (suporte a `OSC 7`).
-  - Proteção contra processos órfãos (`Kill` recursivo da árvore de processos).
+  - **Modo Follow-up**: quando ativado, a aba ativa do explorador acompanha automaticamente os diretórios navegados via `cd` no terminal (e vice-versa).
+  - Encerramento limpo da árvore de processos ao fechar uma sessão.
 
 ### 7. Operações Atômicas e Desfazer (Undo/Redo)
 - **Fila Assíncrona de Operações**:

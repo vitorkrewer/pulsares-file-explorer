@@ -1309,7 +1309,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
           backgroundColor: 'var(--bg-surface)',
           border: '1px solid var(--accent-primary)',
           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
-          cursor: 'pointer',
+          cursor: 'default',
         }}
         onClick={() => setMinimized(false)}
       >
@@ -2105,7 +2105,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                 gap: '6px',
                 padding: '4px 10px',
                 borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
+                cursor: 'default',
                 fontSize: '12px',
                 backgroundColor: isActive ? 'var(--bg-surface)' : 'transparent',
                 color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
@@ -3149,7 +3149,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                                 justifyContent: 'space-between',
                                 padding: '5px 8px',
                                 borderRadius: 'var(--radius-sm)',
-                                cursor: 'pointer',
+                                cursor: 'default',
                                 backgroundColor: active ? 'var(--accent-subtle)' : 'transparent',
                                 color: active ? 'var(--accent-text)' : 'var(--text-primary)',
                                 fontSize: '12px',
@@ -3190,7 +3190,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                         padding: '8px 6px',
                         overflow: 'hidden',
                         position: 'relative',
-                        cursor: 'pointer',
+                        cursor: 'default',
                         userSelect: 'none',
                         flexShrink: 0,
                       }}
@@ -3919,7 +3919,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                     backgroundColor: 'var(--accent-primary)',
                     color: '#ffffff',
                     border: 'none',
-                    cursor: 'pointer',
+                    cursor: 'default',
                     fontSize: '12px',
                     fontWeight: 600,
                   }}
@@ -4695,7 +4695,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                         color: projectModal.inputValue.endsWith(ext)
                           ? 'var(--accent-text)'
                           : 'var(--text-secondary)',
-                        cursor: 'pointer',
+                        cursor: 'default',
                       }}
                     >
                       {ext}
@@ -4964,7 +4964,7 @@ const headerBtnStyle: React.CSSProperties = {
   backgroundColor: 'var(--bg-surface)',
   color: 'var(--text-primary)',
   fontSize: '11px',
-  cursor: 'pointer',
+  cursor: 'default',
 };
 
 const studioTitlebarWinBtnStyle: React.CSSProperties = {
@@ -4974,7 +4974,7 @@ const studioTitlebarWinBtnStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   color: 'var(--text-secondary)',
-  cursor: 'pointer',
+  cursor: 'default',
   borderRadius: 0,
   border: 'none',
   transition: 'background-color 0.12s, color 0.12s',
@@ -4990,7 +4990,7 @@ const windowCtrlBtnStyle: React.CSSProperties = {
   backgroundColor: 'var(--bg-surface)',
   color: 'var(--text-primary)',
   fontSize: '11px',
-  cursor: 'pointer',
+  cursor: 'default',
 };
 
 const findInputStyle: React.CSSProperties = {
@@ -5009,7 +5009,7 @@ const statusLinkBtnStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',
   color: 'var(--text-secondary)',
-  cursor: 'pointer',
+  cursor: 'default',
   fontSize: '11px',
   padding: '0 2px',
 };
@@ -5020,7 +5020,7 @@ const activityBtnStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  cursor: 'pointer',
+  cursor: 'default',
 };
 
 const sidebarHeaderStyle: React.CSSProperties = {
@@ -5042,7 +5042,7 @@ const sidebarItemStyle: React.CSSProperties = {
   padding: '5px 8px',
   borderRadius: 'var(--radius-sm)',
   fontSize: '12px',
-  cursor: 'pointer',
+  cursor: 'default',
   color: 'var(--text-primary)',
 };
 
@@ -5068,7 +5068,7 @@ const toolBtnStyle: React.CSSProperties = {
   backgroundColor: 'var(--bg-surface)',
   color: 'var(--text-primary)',
   fontSize: '11px',
-  cursor: 'pointer',
+  cursor: 'default',
   textAlign: 'center',
 };
 
@@ -5083,7 +5083,7 @@ const projectCtxItemStyle: React.CSSProperties = {
   backgroundColor: 'transparent',
   color: 'var(--text-primary)',
   fontSize: '12px',
-  cursor: 'pointer',
+  cursor: 'default',
 };
 
 const projectCtxDividerStyle: React.CSSProperties = {

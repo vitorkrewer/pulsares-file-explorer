@@ -707,7 +707,7 @@ export const ERDiagramView: React.FC<ERDiagramViewProps> = ({
                 border: 'none',
                 color: 'var(--text-primary, #ffffff)',
                 fontSize: 12,
-                cursor: 'pointer',
+                cursor: 'default',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -845,7 +845,7 @@ export const ERDiagramView: React.FC<ERDiagramViewProps> = ({
             return (
               <g
                 key={rel.id}
-                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                style={{ pointerEvents: 'auto', cursor: 'default' }}
                 onMouseEnter={() => setHoveredEdgeId(rel.id)}
                 onMouseLeave={() => setHoveredEdgeId(null)}
               >
@@ -954,7 +954,7 @@ export const ERDiagramView: React.FC<ERDiagramViewProps> = ({
                 opacity: isFaded ? 0.35 : 1,
                 transition: 'opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
                 zIndex: isSelected ? 30 : isHovered ? 25 : 10,
-                cursor: 'grab',
+                cursor: 'default',
               }}
             >
               {/* Cabeçalho da Tabela */}
@@ -1003,7 +1003,7 @@ export const ERDiagramView: React.FC<ERDiagramViewProps> = ({
                         borderRadius: 4,
                         padding: '3px 5px',
                         color: '#ffffff',
-                        cursor: 'pointer',
+                        cursor: 'default',
                         display: 'flex',
                         alignItems: 'center',
                       }}

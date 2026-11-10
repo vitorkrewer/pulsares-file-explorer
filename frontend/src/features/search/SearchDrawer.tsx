@@ -289,7 +289,7 @@ export const SearchDrawer: React.FC = () => {
                       padding: '2px 8px',
                       borderRadius: 999,
                       fontSize: 11,
-                      cursor: 'pointer',
+                      cursor: 'default',
                       border: isActive
                         ? '1px solid var(--accent-primary)'
                         : '1px solid var(--border-subtle)',
@@ -390,7 +390,7 @@ export const SearchDrawer: React.FC = () => {
             {savedSearches.map((sv) => (
               <span
                 key={sv.id}
-                style={{ ...styles.indexChip, cursor: 'pointer' }}
+                style={{ ...styles.indexChip, cursor: 'default' }}
                 onClick={() => {
                   applySavedSearchPreset(sv);
                   setTimeout(() => {
@@ -713,7 +713,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
     fontSize: 12,
     color: 'var(--text-secondary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   primaryBtn: {
     display: 'flex',
@@ -726,7 +726,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     fontSize: 12,
     fontWeight: 600,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   stopBtn: {
     display: 'flex',
@@ -739,7 +739,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     fontSize: 12,
     fontWeight: 600,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   secondaryBtn: {
     display: 'flex',
@@ -752,7 +752,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: 'var(--bg-surface)',
     color: 'var(--text-primary)',
     fontSize: 11,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   indexBar: {
     display: 'flex',
@@ -776,7 +776,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     color: 'var(--text-muted)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   resultsArea: {
     flex: 1,
@@ -790,7 +790,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '6px 10px',
     borderRadius: 5,
     borderBottom: '1px solid var(--border-subtle)',
-    cursor: 'pointer',
+    cursor: 'default',
     gap: 12,
   },
   resultMain: {
@@ -838,7 +838,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: 'var(--bg-elevated)',
     fontSize: 11,
     color: 'var(--text-primary)',
-    cursor: 'pointer',
+    cursor: 'default',
   },
   emptyBox: {
     padding: 36,
@@ -864,7 +864,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     width: 24,
     height: 24,
-    cursor: 'pointer',
+    cursor: 'default',
     color: 'var(--text-secondary)',
   },
 };

@@ -170,7 +170,7 @@ export const TabBar: React.FC = () => {
           style={{
             ...styles.scrollArrowBtn,
             opacity: canScrollLeft ? 1 : 0.3,
-            cursor: canScrollLeft ? 'pointer' : 'default',
+            cursor: canScrollLeft ? 'default' : 'default',
             '--wails-draggable': 'no-drag',
           } as React.CSSProperties}
         >
@@ -267,7 +267,7 @@ export const TabBar: React.FC = () => {
           style={{
             ...styles.scrollArrowBtn,
             opacity: canScrollRight ? 1 : 0.3,
-            cursor: canScrollRight ? 'pointer' : 'default',
+            cursor: canScrollRight ? 'default' : 'default',
             '--wails-draggable': 'no-drag',
           } as React.CSSProperties}
         >
@@ -288,7 +288,7 @@ export const TabBar: React.FC = () => {
           style={{
             ...styles.iconBtn,
             opacity: reachedTabLimit ? 0.38 : 1,
-            cursor: reachedTabLimit ? 'not-allowed' : 'pointer',
+            cursor: reachedTabLimit ? 'not-allowed' : 'default',
           }}
           disabled={reachedTabLimit}
           onClick={() => newTab()}
@@ -669,7 +669,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--text-secondary)',
     fontSize: 11,
     fontWeight: 600,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   tabCountBadge: {
     fontSize: 10.5,
@@ -703,7 +703,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     color: 'var(--accent)',
     fontWeight: 600,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   allTabsSearchWrap: {
     display: 'flex',
@@ -736,7 +736,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     padding: '6px 8px',
     borderRadius: 5,
-    cursor: 'pointer',
+    cursor: 'default',
   },
   dragSpacer: {
     flex: '1 1 32px',
@@ -757,7 +757,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     color: 'var(--text-secondary)',
-    cursor: 'pointer',
+    cursor: 'default',
     borderRadius: 0,
     transition: 'background-color 0.12s, color 0.12s',
   },
@@ -772,7 +772,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0 7px',
     borderRadius: 6,
     fontSize: 12,
-    cursor: 'pointer',
+    cursor: 'default',
     border: '1px solid transparent',
     transition: 'background 0.12s, border-color 0.12s, min-width 0.12s',
   },
