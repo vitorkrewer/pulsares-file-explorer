@@ -1,6 +1,6 @@
 # Roteiro por etapas
 
-Cada etapa é uma versão *minor* registrada no [`CHANGELOG.md`](../CHANGELOG.md). A ordem é uma intenção e pode mudar com o uso real. Cada etapa só é concluída com **critérios de aceite** atendidos, testes e release manual gerada.
+Cada etapa é registrada no [`CHANGELOG.md`](../CHANGELOG.md). A ordem reflete a evolução do projeto e cada entrega é validada por testes e builds de release.
 
 | Versão | Etapa | Situação |
 | --- | --- | --- |
@@ -12,9 +12,11 @@ Cada etapa é uma versão *minor* registrada no [`CHANGELOG.md`](../CHANGELOG.md
 | 0.6.0 | Modos de visualização, miniaturas e prévia | Concluída |
 | 0.7.0 | Busca e filtros | Concluída |
 | 0.8.0 | Integração com o sistema operacional | Concluída |
-| 0.9.0 | Produtividade (paleta, atalhos, renomeação em lote, etiquetas) | Concluída |
-| 0.10.0 | Arquivos compactados e locais remotos | Concluída |
+| 0.9.0 | Produtividade (paleta, atalhos, renomeação em lote, comparação, hashes) | Concluída |
+| 0.10.0 | Arquivos compactados e perfis remotos | Concluída |
 | 1.0.0 | Estabilização e distribuição | Concluída |
+| 1.1.0 | Conexões SSH/SFTP (TOFU), DB Studio, Studio Editor, streaming HTTP 206 e slides | Concluída |
+| 1.1.1 | Mapa ER, Criador SQLite, Live Web Preview, Terminal Follow-up, Activity Bar e 10 idiomas | Concluída |
 
 ---
 
@@ -22,108 +24,105 @@ Cada etapa é uma versão *minor* registrada no [`CHANGELOG.md`](../CHANGELOG.md
 
 **Objetivo:** app abre em < 1 s e navega em pastas locais grandes sem travar.
 
-- Projeto Wails na raiz, frontend React/TS estrito/Vite, ESLint, Vitest, `go vet`, testes Go.
-- Tokens de design (claro/escuro/sistema), shell da janela (barra de título, barra de ferramentas, área de conteúdo, barra de status).
-- `vfs` + `vfs/local` (Stat, ReadDir em lotes, Open), erros de domínio.
+- Projeto Wails v2 na raiz, frontend React/TS estrito/Vite, Vitest/testes JS, `go vet`, testes Go.
+- Tokens de design (claro/escuro), shell da janela (barra de título, barra de ferramentas, área de conteúdo, barra de status).
+- `vfs` + `vfs/local` (`Stat`, `ReadDir` em lotes, `Open`), erros de domínio.
 - `listing` com streaming por eventos, cancelamento por `requestId`.
 - Modo detalhes virtualizado: nome, tamanho, tipo, data de modificação; ordenação natural; pastas primeiro.
 - Navegação: voltar, avançar, subir, atualizar; breadcrumbs + edição de caminho.
 - Abrir arquivo com o app padrão; mostrar/ocultar ocultos.
-- `storage` com SQLite e migrações; `settings` básico.
-- Internacionalização desde o primeiro componente: i18next + catálogos pt-BR/en/es, detecção do idioma do SO, seletor de idioma nas configurações (troca sem reiniciar), formatadores `Intl` (datas, números, tamanhos, ordenação), erros Go como códigos traduzidos no frontend, `npm run i18n:check` e pseudo-localidade de desenvolvimento.
-- `release.yml` manual gerando executáveis para os três sistemas.
-
-**Aceite:** pasta com 100 mil arquivos sintéticos mostra o primeiro lote em < 200 ms e rola a 60 fps; navegação rápida entre pastas nunca mostra conteúdo da pasta anterior; toda a interface aparece corretamente em pt-BR, en e es, sem strings fixas (verificado com a pseudo-localidade) e sem textos cortados; release gerada nos três SOs.
+- `storage` com SQLite (`modernc.org/sqlite`) e migrações; `settings` básico.
+- Internacionalização com i18next (catálogos `pt-BR`/`en`/`es`), detecção de idioma do SO, formatadores `Intl`, `npm run i18n:check` e pseudo-localidade.
+- `release.yml` manual gerando executáveis para Windows, Linux e macOS.
 
 ## 0.2.0 — Abas, sessão e painel lateral com árvore de pastas
 
 - Store de sessão (janela → painel → abas) e histórico por aba.
 - Nova, fechar, duplicar, fixar, fechar outras/à direita, reabrir fechada, reordenar arrastando.
 - Abrir em nova aba (clique do meio, `Ctrl+Enter`), atalhos `Ctrl+T`, `Ctrl+W`, `Ctrl+Shift+T`, `Ctrl+Tab`, `Ctrl+1..9`.
-- Estado por aba (modo, ordenação, filtro, rolagem, seleção).
-- Persistência e restauração da sessão; cache LRU de listagens de abas inativas.
-- Painel lateral esquerdo recolhível (`Ctrl+B` / `Cmd+B`, botão e comando) e redimensionável, com estado persistido.
-- `internal/tree` + árvore de pastas: raízes por SO, carregamento preguiçoso só de diretórios, sondagem de subpastas com timeout, virtualização, padrão ARIA `tree`, navegação por teclado, abrir na aba ativa ou em nova aba, sincronização com a aba ativa.
-
-**Aceite:** 30 abas abertas com troca < 50 ms; fechar e reabrir o app restaura todas as abas, a aba ativa, a visibilidade/largura do painel lateral e os nós expandidos; expandir uma pasta com 5 mil subpastas não trava a interface; unidade de rede indisponível não bloqueia a árvore; árvore operável só com teclado; testes de `session` e `tree` cobrindo restauração, migração, symlinks em ciclo e permissão negada.
+- Estado por aba (modo, ordenação, filtro, rolagem, seleção) e cache LRU de abas inativas.
+- Painel lateral esquerdo recolhível (`Ctrl+B` / `Cmd+B`) e redimensionável.
+- `internal/tree` + árvore de pastas virtualizada com raízes por SO, carregamento preguiçoso e sincronização com a aba ativa.
 
 ## 0.3.0 — Operações de arquivo e fila de jobs
 
 - Seleção múltipla (clique, `Shift`, `Ctrl`, `Ctrl+A`, retângulo).
-- Copiar/recortar/colar, renomear (`F2`), nova pasta/arquivo, lixeira, exclusão permanente.
-- `ops`: planejamento, escrita segura (temporário + rename), pausa/retomada/cancelamento, política de conflitos, verificação opcional por hash.
-- Painel de operações com progresso, velocidade, ETA e histórico.
-- Diário (`op_journal`) e desfazer/refazer.
-
-**Aceite:** testes cobrindo conflitos, cancelamento no meio, disco cheio simulado, permissão negada, caminhos longos no Windows e mover entre volumes; nenhum arquivo parcial deixado após cancelamento.
+- Copiar/recortar/colar, renomear (`F2`), nova pasta/arquivo, lixeira nativa, exclusão permanente.
+- `internal/ops`: planejamento, escrita atômica (`.pulsares-part` + rename), pausa/retomada/cancelamento, resolução de conflitos, verificação opcional por SHA-256.
+- Painel de operações com progresso, velocidade e ETA; diário (`op_journal`) para Desfazer (`Ctrl+Z`) e Refazer (`Ctrl+Y`).
 
 ## 0.4.0 — Painel duplo, barra lateral e arrastar e soltar interno
 
 - Layout único / dividido horizontal / vertical; cada painel com suas abas.
 - Ações "copiar/mover para o outro painel" (`F5`/`F6`).
-- Arrastar e soltar arquivos e abas entre painéis e sobre nós da árvore (expansão automática ao pairar).
-- Novas seções do painel lateral: favoritos, unidades/volumes com espaço livre, pastas do usuário, recentes; menu de contexto nos nós da árvore.
-- Infraestrutura de layout com regiões redimensionáveis (lateral, conteúdo, inferior) reaproveitada pelo terminal.
+- Arrastar e soltar entre painéis e sobre nós da árvore (expansão automática ao pairar).
+- Seções do painel lateral: favoritos, unidades/volumes com espaço livre, recentes e menu de contexto nos nós da árvore.
 
 ## 0.5.0 — Terminal integrado (painel inferior)
 
-**Objetivo:** terminal real abaixo do conteúdo, estilo VS Code, ligado à pasta da aba ativa.
-
-- `internal/terminal`: sessões de pseudoterminal (ConPTY no Windows, PTY no Linux/macOS), fluxo de saída em lotes, entrada, redimensionamento, encerramento da árvore de processos.
-- Detecção de perfis de shell por SO e perfil padrão configurável; perfis personalizados.
-- Frontend com xterm.js: painel inferior recolhível (`` Ctrl+` ``), redimensionável e maximizável; abas de terminal; divisão lado a lado.
-- Novo terminal na pasta da aba ativa; comando "Ir para a pasta atual"; arrastar arquivos insere caminhos com aspas corretas por shell.
-- Integração opcional de shell (OSC 7) para o explorador acompanhar a pasta do terminal; caminhos e URLs clicáveis.
-- Tema, fonte e histórico de rolagem configuráveis; busca na saída; aviso ao fechar com processos ativos.
-- Persistência do painel (visível, altura) e dos terminais (perfil, pasta, nome).
-
-**Aceite:** `vim`, `htop`/`top`, `ssh` e `git log` com paginação funcionam corretamente nos três SOs; saída intensa (ex.: `cat` de arquivo de 50 MB) não congela a interface do explorador; caracteres acentuados e emojis da saída aparecem corretos; fechar uma aba de terminal encerra todos os processos filhos; caminhos com espaços e acentos são inseridos com aspas corretas em PowerShell, cmd, bash, zsh e fish; testes de `terminal` cobrindo ciclo de vida, redimensionamento e citação de caminhos.
+- `internal/terminal`: sessões de pseudoterminal (ConPTY no Windows, PTY no Linux/macOS), fluxo em lotes base64 (~8 ms ou 64 KB) com contrapressão (`Ack`), citação segura por shell e encerramento completo da árvore de processos.
+- Detecção de perfis de shell por SO (`pwsh`, PowerShell, `cmd`, Git Bash, WSL, `bash`, `zsh`, `fish`, `sh`).
+- Frontend com xterm.js: painel inferior recolhível (`` Ctrl+` ``), redimensionável e maximizável, abas, divisão lado a lado, busca na saída e suporte a `OSC 7`.
 
 ## 0.6.0 — Modos de visualização, miniaturas e prévia
 
-- Modos lista, grade (miniaturas) e colunas (Miller); agrupamento.
-- `thumbs`: geração em segundo plano, prioridade para itens visíveis, cache em disco com limite.
-- Painel de prévia: imagem, texto/código, markdown, PDF, áudio/vídeo; prévia rápida com `Espaço`.
-- Densidade compacta/confortável.
+- Modos lista compacta, grade de miniaturas e colunas (Miller); agrupamento e densidade.
+- `internal/thumbs`: geração assíncrona limitada, cache em disco LRU e prévia segura (64 KB para texto/código).
+- Painel de prévia e Prévia Rápida em tela cheia (`Espaço`).
 
 ## 0.7.0 — Busca e filtros
 
-- Filtro instantâneo na pasta.
-- Busca recursiva em streaming com filtros (glob/regex, extensão, tamanho, datas, conteúdo).
-- Índice opcional (SQLite FTS5) para pastas escolhidas, atualizado por watcher.
-- Resultados abrem em aba própria ("aba de busca").
+- Filtro instantâneo na pasta (`Ctrl+F`).
+- `internal/search`: busca recursiva em streaming (`search:batch` e `search:done`) com glob/Regex, extensão, tamanho, datas e conteúdo de texto com snippets.
+- Índice local opcional no SQLite (`index_roots` e `index_entries`).
 
 ## 0.8.0 — Integração com o sistema operacional
 
-- Watchers por pasta visível e por nó expandido da árvore, com debounce.
-- Abrir com…, abrir terminal externo do sistema aqui, propriedades, ejetar unidade.
-- Ícones do sistema e miniaturas nativas (vídeo, PDF).
-- Menu de contexto nativo (Windows) como submenu opcional.
-- Arrastar arquivos de/para outros aplicativos.
+- `internal/watch`: monitoramento de diretórios com debounce (`watch:changed`).
+- `internal/platform`: propriedades recursivas + checksum, "Abrir com…", terminal externo, mostrar no explorador nativo e ejeção segura de unidades.
+- Seletor rápido de extensões no modal de novo arquivo.
 
 ## 0.9.0 — Produtividade
 
-- Registro de comandos + paleta de comandos.
-- Atalhos configuráveis com detecção de conflitos.
-- Renomeação em lote com prévia; comparar/sincronizar pastas; hash.
-- Etiquetas/cores, buscas salvas, grupos de abas, histórico "ir para".
-- Comandos personalizados executados no terminal sobre a seleção.
+- `internal/productivity`: renomeação em lote com prévia e Regex (`F2`), comparação de diretórios e calculadora de hashes (`MD5`, `SHA-1`, `SHA-256`).
+- Paleta de comandos (`Ctrl+Shift+P`), atalhos configuráveis com detecção de conflitos, etiquetas/cores (`item_tags`) e buscas salvas (`saved_searches`).
 
-## 0.10.0 — Arquivos compactados e locais remotos
+## 0.10.0 — Arquivos compactados e base de perfis remotos
 
-- `vfs/archive`: navegar em zip/tar; extrair/compactar.
-- `vfs/remote`: SFTP (primeiro), WebDAV; credenciais no cofre do sistema.
-- Terminal SSH ligado a abas SFTP (opcional).
+- `internal/vfs/archive`: listagem, criação e extração segura (anti-Zip-Slip) de `.zip`, `.tar`, `.tar.gz` e `.tgz`.
+- Tabela `remote_profiles` no SQLite e modais integrados à paleta de comandos para pacotes e conexões remotas.
 
 ## 1.0.0 — Estabilização e distribuição
 
-- Testes de upgrade de migrações desde 0.1.0.
-- Assinatura de código (Windows) e notarização (macOS), se houver certificados.
-- Instalador Windows (NSIS) opcional, atualização com verificação manual de versão.
-- Auditoria de desempenho contra os orçamentos do `AGENTS.md`.
+- Testes de migração idempotente desde `0.1.0` até `1.0.0` e validação completa dos pacotes Go e paridade i18n inicial.
+
+## 1.1.0 — SSH/SFTP v3, Studio Editor, DB Studio e Multimídia
+
+- **Cliente SSH / SFTP v3 (`internal/vfs/sftp`)**: verificação de chave pública **TOFU (SHA-256 Pinning)**, autenticação por chave privada, SSH Agent e senha volátil em RAM, navegação transparente `sftp://<id>/...` via `CompositeFS` e atalho para terminal SSH.
+- **Streaming HTTP 206 (`internal/thumbs/media_server.go`)**: reprodução contínua e seek instantâneo para vídeos pesados.
+- **Visualizador de apresentações**: leitura estruturada de `.pptx` e `.odp` (`internal/thumbs/presentation.go`).
+- **Pulsares Studio Editor**: editor de código e texto embutido (`Ctrl+E`) com formatação automática, quebra de linha (`Alt+Z`) e edição local/SFTP.
+- **Pulsares DB Studio**: visualizador e console SQL interativo para bancos SQLite e DuckDB.
+- Busca por conteúdo otimizada com streaming progressivo e ícones especializados por linguagem/formato.
+
+## 1.1.1 — Suíte Autônoma, Mapa ER, Criador SQLite, Live Web Preview e 10 Idiomas
+
+- **Janelas independentes e identidade nativa**: processos autônomos (`--studio` e `--dbstudio`) com ícones próprios, `WindowClassName` dedicado e `AppUserModelID` no Win32 (`internal/platform/window_icon_windows.go`).
+- **Pulsares DB Studio & Criador SQLite (`internal/dbcreator`)**:
+  - **Mapa ER (Diagrama Interativo)**: inspeção via `PRAGMA foreign_key_list`, nós arrastáveis, badges `PK`/`FK`, curvas Bézier, auto-layout topológico, MiniMap e exportação para `.svg`.
+  - **Criador SQLite (CSV/TSV/JSON/JSONL → `.db`)**: inferência automática de delimitadores e tipos, modos Simples e Desenvolvedor (DDL customizável, WAL, batch) e importação em massa com progresso.
+  - Otimizações de PRAGMAs (`mmap_size`, `cache_size`, leitura O(1) via `sqlite_sequence`) e diálogo nativo de salvamento na exportação CSV/JSON.
+- **Pulsares Studio Editor & Prévia Web Conectada**:
+  - Servidor local `/__project/<base64_dir>/<relPath>` conectando `index.html` ao conteúdo vivo das abas `.css`, `.js` e assets locais, tanto no Studio quanto no `PreviewPanel`.
+  - Abertura direta de pastas de projeto sem rascunhos vazios e menu de contexto completo em **ARQUIVOS DO PROJETO**.
+- **Terminal Follow-up & Activity Bar**: botão *Follow-up* sincronizando `cd` (cliente + backend) com a aba ativa e barra lateral retrátil com Activity Bar + Flyout auto-ocultável.
+- **Drag & Drop granular** sem congelamentos, spinners de carregamento e expansão para **10 idiomas** (`pt-BR`, `en`, `es`, `de`, `fr`, `it`, `ja`, `zh-CN`, `tr`, `sv`).
+- **Distribuição Portátil**: modo portátil em `./data/explorer.db` (`getPortableDataDir`) com novos pacotes `Windows-x64-Portable.zip` e `Multiverse-Portable.zip`.
 
 ## Pendências sem etapa definida
 
-- Multi-janela e destacar aba (depende de Wails v3 — ADR-0004).
+- Provedor VFS `WebDAV` e `SMB` nativo.
+- Arrastar arquivos para fora do app (para outros programas do SO) e menu de contexto nativo do Windows.
 - Leitura de MFT/USN Journal no Windows para índice instantâneo.
-- SMB nativo, plugins/extensões, definir como explorador padrão do Windows.
+- Assinatura de código (Windows), notarização (macOS) e instalador NSIS opcional.
+- Sistema de plugins/extensões e opção de definir como explorador padrão do Windows.

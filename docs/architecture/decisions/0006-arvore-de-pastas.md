@@ -27,3 +27,7 @@ Navegação por árvore é essencial para quem vem do Windows Explorer, mas árv
 - Expandir nós grandes é rápido e nunca bloqueia a UI.
 - O chevron pode aparecer em pastas sem filhos quando o estado é `Unknown`; ao expandir, ele some.
 - A etapa 0.8 adiciona watchers apenas para nós expandidos e visíveis.
+
+## Atualização (1.1.1)
+
+- Ao recolher a barra lateral (`Ctrl+B`), exibe uma **Activity Bar** vertical compacta (Pastas, Favoritos, Recentes, Volumes e SSH/SFTP) que abre uma gaveta flutuante (**Flyout**) com auto-ocultamento ao navegar, clicar fora ou pressionar `Escape`, além de botão de fixação (*Pin*).

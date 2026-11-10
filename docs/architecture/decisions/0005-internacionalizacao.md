@@ -27,3 +27,8 @@ O app precisa nascer multilíngue (pt-BR, en, es) e permitir novos idiomas apena
 - Nenhum texto fixo em componentes; revisão de código recusa strings literais visíveis.
 - Ordenação de nomes de arquivos passa a depender da localidade (`Intl.Collator`), com opção de ordenação por código (binária) nas configurações para quem preferir.
 - Novos idiomas exigem só uma pasta em `locales/` e uma entrada na lista de idiomas suportados.
+
+## Atualização (1.1.0–1.1.1)
+
+- Catálogo expandido de 3 para **10 idiomas com 100% de paridade**: `pt-BR`, `en`, `es`, `de`, `fr`, `it`, `ja`, `zh-CN`, `tr` e `sv`.
+- Todos os textos ficam em `frontend/src/i18n/locales/<idioma>/common.json` e são validados em bloco pelo script `frontend/scripts/check-i18n.js` (`npm run i18n:check`).

@@ -29,3 +29,7 @@ Queremos um terminal no painel inferior, como no VS Code, ligado à pasta da aba
 - Testes de integração precisam rodar nos três SOs (citação de caminhos, ciclo de vida, redimensionamento).
 - O tema do terminal passa a fazer parte dos tokens de design (paleta ANSI clara/escura).
 
+## Atualização (1.1.1)
+
+- Além do suporte passivo a `OSC 7`, foi adicionado o botão **Follow-up** (desativado por padrão) com detecção dupla no cliente (`resolveClientCdCommand`) e no backend (`detectCdTarget`), permitindo que comandos `cd`, `Set-Location`, `pushd` e trocas de unidade atualizem automaticamente a pasta da aba ativa do explorador.
+
