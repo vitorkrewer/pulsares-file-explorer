@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -104,13 +105,17 @@ func GetAvailableDriveLetters() []string {
 	return free
 }
 
-// IsNetworkServerRoot identifica se o caminho aponta para a raiz de um servidor UNC (ex: \\192.168.10.195) sem compartilhamento.
+// IsNetworkServerRoot identifica se o caminho aponta para a raiz de um servidor (ex: \\192.168.10.195 ou nfs://192.168.10.195) sem compartilhamento.
 func IsNetworkServerRoot(p string) (string, bool) {
 	trimmed := strings.TrimSpace(p)
 	if trimmed == "" {
 		return "", false
 	}
-	if strings.HasPrefix(strings.ToLower(trimmed), "smb://") || strings.HasPrefix(strings.ToLower(trimmed), "cifs://") {
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "smb://") ||
+		strings.HasPrefix(lower, "cifs://") ||
+		strings.HasPrefix(lower, "nfs://") ||
+		strings.HasPrefix(lower, "afp://") {
 		_, host, share, _ := ParseNetworkAddress(trimmed)
 		if host != "" && share == "" {
 			return host, true
@@ -126,6 +131,39 @@ func IsNetworkServerRoot(p string) (string, bool) {
 		return "", false
 	}
 	return rest, true
+}
+
+func listWindowsNFSExports(host string) ([]NetworkShareInfo, error) {
+	cleanHost := strings.Trim(strings.TrimSpace(host), `\/`)
+	if cleanHost == "" {
+		return nil, errors.New("endereço do servidor NFS vazio")
+	}
+	if showmountBin, err := exec.LookPath("showmount"); err == nil {
+		out, cmdErr := exec.Command(showmountBin, "-e", cleanHost).Output()
+		if cmdErr == nil {
+			shares := ParseShowmountExports(string(out), cleanHost, true)
+			if len(shares) > 0 {
+				return shares, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("informe o caminho exportado pelo servidor NFS (ex.: nfs://%s/mnt/dados ou %s:/mnt/dados) ou ative o 'Cliente para NFS' nos Recursos do Windows", cleanHost, cleanHost)
+}
+
+// ListServerSharesForPath enumera compartilhamentos respeitando o protocolo da URL (SMB, NFS ou AFP).
+func ListServerSharesForPath(rawPath string, includeHidden bool) ([]NetworkShareInfo, error) {
+	proto, host, _, _ := ParseNetworkAddress(rawPath)
+	if host == "" {
+		host = rawPath
+	}
+	switch proto {
+	case "afp":
+		return nil, errors.New("o protocolo AFP (Apple Filing Protocol) é exclusivo do macOS e Linux (GVFS); no Windows, utilize SMB ou NFS")
+	case "nfs":
+		return listWindowsNFSExports(host)
+	default:
+		return ListServerShares(host, includeHidden)
+	}
 }
 
 // ListServerShares enumera as pastas compartilhadas (SMB/CIFS) de um servidor via NetShareEnum.
@@ -223,11 +261,18 @@ func wnetConnect(remoteUNC, localDrive, fullUser, password string, resType uint3
 	return uint32(ret)
 }
 
-// ConnectNetworkDrive autentica e/ou mapeia uma unidade de rede SMB/UNC no Windows.
+// ConnectNetworkDrive autentica e/ou mapeia uma unidade de rede SMB/UNC ou NFS no Windows.
 func ConnectNetworkDrive(req NetworkMountRequest) (*NetworkMountResult, error) {
-	_, host, share, subpath := ParseNetworkAddress(req.Address)
+	proto, host, share, subpath := ParseNetworkAddressWithProtocol(req.Address, req.Protocol)
 	if host == "" {
-		return nil, errors.New("informe um endereço ou IP válido (ex.: \\\\192.168.10.195\\)")
+		return nil, errors.New("informe um endereço ou IP válido (ex.: \\\\192.168.10.195\\ ou nfs://192.168.10.195/mnt/dados)")
+	}
+	if proto == "" {
+		proto = "smb"
+	}
+
+	if proto == "afp" {
+		return nil, errors.New("o protocolo AFP (Apple Filing Protocol) é suportado nativamente no macOS e Linux (GVFS); no Windows, conecte-se ao servidor usando SMB ou NFS")
 	}
 
 	fullUser := strings.TrimSpace(req.Username)
@@ -240,7 +285,60 @@ func ConnectNetworkDrive(req NetworkMountRequest) (*NetworkMountResult, error) {
 		cleanLetter += ":"
 	}
 
-	// Caso 1: Raiz do servidor (ex: \\192.168.10.195\) sem pasta específica informada
+	// Fluxo dedicado para NFS (Windows Client for NFS)
+	if proto == "nfs" {
+		if share == "" {
+			if cleanLetter != "" {
+				return nil, fmt.Errorf("para mapear a letra %s via NFS, informe também o caminho exportado (ex.: nfs://%s/mnt/dados ou %s:/mnt/dados)", cleanLetter, host, host)
+			}
+			shares, err := listWindowsNFSExports(host)
+			if err != nil {
+				return nil, err
+			}
+			return &NetworkMountResult{
+				ConnectedPath: "nfs://" + host,
+				RemoteTarget:  "nfs://" + host,
+				IsServerRoot:  true,
+				Shares:        shares,
+			}, nil
+		}
+
+		remoteUNC := `\\` + host + `\` + strings.ReplaceAll(share, "/", `\`)
+		remoteTarget := fmt.Sprintf("nfs://%s/%s", host, share)
+
+		if cleanLetter != "" {
+			ret := wnetConnect(remoteUNC, cleanLetter, fullUser, req.Password, resourceTypeDisk, req.Persistent)
+			if ret != 0 {
+				mountedViaCLI := false
+				if mountBin, lookErr := exec.LookPath("mount"); lookErr == nil {
+					if exec.Command(mountBin, remoteUNC, cleanLetter).Run() == nil ||
+						exec.Command(mountBin, "-o", "anon", remoteUNC, cleanLetter).Run() == nil {
+						mountedViaCLI = true
+					}
+				}
+				if !mountedViaCLI {
+					return nil, fmt.Errorf("não foi possível montar a exportação NFS %s em %s (código Win32 %d): verifique se o 'Cliente para NFS' está ativado nos Recursos do Windows", remoteTarget, cleanLetter, ret)
+				}
+			}
+		}
+
+		navPath := remoteUNC
+		if cleanLetter != "" {
+			navPath = cleanLetter + `\`
+		}
+		if _, err := os.Stat(navPath); err != nil {
+			return nil, fmt.Errorf("exportação NFS %s inacessível em %s (verifique se o 'Cliente para NFS' está ativado no Windows e se o servidor permite este IP): %w", remoteTarget, navPath, err)
+		}
+
+		return &NetworkMountResult{
+			ConnectedPath: navPath,
+			MappedDrive:   cleanLetter,
+			RemoteTarget:  remoteTarget,
+			IsServerRoot:  false,
+		}, nil
+	}
+
+	// Caso 1 (SMB): Raiz do servidor (ex: \\192.168.10.195\) sem pasta específica informada
 	if share == "" {
 		if cleanLetter != "" {
 			return nil, fmt.Errorf("para mapear a letra %s, informe também o nome da pasta compartilhada (ex.: \\\\%s\\Publico) ou deixe sem letra para navegar nos compartilhamentos do servidor", cleanLetter, host)
@@ -327,6 +425,13 @@ func DisconnectNetworkDrive(target string) error {
 		1, // fForce = TRUE
 	)
 	if ret != 0 {
+		if len(clean) == 2 && clean[1] == ':' {
+			if umountBin, lookErr := exec.LookPath("umount"); lookErr == nil {
+				if exec.Command(umountBin, "-f", clean).Run() == nil {
+					return nil
+				}
+			}
+		}
 		return fmt.Errorf("falha ao desconectar %s (código Win32 %d)", clean, ret)
 	}
 	return nil

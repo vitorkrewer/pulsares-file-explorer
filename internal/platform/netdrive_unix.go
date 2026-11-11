@@ -26,7 +26,12 @@ func IsNetworkServerRoot(p string) (string, bool) {
 		return "", false
 	}
 	lower := strings.ToLower(trimmed)
-	if strings.HasPrefix(lower, "smb://") || strings.HasPrefix(lower, "cifs://") || strings.HasPrefix(trimmed, `\\`) || strings.HasPrefix(trimmed, "//") {
+	if strings.HasPrefix(lower, "smb://") ||
+		strings.HasPrefix(lower, "cifs://") ||
+		strings.HasPrefix(lower, "nfs://") ||
+		strings.HasPrefix(lower, "afp://") ||
+		strings.HasPrefix(trimmed, `\\`) ||
+		strings.HasPrefix(trimmed, "//") {
 		_, host, share, _ := ParseNetworkAddress(trimmed)
 		if host != "" && share == "" {
 			return host, true
@@ -49,7 +54,59 @@ func resolveLinuxGVFSDir() string {
 	return ""
 }
 
-func findMountedLinuxGVFSShare(host, share string) string {
+func unescapeProcMountField(s string) string {
+	r := strings.NewReplacer(`\040`, " ", `\011`, "\t", `\012`, "\n", `\134`, `\`)
+	return r.Replace(s)
+}
+
+func findMountedLinuxShare(proto, host, share string) string {
+	hostLower := strings.ToLower(strings.TrimSpace(host))
+	shareClean := strings.Trim(strings.TrimSpace(share), "/")
+	shareLower := strings.ToLower(shareClean)
+	if hostLower == "" {
+		return ""
+	}
+
+	// 1) Verifica montagens de kernel em /proc/mounts (NFS, CIFS/SMB3, AFPFS)
+	if rawMounts, err := os.ReadFile("/proc/mounts"); err == nil {
+		for _, line := range strings.Split(string(rawMounts), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 3 {
+				continue
+			}
+			src := unescapeProcMountField(fields[0])
+			mnt := unescapeProcMountField(fields[1])
+			fstype := fields[2]
+			if fstype != "cifs" && fstype != "smb3" && fstype != "nfs" && fstype != "nfs4" && fstype != "afpfs" {
+				continue
+			}
+			if proto == "nfs" && fstype != "nfs" && fstype != "nfs4" {
+				continue
+			}
+			if proto == "smb" && fstype != "cifs" && fstype != "smb3" {
+				continue
+			}
+			if proto == "afp" && fstype != "afpfs" {
+				continue
+			}
+
+			srcLower := strings.ToLower(strings.TrimRight(strings.ReplaceAll(src, `\`, `/`), "/"))
+			// Ex: //host/share ou host:/export/path
+			if strings.HasPrefix(srcLower, "//"+hostLower+"/") || strings.HasPrefix(srcLower, hostLower+":/") {
+				if shareLower == "" ||
+					strings.HasSuffix(srcLower, "/"+shareLower) ||
+					srcLower == hostLower+":/"+shareLower {
+					return mnt
+				}
+			}
+		}
+	}
+
+	// 2) Verifica montagens GVFS (/run/user/<uid>/gvfs)
+	// Formatos comuns do GVFS:
+	//   - smb-share:server=<host>,share=<share>
+	//   - afp-volume:host=<host>,user=...,volume=<share>
+	//   - nfs:host=<host>,prefix=%2F...
 	gvfs := resolveLinuxGVFSDir()
 	if gvfs == "" {
 		return ""
@@ -58,17 +115,136 @@ func findMountedLinuxGVFSShare(host, share string) string {
 	if err != nil {
 		return ""
 	}
-	hostLower := strings.ToLower(host)
-	shareLower := strings.ToLower(share)
 	for _, e := range entries {
 		nameLower := strings.ToLower(e.Name())
-		if strings.Contains(nameLower, "server="+hostLower) {
-			if shareLower == "" || strings.Contains(nameLower, "share="+shareLower) {
-				return filepath.Join(gvfs, e.Name())
-			}
+		if proto == "smb" && !strings.HasPrefix(nameLower, "smb-share:") {
+			continue
+		}
+		if proto == "afp" && !strings.HasPrefix(nameLower, "afp-volume:") {
+			continue
+		}
+		if proto == "nfs" && !strings.HasPrefix(nameLower, "nfs:") {
+			continue
+		}
+		if !strings.Contains(nameLower, "server="+hostLower) && !strings.Contains(nameLower, "host="+hostLower) {
+			continue
+		}
+		if shareLower == "" {
+			return filepath.Join(gvfs, e.Name())
+		}
+		decodedName, decErr := url.QueryUnescape(nameLower)
+		if decErr != nil {
+			decodedName = nameLower
+		}
+		if strings.Contains(nameLower, "share="+shareLower) ||
+			strings.Contains(nameLower, "volume="+shareLower) ||
+			strings.Contains(decodedName, "/"+shareLower) ||
+			strings.HasSuffix(decodedName, "="+shareLower) {
+			return filepath.Join(gvfs, e.Name())
 		}
 	}
 	return ""
+}
+
+func resolveDarwinMountedVolume(host, share string) string {
+	baseName := filepath.Base(strings.Trim(share, "/"))
+	fallback := filepath.Join("/Volumes", baseName)
+
+	mountOut, err := exec.Command("mount").Output()
+	if err != nil {
+		return fallback
+	}
+	hostLower := strings.ToLower(host)
+	shareLower := strings.ToLower(strings.Trim(share, "/"))
+	for _, ml := range strings.Split(string(mountOut), "\n") {
+		idx := strings.Index(ml, " on /Volumes/")
+		if idx <= 0 {
+			continue
+		}
+		srcLower := strings.ToLower(strings.TrimSpace(ml[:idx]))
+		if !strings.Contains(srcLower, hostLower) {
+			continue
+		}
+		if shareLower == "" || strings.HasSuffix(strings.TrimRight(srcLower, "/"), "/"+shareLower) || strings.HasSuffix(srcLower, ":/"+shareLower) {
+			rest := ml[idx+4:] // começa em "/Volumes/..."
+			if parenIdx := strings.LastIndex(rest, " ("); parenIdx > 0 {
+				return strings.TrimSpace(rest[:parenIdx])
+			}
+		}
+	}
+	return fallback
+}
+
+func listUnixNFSExports(cleanHost string) ([]NetworkShareInfo, error) {
+	if showmountBin, err := exec.LookPath("showmount"); err == nil {
+		if out, cmdErr := exec.Command(showmountBin, "-e", cleanHost).Output(); cmdErr == nil {
+			shares := ParseShowmountExports(string(out), cleanHost, false)
+			if len(shares) > 0 {
+				return shares, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("informe o caminho exportado pelo servidor NFS (ex.: nfs://%s/mnt/dados ou %s:/mnt/dados)", cleanHost, cleanHost)
+}
+
+func ListServerSharesForPath(rawPath string, includeHidden bool) ([]NetworkShareInfo, error) {
+	proto, host, _, _ := ParseNetworkAddress(rawPath)
+	if host == "" {
+		host = rawPath
+	}
+	cleanHost := strings.Trim(strings.TrimSpace(host), `\/`)
+	if cleanHost == "" {
+		return nil, errors.New("endereço do servidor vazio")
+	}
+
+	if proto == "nfs" {
+		return listUnixNFSExports(cleanHost)
+	}
+
+	if proto == "afp" {
+		if runtime.GOOS == "darwin" {
+			mountOut, _ := exec.Command("mount").Output()
+			var shares []NetworkShareInfo
+			for _, ml := range strings.Split(string(mountOut), "\n") {
+				if strings.Contains(ml, "afpfs") && strings.Contains(strings.ToLower(ml), strings.ToLower(cleanHost)) {
+					if idx := strings.Index(ml, " on /Volumes/"); idx > 0 {
+						rest := ml[idx+4:]
+						if parenIdx := strings.LastIndex(rest, " ("); parenIdx > 0 {
+							volPath := strings.TrimSpace(rest[:parenIdx])
+							shares = append(shares, NetworkShareInfo{
+								Name:   filepath.Base(volPath),
+								Path:   volPath,
+								Remark: "AFP",
+							})
+						}
+					}
+				}
+			}
+			if len(shares) > 0 {
+				return shares, nil
+			}
+		} else if gvfs := resolveLinuxGVFSDir(); gvfs != "" {
+			if entries, err := os.ReadDir(gvfs); err == nil {
+				var shares []NetworkShareInfo
+				for _, e := range entries {
+					nl := strings.ToLower(e.Name())
+					if strings.HasPrefix(nl, "afp-volume:") && strings.Contains(nl, "host="+strings.ToLower(cleanHost)) {
+						shares = append(shares, NetworkShareInfo{
+							Name:   e.Name(),
+							Path:   filepath.Join(gvfs, e.Name()),
+							Remark: "AFP",
+						})
+					}
+				}
+				if len(shares) > 0 {
+					return shares, nil
+				}
+			}
+		}
+		return nil, fmt.Errorf("informe o nome do volume AFP após o endereço (ex.: afp://%s/TimeMachine)", cleanHost)
+	}
+
+	return ListServerShares(cleanHost, includeHidden)
 }
 
 func ListServerShares(host string, includeHidden bool) ([]NetworkShareInfo, error) {
@@ -133,8 +309,10 @@ func ListServerShares(host string, includeHidden bool) ([]NetworkShareInfo, erro
 	if gvfs := resolveLinuxGVFSDir(); gvfs != "" {
 		if entries, err := os.ReadDir(gvfs); err == nil {
 			var shares []NetworkShareInfo
+			hostLower := strings.ToLower(cleanHost)
 			for _, e := range entries {
-				if strings.Contains(strings.ToLower(e.Name()), "server="+strings.ToLower(cleanHost)) {
+				nl := strings.ToLower(e.Name())
+				if strings.Contains(nl, "server="+hostLower) || strings.Contains(nl, "host="+hostLower) {
 					shares = append(shares, NetworkShareInfo{
 						Name: e.Name(),
 						Path: filepath.Join(gvfs, e.Name()),
@@ -151,38 +329,44 @@ func ListServerShares(host string, includeHidden bool) ([]NetworkShareInfo, erro
 }
 
 func ConnectNetworkDrive(req NetworkMountRequest) (*NetworkMountResult, error) {
-	proto, host, share, subpath := ParseNetworkAddress(req.Address)
+	proto, host, share, subpath := ParseNetworkAddressWithProtocol(req.Address, req.Protocol)
 	if host == "" {
-		return nil, errors.New("informe um endereço ou IP válido (ex.: smb://192.168.10.195/Publico)")
+		return nil, errors.New("informe um endereço ou IP válido (ex.: smb://192.168.10.195/Publico, nfs://192.168.10.195/mnt/dados ou afp://192.168.10.195/Volume)")
 	}
 	if proto == "" {
 		proto = "smb"
 	}
 
 	if share == "" {
-		shares, err := ListServerShares(host, false)
+		rootURI := fmt.Sprintf("%s://%s", proto, host)
+		shares, err := ListServerSharesForPath(rootURI, false)
 		if err == nil && len(shares) > 0 {
 			return &NetworkMountResult{
-				ConnectedPath: fmt.Sprintf("smb://%s", host),
-				RemoteTarget:  fmt.Sprintf("smb://%s", host),
+				ConnectedPath: rootURI,
+				RemoteTarget:  rootURI,
 				IsServerRoot:  true,
 				Shares:        shares,
 			}, nil
 		}
-		return nil, fmt.Errorf("informe o nome da pasta compartilhada após o IP (ex.: smb://%s/Publico)", host)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("informe o nome da pasta compartilhada após o IP (ex.: %s://%s/Publico)", proto, host)
 	}
 
-	// macOS: monta em /Volumes/<share> via AppleScript mount volume
+	// macOS: monta em /Volumes/<share> via AppleScript mount volume (suporta smb://, afp:// e nfs://)
 	if runtime.GOOS == "darwin" {
 		u := url.URL{
 			Scheme: proto,
 			Host:   host,
-			Path:   "/" + share,
+			Path:   "/" + strings.TrimPrefix(share, "/"),
 		}
-		if strings.TrimSpace(req.Username) != "" {
+		if proto != "nfs" && strings.TrimSpace(req.Username) != "" {
 			user := strings.TrimSpace(req.Username)
-			if dom := strings.TrimSpace(req.Domain); dom != "" && !strings.Contains(user, ";") {
-				user = dom + ";" + user
+			if proto == "smb" {
+				if dom := strings.TrimSpace(req.Domain); dom != "" && !strings.Contains(user, ";") {
+					user = dom + ";" + user
+				}
 			}
 			if req.Password != "" {
 				u.User = url.UserPassword(user, req.Password)
@@ -195,7 +379,7 @@ func ConnectNetworkDrive(req NetworkMountRequest) (*NetworkMountResult, error) {
 			return nil, fmt.Errorf("falha ao montar %s://%s/%s no macOS: %w", proto, host, share, err)
 		}
 
-		volPath := filepath.Join("/Volumes", share)
+		volPath := resolveDarwinMountedVolume(host, share)
 		if subpath != "" {
 			volPath = filepath.Join(volPath, subpath)
 		}
@@ -205,8 +389,8 @@ func ConnectNetworkDrive(req NetworkMountRequest) (*NetworkMountResult, error) {
 		}, nil
 	}
 
-	// Linux: monta via GVFS (gio mount smb://host/share) em /run/user/<uid>/gvfs/...
-	if existing := findMountedLinuxGVFSShare(host, share); existing != "" {
+	// Linux: 1) verifica se já está montado em /proc/mounts ou no GVFS
+	if existing := findMountedLinuxShare(proto, host, share); existing != "" {
 		nav := existing
 		if subpath != "" {
 			nav = filepath.Join(nav, subpath)
@@ -217,18 +401,31 @@ func ConnectNetworkDrive(req NetworkMountRequest) (*NetworkMountResult, error) {
 		}, nil
 	}
 
-	uri := fmt.Sprintf("%s://%s/%s", proto, host, share)
+	// Linux: 2) monta via GVFS (gio mount smb://..., afp://... ou nfs://...)
+	uri := fmt.Sprintf("%s://%s/%s", proto, host, strings.TrimPrefix(share, "/"))
 	if _, err := exec.LookPath("gio"); err == nil {
 		var stdinBuf bytes.Buffer
-		if strings.TrimSpace(req.Username) != "" {
-			stdinBuf.WriteString(strings.TrimSpace(req.Username) + "\n")
-			if strings.TrimSpace(req.Domain) != "" {
-				stdinBuf.WriteString(strings.TrimSpace(req.Domain) + "\n")
+		switch proto {
+		case "smb":
+			if strings.TrimSpace(req.Username) != "" {
+				stdinBuf.WriteString(strings.TrimSpace(req.Username) + "\n")
+				if strings.TrimSpace(req.Domain) != "" {
+					stdinBuf.WriteString(strings.TrimSpace(req.Domain) + "\n")
+				} else {
+					stdinBuf.WriteString("WORKGROUP\n")
+				}
+				stdinBuf.WriteString(req.Password + "\n")
 			} else {
-				stdinBuf.WriteString("WORKGROUP\n")
+				stdinBuf.WriteString("\n")
 			}
-			stdinBuf.WriteString(req.Password + "\n")
-		} else {
+		case "afp":
+			if strings.TrimSpace(req.Username) != "" {
+				stdinBuf.WriteString(strings.TrimSpace(req.Username) + "\n")
+				stdinBuf.WriteString(req.Password + "\n")
+			} else {
+				stdinBuf.WriteString("\n")
+			}
+		default: // nfs
 			stdinBuf.WriteString("\n")
 		}
 
@@ -236,9 +433,9 @@ func ConnectNetworkDrive(req NetworkMountRequest) (*NetworkMountResult, error) {
 		cmd.Stdin = &stdinBuf
 		_ = cmd.Run()
 
-		// Aguarda ponto de montagem aparecer no GVFS
+		// Aguarda ponto de montagem aparecer no GVFS ou /proc/mounts
 		for i := 0; i < 15; i++ {
-			if mounted := findMountedLinuxGVFSShare(host, share); mounted != "" {
+			if mounted := findMountedLinuxShare(proto, host, share); mounted != "" {
 				nav := mounted
 				if subpath != "" {
 					nav = filepath.Join(nav, subpath)
@@ -252,6 +449,9 @@ func ConnectNetworkDrive(req NetworkMountRequest) (*NetworkMountResult, error) {
 		}
 	}
 
+	if proto == "nfs" {
+		return nil, fmt.Errorf("não foi possível montar %s automaticamente (instale gvfs-backends com suporte NFS ou monte via sistema com: sudo mount -t nfs %s:/%s /mnt/...)", uri, host, strings.TrimPrefix(share, "/"))
+	}
 	return nil, fmt.Errorf("não foi possível montar %s (verifique se gvfs / gio está instalado e se as credenciais estão corretas)", uri)
 }
 
@@ -327,8 +527,10 @@ func listUnixMountedNetworkDrives() []DriveInfo {
 			if len(fields) < 3 {
 				continue
 			}
-			src, mnt, fstype := fields[0], fields[1], fields[2]
-			if fstype == "cifs" || fstype == "smb3" || fstype == "nfs" || fstype == "nfs4" || fstype == "fuse.sshfs" {
+			src := unescapeProcMountField(fields[0])
+			mnt := unescapeProcMountField(fields[1])
+			fstype := fields[2]
+			if fstype == "cifs" || fstype == "smb3" || fstype == "nfs" || fstype == "nfs4" || fstype == "afpfs" || fstype == "fuse.sshfs" {
 				var freeBytes, totalBytes uint64
 				var st syscall.Statfs_t
 				if err := syscall.Statfs(mnt, &st); err == nil {

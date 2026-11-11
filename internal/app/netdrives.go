@@ -23,7 +23,7 @@ func (a *App) SaveNetworkDrive(d storage.SavedNetworkDrive) (int64, error) {
 	if a.storage == nil {
 		return 0, nil
 	}
-	proto, host, share, _ := platform.ParseNetworkAddress(d.Address)
+	proto, host, share, _ := platform.ParseNetworkAddressWithProtocol(d.Address, d.Protocol)
 	if strings.TrimSpace(d.Protocol) == "" && proto != "" {
 		d.Protocol = proto
 	}
@@ -51,7 +51,7 @@ func (a *App) ConnectNetworkDrive(req platform.NetworkMountRequest, saveShortcut
 	}
 
 	if saveShortcut && a.storage != nil {
-		proto, host, share, _ := platform.ParseNetworkAddress(req.Address)
+		proto, host, share, _ := platform.ParseNetworkAddressWithProtocol(req.Address, req.Protocol)
 		if proto == "" {
 			proto = "smb"
 		}

@@ -258,10 +258,10 @@ assert.equal(prunedClip[0].id, 2);
 assert.equal(prunedClip[0].pinned, true);
 assert.equal(prunedClip[1].id, 25);
 
-// 8. Testar resolução de caminhos de rede UNC / SMB (goUp e breadcrumbs — v1.2.0)
+// 8. Testar resolução de caminhos de rede UNC / SMB / NFS / AFP (goUp e breadcrumbs — v1.2.0)
 function resolveNetworkParent(currentPath) {
   const normalized = currentPath.replace(/\\/g, '/');
-  const smbMatch = normalized.match(/^(smb|cifs|nfs):\/\/([^/]+)(\/.*)?$/i);
+  const smbMatch = normalized.match(/^(smb|cifs|nfs|afp):\/\/([^/]+)(\/.*)?$/i);
   if (smbMatch) {
     const scheme = smbMatch[1].toLowerCase();
     const host = smbMatch[2];
@@ -290,6 +290,12 @@ assert.equal(resolveNetworkParent('\\\\192.168.10.195'), null);
 assert.equal(resolveNetworkParent('smb://192.168.10.195/Publico/Docs'), 'smb://192.168.10.195/Publico');
 assert.equal(resolveNetworkParent('smb://192.168.10.195/Publico'), 'smb://192.168.10.195');
 assert.equal(resolveNetworkParent('smb://192.168.10.195'), null);
+assert.equal(resolveNetworkParent('nfs://192.168.10.195/volume1/media'), 'nfs://192.168.10.195/volume1');
+assert.equal(resolveNetworkParent('nfs://192.168.10.195/volume1'), 'nfs://192.168.10.195');
+assert.equal(resolveNetworkParent('nfs://192.168.10.195'), null);
+assert.equal(resolveNetworkParent('afp://192.168.10.195/TimeMachine/Backups'), 'afp://192.168.10.195/TimeMachine');
+assert.equal(resolveNetworkParent('afp://192.168.10.195/TimeMachine'), 'afp://192.168.10.195');
+assert.equal(resolveNetworkParent('afp://192.168.10.195'), null);
 
 // 9. Testar escala progressiva de Zoom e Visualização de Pastas (v1.2.0)
 const ZOOM_STEPS_TEST = [

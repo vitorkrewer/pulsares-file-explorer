@@ -60,6 +60,7 @@ export interface NetworkShareInfo {
 }
 
 export interface NetworkMountRequest {
+  protocol?: string;
   address: string;
   label: string;
   username: string;

@@ -44,21 +44,33 @@ func ExpandPath(input string) string {
 		return ""
 	})
 
-	// 4. Tratamento de endereços de rede (UNC / SMB / NFS)
+	// 4. Tratamento de endereços de rede (UNC / SMB / NFS / AFP)
 	lower := strings.ToLower(expanded)
+	isClassicNFS := !strings.Contains(expanded, "://") && func() bool {
+		slashForm := strings.ReplaceAll(expanded, `\`, `/`)
+		idx := strings.Index(slashForm, ":/")
+		return idx > 1 && !strings.ContainsAny(slashForm[:idx], "/ ")
+	}()
+
 	if runtime.GOOS == "windows" {
-		if strings.HasPrefix(lower, "smb://") || strings.HasPrefix(lower, "cifs://") {
-			_, host, share, subpath := ParseNetworkAddress(expanded)
+		if strings.HasPrefix(lower, "smb://") || strings.HasPrefix(lower, "cifs://") || strings.HasPrefix(lower, "nfs://") || isClassicNFS {
+			proto, host, share, subpath := ParseNetworkAddress(expanded)
 			if host != "" {
 				if share == "" {
+					if proto == "nfs" {
+						return "nfs://" + host
+					}
 					return `\\` + host
 				}
-				unc := `\\` + host + `\` + share
+				unc := `\\` + host + `\` + strings.ReplaceAll(share, "/", `\`)
 				if subpath != "" {
 					unc += `\` + strings.ReplaceAll(subpath, "/", `\`)
 				}
 				return filepath.Clean(unc)
 			}
+		}
+		if strings.HasPrefix(lower, "afp://") {
+			return expanded
 		}
 		if host, ok := IsNetworkServerRoot(expanded); ok {
 			// filepath.Clean(`\\host\`) no Windows remove uma barra por não haver share segment; preservamos `\\host`.
@@ -66,9 +78,18 @@ func ExpandPath(input string) string {
 		}
 	} else {
 		if host, ok := IsNetworkServerRoot(expanded); ok {
-			return "smb://" + host
+			proto, _, _, _ := ParseNetworkAddress(expanded)
+			if proto == "" {
+				proto = "smb"
+			}
+			return proto + "://" + host
 		}
-		if strings.HasPrefix(lower, "smb://") || strings.HasPrefix(lower, "cifs://") || strings.HasPrefix(lower, "nfs://") || strings.HasPrefix(expanded, `\\`) {
+		if strings.HasPrefix(lower, "smb://") ||
+			strings.HasPrefix(lower, "cifs://") ||
+			strings.HasPrefix(lower, "nfs://") ||
+			strings.HasPrefix(lower, "afp://") ||
+			isClassicNFS ||
+			strings.HasPrefix(expanded, `\\`) {
 			if res, err := ConnectNetworkDrive(NetworkMountRequest{Address: expanded}); err == nil && res.ConnectedPath != "" {
 				return res.ConnectedPath
 			}
@@ -107,9 +128,9 @@ func AutocompleteDirs(partial string, showHidden bool, maxResults int) []string 
 	expanded := ExpandPath(trimmed)
 	endsWithSep := strings.HasSuffix(trimmed, "/") || strings.HasSuffix(trimmed, `\`)
 
-	// Autocomplete para raiz de servidor de rede (ex: \\192.168.10.195\ ou \\192.168.10.195\Pub)
-	if host, ok := IsNetworkServerRoot(expanded); ok && endsWithSep {
-		shares, err := ListServerShares(host, showHidden)
+	// Autocomplete para raiz de servidor de rede (ex: \\192.168.10.195\ ou nfs://192.168.10.195/)
+	if _, ok := IsNetworkServerRoot(expanded); ok && endsWithSep {
+		shares, err := ListServerSharesForPath(expanded, showHidden)
 		if err != nil {
 			return nil
 		}
@@ -122,10 +143,11 @@ func AutocompleteDirs(partial string, showHidden bool, maxResults int) []string 
 		}
 		return out
 	}
-	if !endsWithSep && (strings.HasPrefix(expanded, `\\`) || strings.HasPrefix(strings.ToLower(expanded), "smb://")) {
-		_, host, share, subpath := ParseNetworkAddress(expanded)
+	expLower := strings.ToLower(expanded)
+	if !endsWithSep && (strings.HasPrefix(expanded, `\\`) || strings.HasPrefix(expLower, "smb://") || strings.HasPrefix(expLower, "nfs://")) {
+		proto, host, share, subpath := ParseNetworkAddress(expanded)
 		if host != "" && share != "" && subpath == "" {
-			shares, err := ListServerShares(host, showHidden)
+			shares, err := ListServerSharesForPath(proto+"://"+host, showHidden)
 			if err == nil {
 				prefix := strings.ToLower(share)
 				var out []string

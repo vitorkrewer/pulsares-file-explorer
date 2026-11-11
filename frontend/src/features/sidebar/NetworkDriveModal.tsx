@@ -1,9 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, X, Lock, HardDrive, Loader2, AlertCircle } from 'lucide-react';
+import { Globe, X, Lock, HardDrive, Loader2, AlertCircle, Info } from 'lucide-react';
 import { useFolderTreeStore } from './folder-tree/store';
 import { useBrowserStore } from '../browser/store';
 import { connectNetworkDrive } from '../../lib/wails';
+
+type NetworkProtocolChoice = 'auto' | 'smb' | 'nfs' | 'afp';
+
+function detectProtocolFromInput(raw: string): 'smb' | 'nfs' | 'afp' | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (/^afp:\/\//i.test(trimmed)) return 'afp';
+  if (/^nfs:\/\//i.test(trimmed)) return 'nfs';
+  if (/^(smb|cifs):\/\//i.test(trimmed) || /^(\\\\|\/\/)/.test(trimmed)) return 'smb';
+  if (!trimmed.includes('://') && /^[^/\\:\s]{2,}:(\/|$)/.test(trimmed.replace(/\\/g, '/'))) {
+    return 'nfs';
+  }
+  return null;
+}
 
 export const NetworkDriveModal: React.FC = () => {
   const { t } = useTranslation('common');
@@ -16,6 +30,7 @@ export const NetworkDriveModal: React.FC = () => {
   } = useFolderTreeStore();
   const { navigateTo } = useBrowserStore();
 
+  const [protocol, setProtocol] = useState<NetworkProtocolChoice>('auto');
   const [address, setAddress] = useState('');
   const [label, setLabel] = useState('');
   const [useCustomAuth, setUseCustomAuth] = useState(false);
@@ -34,18 +49,24 @@ export const NetworkDriveModal: React.FC = () => {
   useEffect(() => {
     if (!networkModalOpen) return;
 
+    const prefillProto = (networkModalPrefill?.protocol || '').toLowerCase();
     const prefillAddr = networkModalPrefill?.address || '';
     const prefillLabel = networkModalPrefill?.label || '';
     const prefillUser = networkModalPrefill?.username || '';
     const prefillDomain = networkModalPrefill?.domain || '';
     const prefillLetter = networkModalPrefill?.driveLetter || '';
 
+    if (prefillProto === 'smb' || prefillProto === 'nfs' || prefillProto === 'afp') {
+      setProtocol(prefillProto);
+    } else {
+      setProtocol('auto');
+    }
     setAddress(prefillAddr);
     setLabel(prefillLabel);
     setUsername(prefillUser);
     setDomain(prefillDomain);
     setPassword('');
-    setUseCustomAuth(Boolean(prefillUser || prefillAddr));
+    setUseCustomAuth(Boolean(prefillUser || (prefillAddr && prefillProto !== 'nfs')));
     setDriveLetter(
       prefillLetter && availableDriveLetters.includes(prefillLetter) ? prefillLetter : ''
     );
@@ -78,6 +99,19 @@ export const NetworkDriveModal: React.FC = () => {
 
   if (!networkModalOpen) return null;
 
+  const detectedProto = detectProtocolFromInput(address);
+  const effectiveProtocol: 'smb' | 'nfs' | 'afp' =
+    protocol === 'auto' ? detectedProto || 'smb' : protocol;
+  const isWindowsHost = availableDriveLetters.length > 0;
+  const canMapDriveLetter = isWindowsHost && effectiveProtocol !== 'afp';
+
+  const addressPlaceholder =
+    effectiveProtocol === 'nfs'
+      ? t('networkDrive.addressPlaceholderNFS')
+      : effectiveProtocol === 'afp'
+        ? t('networkDrive.addressPlaceholderAFP')
+        : t('networkDrive.addressPlaceholder');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedAddr = address.trim();
@@ -92,13 +126,14 @@ export const NetworkDriveModal: React.FC = () => {
     try {
       const res = await connectNetworkDrive(
         {
+          protocol: protocol === 'auto' ? '' : protocol,
           address: trimmedAddr,
           label: label.trim(),
           username: useCustomAuth ? username.trim() : '',
-          domain: useCustomAuth ? domain.trim() : '',
+          domain: useCustomAuth && effectiveProtocol === 'smb' ? domain.trim() : '',
           password: useCustomAuth ? password : '',
-          driveLetter: driveLetter,
-          persistent: Boolean(driveLetter && persistent),
+          driveLetter: canMapDriveLetter ? driveLetter : '',
+          persistent: Boolean(canMapDriveLetter && driveLetter && persistent),
         },
         saveShortcut
       );
@@ -115,8 +150,6 @@ export const NetworkDriveModal: React.FC = () => {
       setConnecting(false);
     }
   };
-
-  const canMapDriveLetter = availableDriveLetters.length > 0;
 
   return (
     <div
@@ -150,6 +183,38 @@ export const NetworkDriveModal: React.FC = () => {
 
         <form onSubmit={handleSubmit} style={styles.body}>
           <div style={styles.fieldGroup}>
+            <label style={styles.label}>{t('networkDrive.protocolLabel')}</label>
+            <div style={styles.protoRow} role="radiogroup" aria-label={t('networkDrive.protocolLabel')}>
+              {(
+                [
+                  { id: 'auto', label: t('networkDrive.protocolAuto') },
+                  { id: 'smb', label: t('networkDrive.protocolSMB') },
+                  { id: 'nfs', label: t('networkDrive.protocolNFS') },
+                  { id: 'afp', label: t('networkDrive.protocolAFP') },
+                ] as { id: NetworkProtocolChoice; label: string }[]
+              ).map((opt) => {
+                const active = protocol === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={connecting}
+                    onClick={() => setProtocol(opt.id)}
+                    style={{
+                      ...styles.protoPill,
+                      ...(active ? styles.protoPillActive : {}),
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={styles.fieldGroup}>
             <label style={styles.label}>{t('networkDrive.addressLabel')}</label>
             <input
               ref={addressInputRef}
@@ -157,13 +222,20 @@ export const NetworkDriveModal: React.FC = () => {
               style={styles.input}
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder={t('networkDrive.addressPlaceholder')}
+              placeholder={addressPlaceholder}
               disabled={connecting}
               autoComplete="off"
               spellCheck={false}
             />
             <span style={styles.hint}>{t('networkDrive.addressHint')}</span>
           </div>
+
+          {isWindowsHost && effectiveProtocol === 'afp' && (
+            <div style={styles.infoBanner}>
+              <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{t('networkDrive.afpPlatformHint')}</span>
+            </div>
+          )}
 
           <div style={styles.fieldGroup}>
             <label style={styles.label}>{t('networkDrive.aliasLabel')}</label>
@@ -224,6 +296,10 @@ export const NetworkDriveModal: React.FC = () => {
               <span style={{ fontWeight: 600 }}>{t('networkDrive.useCredentials')}</span>
             </label>
 
+            {effectiveProtocol === 'nfs' && !useCustomAuth && (
+              <span style={styles.hint}>{t('networkDrive.nfsAuthHint')}</span>
+            )}
+
             {useCustomAuth && (
               <div style={styles.authFields}>
                 <div style={styles.rowGrid}>
@@ -239,18 +315,20 @@ export const NetworkDriveModal: React.FC = () => {
                       autoComplete="off"
                     />
                   </div>
-                  <div style={{ ...styles.fieldGroup, width: 155 }}>
-                    <label style={styles.label}>{t('networkDrive.domainLabel')}</label>
-                    <input
-                      type="text"
-                      style={styles.input}
-                      value={domain}
-                      onChange={(e) => setDomain(e.target.value)}
-                      placeholder="WORKGROUP"
-                      disabled={connecting}
-                      autoComplete="off"
-                    />
-                  </div>
+                  {effectiveProtocol === 'smb' && (
+                    <div style={{ ...styles.fieldGroup, width: 155 }}>
+                      <label style={styles.label}>{t('networkDrive.domainLabel')}</label>
+                      <input
+                        type="text"
+                        style={styles.input}
+                        value={domain}
+                        onChange={(e) => setDomain(e.target.value)}
+                        placeholder="WORKGROUP"
+                        disabled={connecting}
+                        autoComplete="off"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div style={styles.fieldGroup}>
                   <label style={styles.label}>{t('networkDrive.passwordLabel')}</label>
@@ -379,6 +457,39 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'flex-start',
     gap: 10,
+  },
+  protoRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+    gap: 6,
+  },
+  protoPill: {
+    padding: '6px 8px',
+    fontSize: 11.5,
+    fontWeight: 600,
+    borderRadius: 6,
+    border: '1px solid var(--border-subtle)',
+    backgroundColor: 'var(--bg-base)',
+    color: 'var(--text-secondary)',
+    cursor: 'default',
+    textAlign: 'center',
+  },
+  protoPillActive: {
+    borderColor: 'var(--accent)',
+    backgroundColor: 'rgba(59, 130, 246, 0.14)',
+    color: 'var(--accent)',
+  },
+  infoBanner: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: '8px 10px',
+    borderRadius: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    border: '1px solid rgba(59, 130, 246, 0.3)',
+    color: 'var(--text-secondary)',
+    fontSize: 11.5,
+    lineHeight: 1.4,
   },
   label: {
     fontSize: 11,

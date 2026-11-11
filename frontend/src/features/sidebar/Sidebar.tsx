@@ -262,6 +262,7 @@ export const Sidebar: React.FC = () => {
     try {
       const res = await connectNetworkDrive(
         {
+          protocol: item.protocol || '',
           address: item.address,
           label: item.label,
           username: item.username,
@@ -392,6 +393,23 @@ export const Sidebar: React.FC = () => {
           >
             <Globe size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <span style={styles.itemText}>{saved.label || saved.address}</span>
+            {saved.protocol && (
+              <span
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.03em',
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  backgroundColor: 'rgba(59, 130, 246, 0.14)',
+                  color: 'var(--accent)',
+                  flexShrink: 0,
+                }}
+              >
+                {saved.protocol}
+              </span>
+            )}
             <button
               type="button"
               style={styles.removeBtn}

@@ -163,7 +163,7 @@ export function getTabLabel(path: string): string {
     const seg = sub.split('/').filter(Boolean).pop();
     return seg ? `SSH:${seg}` : `SSH #${sftpMatch[1]}`;
   }
-  const smbMatch = normalized.match(/^(smb|cifs|nfs):\/\/([^/]+)(\/.*)?$/i);
+  const smbMatch = normalized.match(/^(smb|cifs|nfs|afp):\/\/([^/]+)(\/.*)?$/i);
   if (smbMatch) {
     const segs = (smbMatch[3] || '').split('/').filter(Boolean);
     return segs.length > 0 ? segs[segs.length - 1] : smbMatch[2];
@@ -376,7 +376,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       return;
     }
 
-    const smbMatch = normalized.match(/^(smb|cifs|nfs):\/\/([^/]+)(\/.*)?$/i);
+    const smbMatch = normalized.match(/^(smb|cifs|nfs|afp):\/\/([^/]+)(\/.*)?$/i);
     if (smbMatch) {
       const scheme = smbMatch[1].toLowerCase();
       const host = smbMatch[2];

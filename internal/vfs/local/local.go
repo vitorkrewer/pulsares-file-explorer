@@ -61,10 +61,10 @@ func (fs *LocalFS) ReadDir(ctx context.Context, loc vfs.Location, batch int) (<-
 		defer close(outChan)
 		defer close(errChan)
 
-		// Se o caminho aponta para a raiz de um servidor de rede (ex: \\192.168.10.195),
-		// enumera as pastas compartilhadas (SMB/CIFS) como subdiretórios navegáveis.
-		if host, ok := platform.IsNetworkServerRoot(loc.Path); ok {
-			shares, err := platform.ListServerShares(host, true)
+		// Se o caminho aponta para a raiz de um servidor de rede (ex: \\192.168.10.195 ou nfs://192.168.10.195),
+		// enumera as pastas compartilhadas (SMB/CIFS, NFS ou AFP) como subdiretórios navegáveis.
+		if _, ok := platform.IsNetworkServerRoot(loc.Path); ok {
+			shares, err := platform.ListServerSharesForPath(loc.Path, true)
 			if err != nil {
 				errChan <- err
 				return

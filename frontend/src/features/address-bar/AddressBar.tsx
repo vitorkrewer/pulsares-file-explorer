@@ -149,7 +149,7 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
   const sftpProfileId = sftpMatch ? Number(sftpMatch[1]) : 0;
   const sftpProfile = isSFTP ? remoteProfiles.find((p) => p.id === sftpProfileId) : undefined;
   const sftpRemoteSub = sftpMatch ? (sftpMatch[2] || '/') : '';
-  const smbMatch = !isSFTP ? normalized.match(/^(smb|cifs|nfs):\/\/([^/]+)(\/.*)?$/i) : null;
+  const smbMatch = !isSFTP ? normalized.match(/^(smb|cifs|nfs|afp):\/\/([^/]+)(\/.*)?$/i) : null;
   const isSMBUrl = Boolean(smbMatch);
   const isUNC = !isSFTP && !isSMBUrl && (currentPath.startsWith('\\\\') || currentPath.startsWith('//'));
   const isWindows = !isSFTP && !isSMBUrl && !isUNC && /^[a-zA-Z]:/.test(normalized);
