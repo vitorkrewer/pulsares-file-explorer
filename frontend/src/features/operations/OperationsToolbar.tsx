@@ -29,8 +29,6 @@ import {
   Filter,
   Info,
   Command,
-  FileCode2,
-  Database,
   Server,
   X,
 } from 'lucide-react';
@@ -46,6 +44,7 @@ import { useProductivityStore } from '../productivity/store';
 import { useEditorStore } from '../editor/store';
 import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { openPath } from '../../lib/wails';
+import { SuiteAppIcon } from '../../ui/SuiteAppIcon';
 
 export const OperationsToolbar: React.FC = () => {
   const { t } = useTranslation('common');
@@ -239,9 +238,11 @@ export const OperationsToolbar: React.FC = () => {
           <Info size={14} />
         </button>
 
+        <span style={styles.divider} />
+
         <button
           type="button"
-          style={styles.btn}
+          style={styles.suiteAppBtn}
           onClick={() => {
             const firstSelected = Array.from(selectedPaths)[0];
             const entry = useBrowserStore
@@ -258,12 +259,12 @@ export const OperationsToolbar: React.FC = () => {
           title="Pulsares Studio Editor (Ctrl+E)"
           aria-label="Pulsares Studio Editor (Ctrl+E)"
         >
-          <FileCode2 size={14} />
+          <SuiteAppIcon variant="studio" size={19} />
         </button>
 
         <button
           type="button"
-          style={styles.btn}
+          style={styles.suiteAppBtn}
           onClick={() => {
             const entries = useBrowserStore.getState().entries;
             const firstSelected = Array.from(selectedPaths)[0];
@@ -282,7 +283,7 @@ export const OperationsToolbar: React.FC = () => {
           title="Pulsares DB Studio (Visualizador e Console SQLite)"
           aria-label="Pulsares DB Studio"
         >
-          <Database size={14} />
+          <SuiteAppIcon variant="dbstudio" size={19} />
         </button>
 
         {layoutMode !== 'single' && (
@@ -633,6 +634,16 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--text-primary)',
     cursor: 'default',
     whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
+  suiteAppBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 26,
+    padding: '0 4px',
+    borderRadius: 5,
+    cursor: 'default',
     flexShrink: 0,
   },
   disabledBtn: {

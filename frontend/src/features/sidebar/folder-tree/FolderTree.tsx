@@ -71,12 +71,21 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
     [roots, nodesByPath]
   );
 
+  const maxDepth = useMemo(
+    () => flatNodes.reduce((max, item) => (item.depth > max ? item.depth : max), 1),
+    [flatNodes]
+  );
+
   const rowVirtualizer = useVirtualizer({
     count: flatNodes.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 26,
     overscan: 12,
   });
+
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [flatNodes.length, rowVirtualizer]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (flatNodes.length === 0) return;
@@ -271,6 +280,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
   return (
     <div
       ref={parentRef}
+      className="pulsares-tree-scroll"
       role="tree"
       aria-label={t('tree.title')}
       tabIndex={0}
@@ -282,6 +292,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
         style={{
           height: `${rowVirtualizer.getTotalSize()}px`,
           width: '100%',
+          minWidth: maxDepth > 3 ? `${maxDepth * 14 + 150}px` : '100%',
           position: 'relative',
         }}
       >
@@ -310,7 +321,16 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
               onClick={() => {
                 setFocusedPath(path);
                 navigateTo(path);
+                if (!onNavigate && item.depth === 1 && showChevron && !item.expanded) {
+                  void toggleExpand(item.node, showHidden, i18n.language);
+                }
                 onNavigate?.();
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (showChevron) {
+                  void toggleExpand(item.node, showHidden, i18n.language);
+                }
               }}
               onAuxClick={(e) => {
                 if (e.button === 1) {
@@ -438,8 +458,11 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
 const styles: Record<string, React.CSSProperties> = {
   treeContainer: {
     flex: 1,
+    height: '100%',
+    width: '100%',
+    minHeight: 0,
     overflowY: 'auto',
-    overflowX: 'hidden',
+    overflowX: 'auto',
     outline: 'none',
     userSelect: 'none',
     padding: '4px 0',
@@ -471,8 +494,8 @@ const styles: Record<string, React.CSSProperties> = {
     outline: '1px dashed var(--accent)',
   },
   chevronBox: {
-    width: 16,
-    height: 16,
+    width: 18,
+    height: 18,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

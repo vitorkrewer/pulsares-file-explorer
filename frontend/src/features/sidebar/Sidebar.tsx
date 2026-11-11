@@ -61,6 +61,7 @@ export const Sidebar: React.FC = () => {
   } = useProductivityStore();
 
   const [favOpen, setFavOpen] = useState(true);
+  const [treeOpen, setTreeOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(false);
   const [drivesOpen, setDrivesOpen] = useState(true);
   const [sshOpen, setSshOpen] = useState(true);
@@ -134,7 +135,10 @@ export const Sidebar: React.FC = () => {
   // --- Sub-renderers de seções reutilizáveis entre painel fixo e flyout ---
 
   const renderFavorites = (onItemClick?: () => void) => (
-    <div style={styles.sectionBody}>
+    <div
+      className="pulsares-tree-scroll"
+      style={{ ...styles.sectionBody, maxHeight: 160, overflowY: 'auto' }}
+    >
       {favorites.length === 0 ? (
         <div style={styles.emptyHint}>{t('sidebar.noFavorites')}</div>
       ) : (
@@ -177,42 +181,62 @@ export const Sidebar: React.FC = () => {
     </div>
   );
 
-  const renderTree = (onItemClick?: () => void) => (
-    <div style={styles.treeSectionWrapper}>
-      <div style={styles.header}>
-        <span style={styles.title}>{t('tree.title')}</span>
-        <div style={styles.headerActions}>
-          <button
-            type="button"
-            style={{
-              ...styles.iconBtn,
-              color: followActiveTab ? 'var(--accent)' : 'var(--text-secondary)',
-            }}
-            onClick={toggleFollowActiveTab}
-            title={t('tree.followActiveTab')}
-            aria-label={t('tree.followActiveTab')}
-          >
-            <Crosshair size={13} />
-          </button>
-          <button
-            type="button"
-            style={styles.iconBtn}
-            onClick={collapseAll}
-            title={t('tree.collapseAll')}
-            aria-label={t('tree.collapseAll')}
-          >
-            <ChevronsDownUp size={13} />
-          </button>
-          <button
-            type="button"
-            style={styles.iconBtn}
-            onClick={loadRoots}
-            title={t('tree.refresh')}
-            aria-label={t('tree.refresh')}
-          >
-            <RotateCw size={13} />
-          </button>
-          {visible && (
+  const renderTree = (onItemClick?: () => void) => {
+    if (!visible) {
+      return (
+        <div style={styles.treeSectionWrapper}>
+          <div style={styles.treeContentWrapper}>
+            <FolderTree onNavigate={onItemClick} />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        style={
+          treeOpen
+            ? { ...styles.treeSectionWrapper, borderBottom: '1px solid var(--border-subtle)' }
+            : { flexShrink: 0 }
+        }
+      >
+        <div style={styles.sectionHeader} onClick={() => setTreeOpen(!treeOpen)}>
+          <div style={styles.sectionTitleRow}>
+            {treeOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            <FolderTreeIcon size={12} style={{ color: 'var(--accent)' }} />
+            <span style={styles.title}>{t('tree.title')}</span>
+          </div>
+          <div style={styles.headerActions} onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              style={{
+                ...styles.iconBtn,
+                color: followActiveTab ? 'var(--accent)' : 'var(--text-secondary)',
+              }}
+              onClick={toggleFollowActiveTab}
+              title={t('tree.followActiveTab')}
+              aria-label={t('tree.followActiveTab')}
+            >
+              <Crosshair size={13} />
+            </button>
+            <button
+              type="button"
+              style={styles.iconBtn}
+              onClick={collapseAll}
+              title={t('tree.collapseAll')}
+              aria-label={t('tree.collapseAll')}
+            >
+              <ChevronsDownUp size={13} />
+            </button>
+            <button
+              type="button"
+              style={styles.iconBtn}
+              onClick={loadRoots}
+              title={t('tree.refresh')}
+              aria-label={t('tree.refresh')}
+            >
+              <RotateCw size={13} />
+            </button>
             <button
               type="button"
               style={styles.iconBtn}
@@ -222,14 +246,16 @@ export const Sidebar: React.FC = () => {
             >
               <PanelLeftClose size={13} />
             </button>
-          )}
+          </div>
         </div>
+        {treeOpen && (
+          <div style={styles.treeContentWrapper}>
+            <FolderTree onNavigate={onItemClick} />
+          </div>
+        )}
       </div>
-      <div style={styles.treeContentWrapper}>
-        <FolderTree onNavigate={onItemClick} />
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderRecent = (onItemClick?: () => void) => (
     <div style={{ ...styles.sectionBody, maxHeight: 220, overflowY: 'auto' }}>
@@ -645,6 +671,40 @@ export const Sidebar: React.FC = () => {
                 <span style={styles.flyoutTitle}>{getSectionInfo(activeFlyout).title}</span>
               </div>
               <div style={styles.flyoutActions}>
+                {activeFlyout === 'tree' && (
+                  <>
+                    <button
+                      type="button"
+                      style={{
+                        ...styles.iconBtn,
+                        color: followActiveTab ? 'var(--accent)' : 'var(--text-secondary)',
+                      }}
+                      onClick={toggleFollowActiveTab}
+                      title={t('tree.followActiveTab')}
+                      aria-label={t('tree.followActiveTab')}
+                    >
+                      <Crosshair size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      style={styles.iconBtn}
+                      onClick={collapseAll}
+                      title={t('tree.collapseAll')}
+                      aria-label={t('tree.collapseAll')}
+                    >
+                      <ChevronsDownUp size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      style={styles.iconBtn}
+                      onClick={loadRoots}
+                      title={t('tree.refresh')}
+                      aria-label={t('tree.refresh')}
+                    >
+                      <RotateCw size={13} />
+                    </button>
+                  </>
+                )}
                 {activeFlyout === 'drives' && (
                   <button
                     type="button"
@@ -696,7 +756,12 @@ export const Sidebar: React.FC = () => {
               </div>
             </div>
 
-            <div style={styles.flyoutBody}>
+            <div
+              style={{
+                ...styles.flyoutBody,
+                overflowY: activeFlyout === 'tree' ? 'hidden' : 'auto',
+              }}
+            >
               {activeFlyout === 'tree' && renderTree(() => setActiveFlyout(null))}
               {activeFlyout === 'favorites' && renderFavorites(() => setActiveFlyout(null))}
               {activeFlyout === 'recent' && renderRecent(() => setActiveFlyout(null))}
@@ -916,6 +981,8 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
   },
   treeContentWrapper: {
+    display: 'flex',
+    flexDirection: 'column',
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',

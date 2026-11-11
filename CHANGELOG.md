@@ -6,6 +6,8 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Ícones Oficiais em Cores Reais para Studio Editor e DB Studio (`SuiteAppIcon.tsx`, `OperationsToolbar.tsx` e `FileContextMenu.tsx`)**: botões de abertura do **Pulsares Studio Editor** (`</>`) e do **Pulsares DB Studio** (cilindro SQLite) na barra de ferramentas e no menu de contexto agora exibem o emblema oficial em cores reais (`#2563eb` → `#4f46e5`) para destaque imediato.
+- **Correção de Rolagem e Expansão na Seção "Pastas" da Barra Lateral (`Sidebar.tsx`, `FolderTree.tsx` e `tokens.css`)**: corrigida a cadeia flexível (`minHeight: 0` + `height: 100%`) que impedia a exibição da barra de rolagem vertical/horizontal ao expandir subpastas na árvore, além de cabeçalho recolhível em *Pastas*, expansão por duplo clique e barra de rolagem mais visível (`.pulsares-tree-scroll`).
 - **Zoom Progressivo e Alternância Dinâmica de Visualização nas Pastas (`FolderZoomControl.tsx`, `StatusBar.tsx` e `preview/store.ts`)**:
   - **Botão de Zoom na Barra de Ferramentas e na Barra de Status**: controle segmentado (`−` · `100% ▾` · `+`) sempre visível na barra de ferramentas (`OperationsToolbar.tsx`) com popover interativo (slider contínuo + lista completa de modos) e controles rápidos de visualização/zoom no canto inferior direito da `StatusBar.tsx`.
   - **Atalhos `Ctrl + +`, `Ctrl + -`, `Ctrl + 0` e `Ctrl + Roda do Mouse`**: dar zoom progressivo alterna automaticamente entre **Detalhes Compactos (85%) → Detalhes (100%) → Lista Compacta (115%) → Ícones Pequenos (130%) → Ícones Médios (150%) → Ícones Grandes (175%) → Ícones Extra Grandes (200%)**, com indicador flutuante instantâneo (HUD) no painel de pastas e bloqueio de zoom acidental da janela WebView2.

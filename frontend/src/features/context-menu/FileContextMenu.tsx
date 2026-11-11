@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
   FolderOpen,
-  FileCode2,
   Eye,
   ExternalLink,
   Star,
@@ -38,6 +37,7 @@ import { useProductivityStore } from '../productivity/store';
 import { useEditorStore, isEditableTextFile } from '../editor/store';
 import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { useDBCreatorStore, isConvertibleToDB } from '../db-creator/store';
+import { SuiteAppIcon } from '../../ui/SuiteAppIcon';
 
 export interface ContextMenuTarget {
   x: number;
@@ -262,7 +262,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
 
           {!isDir && isDbFile && (
             <MenuItem
-              icon={<Database size={14} />}
+              icon={<SuiteAppIcon variant="dbstudio" size={15} />}
               label="Abrir no Pulsares DB Studio"
               badge="SQLite"
               onClick={() =>
@@ -288,7 +288,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
 
           {isDir ? (
             <MenuItem
-              icon={<FileCode2 size={14} />}
+              icon={<SuiteAppIcon variant="studio" size={15} />}
               label="Abrir pasta no Pulsares Studio Editor"
               badge="Studio"
               onClick={() =>
@@ -299,7 +299,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
             />
           ) : (
             <MenuItem
-              icon={<FileCode2 size={14} />}
+              icon={<SuiteAppIcon variant="studio" size={15} />}
               label="Editar no Pulsares Studio"
               badge={isEditable ? 'Studio' : undefined}
               onClick={() =>
@@ -508,7 +508,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
           />
 
           <MenuItem
-            icon={<FileCode2 size={14} />}
+            icon={<SuiteAppIcon variant="studio" size={15} />}
             label="Abrir Pulsares Studio Editor"
             badge="Dev"
             onClick={() => runAndClose(() => void openFolderInEditor(currentPath))}
