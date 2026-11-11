@@ -489,111 +489,780 @@ function renderHighlightedLine(line: string, language: string): React.ReactNode 
   });
 }
 
-function renderMarkdownPreview(md: string): React.ReactNode {
-  const lines = md.replace(/\r\n/g, '\n').split('\n');
-  const elements: React.ReactNode[] = [];
-  let inCode = false;
-  let codeBuffer: string[] = [];
+function resolveMarkdownAssetPath(rawRef: string, baseDir?: string): string {
+  const trimmed = rawRef.trim();
+  if (!trimmed || isExternalOrDataUrl(trimmed) || trimmed.startsWith('/__')) {
+    return trimmed;
+  }
+  if (/^[a-zA-Z]:[/\\]/.test(trimmed) || trimmed.startsWith('\\\\')) {
+    return `/__localmedia?path=${encodeURIComponent(trimmed)}`;
+  }
+  if (baseDir) {
+    const cleanBase = baseDir.replace(/[/\\]+$/, '');
+    const cleanRel = trimmed.replace(/^[./\\]+/, '').replace(/\//g, '\\');
+    const sep = cleanBase.includes('\\') ? '\\' : '/';
+    const joined = `${cleanBase}${sep}${cleanRel.replace(/\\/g, sep)}`;
+    return `/__localmedia?path=${encodeURIComponent(joined)}`;
+  }
+  return trimmed;
+}
 
-  lines.forEach((line, idx) => {
-    if (line.trim().startsWith('```')) {
-      if (inCode) {
-        elements.push(
-          <pre
-            key={`code-${idx}`}
-            style={{
-              backgroundColor: 'var(--bg-app)',
-              padding: '10px 12px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '12px',
-              overflowX: 'auto',
-              margin: '8px 0',
-            }}
-          >
-            {codeBuffer.join('\n')}
-          </pre>
-        );
-        codeBuffer = [];
-        inCode = false;
-      } else {
-        inCode = true;
-      }
-      return;
-    }
-    if (inCode) {
-      codeBuffer.push(line);
-      return;
-    }
+function resolveMarkdownLinkTarget(rawHref: string, baseDir?: string): string {
+  const trimmed = rawHref.trim().split('#')[0];
+  if (!trimmed) return '';
+  if (isExternalOrDataUrl(trimmed)) return trimmed;
+  if (/^[a-zA-Z]:[/\\]/.test(trimmed) || trimmed.startsWith('\\\\')) {
+    return trimmed;
+  }
+  if (baseDir) {
+    const cleanBase = baseDir.replace(/[/\\]+$/, '');
+    const sep = cleanBase.includes('\\') ? '\\' : '/';
+    const rel = trimmed.replace(/^[./\\]+/, '').replace(/[/\\]/g, sep);
+    return `${cleanBase}${sep}${rel}`;
+  }
+  return trimmed;
+}
 
-    if (line.startsWith('# ')) {
-      elements.push(
-        <h1
-          key={idx}
+export function renderInlineMarkdown(
+  text: string,
+  keyPrefix: string,
+  baseDir?: string,
+  onOpenLink?: (targetPathOrUrl: string) => void
+): React.ReactNode {
+  if (!text) return null;
+
+  // Tokeniza imagens, links, código inline (`` ou `), negrito+itálico, negrito, tachado, <kbd> e itálico
+  const inlineRegex =
+    /(!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)|\[([^\]]+)\]\(([^)]+)\)|``([^`]+)``|`([^`]+)`|\*\*\*([^*]+)\*\*\*|___([^_]+)___|\*\*([^*]+)\*\*|__([^_]+)__|~~([^~]+)~~|<kbd>([^<]+)<\/kbd>|\*([^*\s][^*]*?)\*|\b_([^_\s][^_]*?)_\b)/g;
+
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let tokenIdx = 0;
+
+  while ((match = inlineRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    const k = `${keyPrefix}-i-${tokenIdx++}`;
+
+    if (match[1].startsWith('![')) {
+      const alt = match[2] || '';
+      const rawSrc = match[3] || '';
+      const title = match[4] || alt;
+      const resolvedSrc = resolveMarkdownAssetPath(rawSrc, baseDir);
+      nodes.push(
+        <img
+          key={k}
+          src={resolvedSrc}
+          alt={alt}
+          title={title}
           style={{
-            fontSize: '20px',
-            fontWeight: 700,
-            margin: '12px 0 6px',
-            borderBottom: '1px solid var(--border-subtle)',
-            paddingBottom: '4px',
-          }}
-        >
-          {line.slice(2)}
-        </h1>
-      );
-    } else if (line.startsWith('## ')) {
-      elements.push(
-        <h2 key={idx} style={{ fontSize: '17px', fontWeight: 700, margin: '10px 0 4px' }}>
-          {line.slice(3)}
-        </h2>
-      );
-    } else if (line.startsWith('### ')) {
-      elements.push(
-        <h3 key={idx} style={{ fontSize: '15px', fontWeight: 600, margin: '8px 0 4px' }}>
-          {line.slice(4)}
-        </h3>
-      );
-    } else if (/^\s*[-*+]\s/.test(line)) {
-      elements.push(
-        <li key={idx} style={{ marginLeft: '18px', marginBottom: '3px' }}>
-          {line.replace(/^\s*[-*+]\s/, '')}
-        </li>
-      );
-    } else if (line.trim().startsWith('>')) {
-      elements.push(
-        <blockquote
-          key={idx}
-          style={{
-            borderLeft: '3px solid var(--accent-primary)',
-            paddingLeft: '10px',
-            color: 'var(--text-secondary)',
-            fontStyle: 'italic',
+            maxWidth: '100%',
+            maxHeight: '360px',
+            borderRadius: '6px',
+            border: '1px solid var(--border-subtle)',
             margin: '6px 0',
+            display: 'inline-block',
+            verticalAlign: 'middle',
           }}
-        >
-          {line.replace(/^\s*>\s?/, '')}
-        </blockquote>
-      );
-    } else if (line.trim() === '---' || line.trim() === '***') {
-      elements.push(
-        <hr
-          key={idx}
-          style={{ border: 'none', borderTop: '1px solid var(--border-subtle)', margin: '10px 0' }}
         />
       );
-    } else if (line.trim().length === 0) {
-      elements.push(<div key={idx} style={{ height: '8px' }} />);
-    } else {
-      elements.push(
-        <p key={idx} style={{ marginBottom: '6px', lineHeight: 1.55 }}>
-          {line}
-        </p>
+    } else if (match[5] !== undefined && match[6] !== undefined) {
+      const label = match[5];
+      const rawHref = match[6].trim();
+      nodes.push(
+        <a
+          key={k}
+          href={rawHref}
+          title={rawHref}
+          onClick={(e) => {
+            e.preventDefault();
+            if (rawHref.startsWith('#')) return;
+            const resolved = resolveMarkdownLinkTarget(rawHref, baseDir);
+            if (onOpenLink && resolved && !isExternalOrDataUrl(resolved)) {
+              onOpenLink(resolved);
+            } else if (isExternalOrDataUrl(rawHref)) {
+              window.open(rawHref, '_blank', 'noopener,noreferrer');
+            }
+          }}
+          style={{
+            color: 'var(--accent)',
+            textDecoration: 'underline',
+            textUnderlineOffset: '2px',
+            fontWeight: 500,
+            cursor: 'pointer',
+          }}
+        >
+          {renderInlineMarkdown(label, `${k}-lbl`, baseDir, onOpenLink)}
+        </a>
+      );
+    } else if (match[7] !== undefined || match[8] !== undefined) {
+      const codeText = match[7] ?? match[8] ?? '';
+      nodes.push(
+        <code
+          key={k}
+          style={{
+            padding: '1.5px 5px',
+            borderRadius: '4px',
+            backgroundColor: 'var(--bg-subtle)',
+            border: '1px solid var(--border-subtle)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.88em',
+            color: 'var(--accent-text)',
+          }}
+        >
+          {codeText}
+        </code>
+      );
+    } else if (match[9] !== undefined || match[10] !== undefined) {
+      const biText = match[9] ?? match[10] ?? '';
+      nodes.push(
+        <strong key={k} style={{ fontWeight: 700, fontStyle: 'italic', color: 'var(--text-primary)' }}>
+          { renderInlineMarkdown(biText, `${k}-bi`, baseDir, onOpenLink) }
+        </strong>
+      );
+    } else if (match[11] !== undefined || match[12] !== undefined) {
+      const bText = match[11] ?? match[12] ?? '';
+      nodes.push(
+        <strong key={k} style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+          {renderInlineMarkdown(bText, `${k}-b`, baseDir, onOpenLink)}
+        </strong>
+      );
+    } else if (match[13] !== undefined) {
+      nodes.push(
+        <del key={k} style={{ opacity: 0.72 }}>
+          {renderInlineMarkdown(match[13], `${k}-del`, baseDir, onOpenLink)}
+        </del>
+      );
+    } else if (match[14] !== undefined) {
+      nodes.push(
+        <kbd
+          key={k}
+          style={{
+            padding: '1px 5px',
+            borderRadius: '4px',
+            backgroundColor: 'var(--bg-elevated)',
+            border: '1px solid var(--border-strong)',
+            boxShadow: '0 1px 0 var(--border-strong)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.84em',
+            color: 'var(--text-primary)',
+          }}
+        >
+          {match[14]}
+        </kbd>
+      );
+    } else if (match[15] !== undefined || match[16] !== undefined) {
+      const iText = match[15] ?? match[16] ?? '';
+      nodes.push(
+        <em key={k} style={{ fontStyle: 'italic' }}>
+          {renderInlineMarkdown(iText, `${k}-em`, baseDir, onOpenLink)}
+        </em>
       );
     }
-  });
 
-  return elements;
+    lastIndex = inlineRegex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return nodes.length === 1 ? nodes[0] : nodes;
+}
+
+function splitMarkdownTableRow(rowLine: string): string[] {
+  const trimmed = rowLine.trim().replace(/^\|/, '').replace(/\|$/, '');
+  const cells: string[] = [];
+  let cur = '';
+  let inCode = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch === '`') {
+      inCode = !inCode;
+      cur += ch;
+    } else if (ch === '\\' && i + 1 < trimmed.length && trimmed[i + 1] === '|') {
+      cur += '|';
+      i++;
+    } else if (ch === '|' && !inCode) {
+      cells.push(cur.trim());
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(cur.trim());
+  return cells;
+}
+
+function isMarkdownTableSeparator(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes('|') && !trimmed.includes('-')) return false;
+  const cells = splitMarkdownTableRow(trimmed);
+  return cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c));
+}
+
+export function renderMarkdownPreview(
+  md: string,
+  baseDir?: string,
+  onOpenLink?: (targetPathOrUrl: string) => void
+): React.ReactNode {
+  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  const elements: React.ReactNode[] = [];
+
+  let i = 0;
+
+  // 1. Suporte a YAML Frontmatter no topo do arquivo (--- ... ---)
+  if (lines[0]?.trim() === '---') {
+    let endFm = -1;
+    for (let j = 1; j < Math.min(lines.length, 40); j++) {
+      if (lines[j].trim() === '---' || lines[j].trim() === '...') {
+        endFm = j;
+        break;
+      }
+    }
+    if (endFm > 0) {
+      const fmPairs = lines
+        .slice(1, endFm)
+        .map((l) => {
+          const colonIdx = l.indexOf(':');
+          if (colonIdx <= 0) return null;
+          return {
+            key: l.slice(0, colonIdx).trim(),
+            val: l.slice(colonIdx + 1).trim().replace(/^["']|["']$/g, ''),
+          };
+        })
+        .filter((item): item is { key: string; val: string } => Boolean(item));
+
+      if (fmPairs.length > 0) {
+        elements.push(
+          <div
+            key="md-frontmatter"
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '6px 12px',
+              padding: '8px 12px',
+              marginBottom: '12px',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'var(--bg-subtle)',
+              border: '1px solid var(--border-subtle)',
+              fontSize: '11.5px',
+            }}
+          >
+            {fmPairs.map((pair, pIdx) => (
+              <span key={pIdx}>
+                <strong style={{ color: 'var(--text-muted)' }}>{pair.key}:</strong>{' '}
+                <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                  {pair.val}
+                </span>
+              </span>
+            ))}
+          </div>
+        );
+      }
+      i = endFm + 1;
+    }
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // 2. Blocos de código cercados (```lang ou ~~~lang)
+    const fenceMatch = trimmed.match(/^(`{3,}|~{3,})(.*)$/);
+    if (fenceMatch) {
+      const fenceMarker = fenceMatch[1].slice(0, 3);
+      const codeLang = (fenceMatch[2] || '').trim().split(/\s+/)[0].toLowerCase();
+      const codeLines: string[] = [];
+      const startIdx = i;
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith(fenceMarker)) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++; // Consome linha de fechamento
+      const rawCode = codeLines.join('\n');
+
+      elements.push(
+        <div
+          key={`code-${startIdx}`}
+          style={{
+            margin: '10px 0',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border-subtle)',
+            backgroundColor: 'var(--bg-app)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '4px 10px',
+              backgroundColor: 'var(--bg-subtle)',
+              borderBottom: '1px solid var(--border-subtle)',
+              fontSize: '10.5px',
+              color: 'var(--text-muted)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            <span style={{ fontWeight: 700, textTransform: 'uppercase' }}>
+              {codeLang || 'código'}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (navigator.clipboard?.writeText) {
+                  void navigator.clipboard.writeText(rawCode);
+                }
+              }}
+              style={{
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-surface)',
+                color: 'var(--text-secondary)',
+                borderRadius: '4px',
+                padding: '1px 6px',
+                fontSize: '10px',
+                cursor: 'pointer',
+              }}
+              title="Copiar bloco de código"
+            >
+              Copiar
+            </button>
+          </div>
+          <pre
+            style={{
+              margin: 0,
+              padding: '10px 12px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '12px',
+              lineHeight: 1.5,
+              overflowX: 'auto',
+              color: 'var(--text-primary)',
+            }}
+          >
+            {codeLines.map((cLine, cIdx) => (
+              <div key={cIdx}>{renderHighlightedLine(cLine, codeLang)}</div>
+            ))}
+          </pre>
+        </div>
+      );
+      continue;
+    }
+
+    // 3. Tabelas GFM (| Col 1 | Col 2 | seguido de | --- | --- |)
+    if (
+      trimmed.includes('|') &&
+      i + 1 < lines.length &&
+      isMarkdownTableSeparator(lines[i + 1])
+    ) {
+      const tableStart = i;
+      const headers = splitMarkdownTableRow(lines[i]);
+      const alignCells = splitMarkdownTableRow(lines[i + 1]);
+      const aligns: Array<'left' | 'center' | 'right'> = alignCells.map((c) => {
+        if (c.startsWith(':') && c.endsWith(':')) return 'center';
+        if (c.endsWith(':')) return 'right';
+        return 'left';
+      });
+      i += 2;
+      const bodyRows: string[][] = [];
+      while (i < lines.length && lines[i].trim().includes('|') && lines[i].trim() !== '') {
+        bodyRows.push(splitMarkdownTableRow(lines[i]));
+        i++;
+      }
+
+      elements.push(
+        <div
+          key={`tbl-${tableStart}`}
+          style={{
+            margin: '10px 0',
+            overflowX: 'auto',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-sm)',
+          }}
+        >
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '12.5px',
+              lineHeight: 1.5,
+            }}
+          >
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-subtle)' }}>
+                {headers.map((h, hIdx) => (
+                  <th
+                    key={hIdx}
+                    style={{
+                      padding: '6px 10px',
+                      borderBottom: '1px solid var(--border-strong)',
+                      borderRight:
+                        hIdx < headers.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                      textAlign: aligns[hIdx] || 'left',
+                      fontWeight: 700,
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {renderInlineMarkdown(
+                      h,
+                      `tbl-${tableStart}-h-${hIdx}`,
+                      baseDir,
+                      onOpenLink
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {bodyRows.map((row, rIdx) => (
+                <tr
+                  key={rIdx}
+                  style={{
+                    backgroundColor: rIdx % 2 === 1 ? 'var(--bg-subtle)' : 'transparent',
+                  }}
+                >
+                  {headers.map((_, cIdx) => (
+                    <td
+                      key={cIdx}
+                      style={{
+                        padding: '5px 10px',
+                        borderBottom:
+                          rIdx < bodyRows.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                        borderRight:
+                          cIdx < headers.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                        textAlign: aligns[cIdx] || 'left',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      {renderInlineMarkdown(
+                        row[cIdx] ?? '',
+                        `tbl-${tableStart}-r-${rIdx}-c-${cIdx}`,
+                        baseDir,
+                        onOpenLink
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    // 4. Blockquotes & Alertas GFM (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION])
+    if (trimmed.startsWith('>')) {
+      const bqStart = i;
+      const bqLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('>')) {
+        bqLines.push(lines[i].replace(/^\s*>\s?/, ''));
+        i++;
+      }
+      const firstLine = (bqLines[0] || '').trim();
+      const alertMatch = firstLine.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i);
+      if (alertMatch) {
+        const kind = alertMatch[1].toUpperCase();
+        const inlineRest = alertMatch[2];
+        const bodyLines = inlineRest ? [inlineRest, ...bqLines.slice(1)] : bqLines.slice(1);
+        const palette: Record<string, { border: string; bg: string; label: string }> = {
+          NOTE: { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', label: 'Nota' },
+          TIP: { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', label: 'Dica' },
+          IMPORTANT: { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)', label: 'Importante' },
+          WARNING: { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', label: 'Atenção' },
+          CAUTION: { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', label: 'Cuidado' },
+        };
+        const styleInfo = palette[kind] || palette.NOTE;
+        elements.push(
+          <div
+            key={`alert-${bqStart}`}
+            style={{
+              borderLeft: `4px solid ${styleInfo.border}`,
+              backgroundColor: styleInfo.bg,
+              padding: '8px 12px',
+              borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
+              margin: '8px 0',
+              fontSize: '12.5px',
+              lineHeight: 1.55,
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 700,
+                color: styleInfo.border,
+                marginBottom: bodyLines.length > 0 ? '4px' : 0,
+                fontSize: '11.5px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.03em',
+              }}
+            >
+              {styleInfo.label}
+            </div>
+            {bodyLines.map((bLine, bIdx) => (
+              <div key={bIdx} style={{ color: 'var(--text-primary)' }}>
+                {renderInlineMarkdown(
+                  bLine,
+                  `alert-${bqStart}-${bIdx}`,
+                  baseDir,
+                  onOpenLink
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      } else {
+        elements.push(
+          <blockquote
+            key={`bq-${bqStart}`}
+            style={{
+              borderLeft: '3px solid var(--accent-primary)',
+              backgroundColor: 'var(--bg-subtle)',
+              padding: '6px 12px',
+              borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
+              color: 'var(--text-secondary)',
+              margin: '8px 0',
+              lineHeight: 1.55,
+            }}
+          >
+            {bqLines.map((bLine, bIdx) => (
+              <div key={bIdx}>
+                {renderInlineMarkdown(bLine, `bq-${bqStart}-${bIdx}`, baseDir, onOpenLink)}
+              </div>
+            ))}
+          </blockquote>
+        );
+      }
+      continue;
+    }
+
+    // 5. Linhas divisórias horizontais (---, ***, ___)
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      elements.push(
+        <hr
+          key={`hr-${i}`}
+          style={{
+            border: 'none',
+            borderTop: '1px solid var(--border-subtle)',
+            margin: '12px 0',
+          }}
+        />
+      );
+      i++;
+      continue;
+    }
+
+    // 6. Títulos (# H1 até ###### H6)
+    const headingMatch = line.match(/^\s*(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const content = headingMatch[2].replace(/\s+#+\s*$/, '');
+      const sizes = ['21px', '17.5px', '15px', '13.5px', '12.5px', '12px'];
+      const margins = [
+        '16px 0 8px',
+        '14px 0 6px',
+        '12px 0 5px',
+        '10px 0 4px',
+        '8px 0 3px',
+        '6px 0 2px',
+      ];
+      elements.push(
+        <div
+          key={`h-${i}`}
+          role="heading"
+          aria-level={level}
+          style={{
+            fontSize: sizes[level - 1] || '13px',
+            fontWeight: 700,
+            margin: margins[level - 1] || '8px 0 4px',
+            color: 'var(--text-primary)',
+            borderBottom: level <= 2 ? '1px solid var(--border-subtle)' : 'none',
+            paddingBottom: level <= 2 ? '4px' : 0,
+            lineHeight: 1.35,
+          }}
+        >
+          {renderInlineMarkdown(content, `h-${i}`, baseDir, onOpenLink)}
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // 7. Listas de tarefas (- [x] / - [ ]) e listas com marcadores (- / * / +) com recuo multinível
+    const unorderedMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
+    if (unorderedMatch) {
+      const indentSpaces = unorderedMatch[1].replace(/\t/g, '  ').length;
+      const depth = Math.min(5, Math.floor(indentSpaces / 2));
+      const itemText = unorderedMatch[3];
+      const taskMatch = itemText.match(/^\[([ xX])\]\s+(.*)$/);
+
+      if (taskMatch) {
+        const checked = taskMatch[1].toLowerCase() === 'x';
+        const taskLabel = taskMatch[2];
+        elements.push(
+          <div
+            key={`task-${i}`}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '8px',
+              marginLeft: `${8 + depth * 18}px`,
+              marginBottom: '4px',
+              lineHeight: 1.55,
+              fontSize: '13px',
+            }}
+          >
+            <span
+              style={{
+                width: '15px',
+                height: '15px',
+                marginTop: '3px',
+                borderRadius: '4px',
+                border: checked
+                  ? '1px solid var(--accent-primary)'
+                  : '1px solid var(--border-strong)',
+                backgroundColor: checked ? 'var(--accent-primary)' : 'var(--bg-app)',
+                color: '#ffffff',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '10px',
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              {checked ? '✓' : ''}
+            </span>
+            <span
+              style={{
+                flex: 1,
+                color: checked ? 'var(--text-muted)' : 'var(--text-primary)',
+                textDecoration: checked ? 'line-through' : 'none',
+              }}
+            >
+              {renderInlineMarkdown(taskLabel, `task-${i}`, baseDir, onOpenLink)}
+            </span>
+          </div>
+        );
+      } else {
+        const bullets = ['•', '◦', '▪', '▫'];
+        const bulletChar = bullets[depth % bullets.length];
+        elements.push(
+          <div
+            key={`ul-${i}`}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '7px',
+              marginLeft: `${8 + depth * 18}px`,
+              marginBottom: '4px',
+              lineHeight: 1.55,
+              fontSize: '13px',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <span
+              style={{
+                color: 'var(--accent)',
+                fontWeight: 700,
+                flexShrink: 0,
+                userSelect: 'none',
+              }}
+            >
+              {bulletChar}
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {renderInlineMarkdown(itemText, `ul-${i}`, baseDir, onOpenLink)}
+            </span>
+          </div>
+        );
+      }
+      i++;
+      continue;
+    }
+
+    // 8. Listas numeradas (1. / 2. / 1)) com recuo multinível
+    const orderedMatch = line.match(/^(\s*)(\d+)[.)]\s+(.*)$/);
+    if (orderedMatch) {
+      const indentSpaces = orderedMatch[1].replace(/\t/g, '  ').length;
+      const depth = Math.min(5, Math.floor(indentSpaces / 2));
+      const numLabel = orderedMatch[2];
+      const itemText = orderedMatch[3];
+      elements.push(
+        <div
+          key={`ol-${i}`}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '7px',
+            marginLeft: `${8 + depth * 18}px`,
+            marginBottom: '4px',
+            lineHeight: 1.55,
+            fontSize: '13px',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <span
+            style={{
+              color: 'var(--accent)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '12px',
+              fontWeight: 700,
+              minWidth: '18px',
+              flexShrink: 0,
+              userSelect: 'none',
+            }}
+          >
+            {numLabel}.
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            {renderInlineMarkdown(itemText, `ol-${i}`, baseDir, onOpenLink)}
+          </span>
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // 9. Linha em branco
+    if (trimmed.length === 0) {
+      elements.push(<div key={`sp-${i}`} style={{ height: '6px' }} />);
+      i++;
+      continue;
+    }
+
+    // 10. Parágrafo padrão com formatação inline completa
+    elements.push(
+      <p
+        key={`p-${i}`}
+        style={{
+          margin: '0 0 6px 0',
+          lineHeight: 1.6,
+          fontSize: '13px',
+          color: 'var(--text-primary)',
+        }}
+      >
+        {renderInlineMarkdown(line, `p-${i}`, baseDir, onOpenLink)}
+      </p>
+    );
+    i++;
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        color: 'var(--text-primary)',
+        wordBreak: 'break-word',
+      }}
+    >
+      {elements}
+    </div>
+  );
 }
 
 interface CodeEditorModalProps {
@@ -4655,8 +5324,15 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                             </>
                           )}
                         </div>
-                      ) : activeTab.language === 'markdown' ? (
-                        <div>{renderMarkdownPreview(activeTab.content)}</div>
+                      ) : activeTab.language === 'markdown' ||
+                        /\.(md|mdx|markdown|mdown|mkd|rmd)$/i.test(activeTab.name) ? (
+                        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+                          {renderMarkdownPreview(
+                            activeTab.content,
+                            activeProjectDir,
+                            (targetPath) => void openFileInEditor(targetPath, true)
+                          )}
+                        </div>
                       ) : connectedWebPreview?.isWebProject ? (
                         <div
                           style={{
@@ -4853,15 +5529,13 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                           )}
                         </div>
                       ) : (
-                        <pre
-                          style={{
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: '12px',
-                            whiteSpace: 'pre-wrap',
-                          }}
-                        >
-                          {activeTab.content}
-                        </pre>
+                        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+                          {renderMarkdownPreview(
+                            activeTab.content,
+                            activeProjectDir,
+                            (targetPath) => void openFileInEditor(targetPath, true)
+                          )}
+                        </div>
                       )}
                     </div>
                   )}

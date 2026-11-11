@@ -23,7 +23,10 @@ import {
 import { usePreviewStore } from './store';
 import { useBrowserStore } from '../browser/store';
 import { useEditorStore } from '../editor/store';
-import { buildConnectedWebPreviewDoc } from '../editor/CodeEditorModal';
+import {
+  buildConnectedWebPreviewDoc,
+  renderMarkdownPreview,
+} from '../editor/CodeEditorModal';
 import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { formatBytes, formatDate } from '../../i18n/format';
 import {
@@ -34,45 +37,6 @@ import {
   PresentationSlide,
 } from '../../lib/wails';
 import { FileTypeIcon, getFileTypeVisual } from '../../ui/FileTypeIcon';
-
-function renderSimpleMarkdown(md: string): React.ReactNode {
-  const lines = md.split('\n');
-  return lines.map((line, i) => {
-    if (line.startsWith('### ')) {
-      return (
-        <h4 key={i} style={{ margin: '10px 0 4px', fontSize: 13 }}>
-          {line.slice(4)}
-        </h4>
-      );
-    }
-    if (line.startsWith('## ')) {
-      return (
-        <h3 key={i} style={{ margin: '12px 0 6px', fontSize: 15 }}>
-          {line.slice(3)}
-        </h3>
-      );
-    }
-    if (line.startsWith('# ')) {
-      return (
-        <h2 key={i} style={{ margin: '14px 0 8px', fontSize: 17 }}>
-          {line.slice(2)}
-        </h2>
-      );
-    }
-    if (line.startsWith('- ') || line.startsWith('* ')) {
-      return (
-        <li key={i} style={{ marginLeft: 16, fontSize: 12, lineHeight: 1.5 }}>
-          {line.slice(2)}
-        </li>
-      );
-    }
-    return (
-      <p key={i} style={{ margin: '4px 0', fontSize: 12, lineHeight: 1.5 }}>
-        {line}
-      </p>
-    );
-  });
-}
 
 const MediaPlayerSection: React.FC<{ data: PreviewData }> = ({ data }) => {
   const isAudio = data.mimeType.startsWith('audio/');
@@ -1090,7 +1054,10 @@ const PreviewBody: React.FC<{
 
         {data.kind === 'markdown' && (
           <div style={styles.markdownBox}>
-            {renderSimpleMarkdown(data.textContent || '')}
+            {renderMarkdownPreview(
+              data.textContent || '',
+              data.path ? data.path.replace(/[/\\][^/\\]+$/, '') : undefined
+            )}
             {data.truncated && <div style={styles.truncatedNote}>{t('preview.truncated')}</div>}
           </div>
         )}

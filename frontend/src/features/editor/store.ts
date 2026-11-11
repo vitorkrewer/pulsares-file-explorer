@@ -83,6 +83,10 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   tsv: 'csv',
   md: 'markdown',
   markdown: 'markdown',
+  mdx: 'markdown',
+  mdown: 'markdown',
+  mkd: 'markdown',
+  rmd: 'markdown',
   json: 'json',
   jsonc: 'json',
   jsonl: 'json',
@@ -132,6 +136,7 @@ export function detectLanguageFromPath(nameOrPath: string): string {
   const base = (nameOrPath.split(/[/\\]/).pop() || nameOrPath).toLowerCase();
   if (base === 'dockerfile') return 'dockerfile';
   if (base === 'makefile') return 'makefile';
+  if (base === 'readme' || base === 'changelog') return 'markdown';
   if (base.startsWith('.env')) return 'ini';
   if (base.startsWith('.git')) return 'ini';
   const dotIdx = base.lastIndexOf('.');
@@ -764,6 +769,12 @@ function loadPersistedTabs(): {
               };
             }
           }
+          if ((!t.tabKind || t.tabKind === 'code') && (t.name || t.path)) {
+            const detected = detectLanguageFromPath(t.name || t.path);
+            if ((!t.language || t.language === 'plaintext') && detected !== 'plaintext') {
+              return { ...t, language: detected };
+            }
+          }
           return t;
         })
     );
@@ -937,11 +948,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       sidebarTab: 'files',
     });
     if (saved.tabs.length > 0) {
-      set({
+      const resolvedActiveId = saved.activeTabId || saved.tabs[0].id;
+      const activeObj = saved.tabs.find((t) => t.id === resolvedActiveId) || saved.tabs[0];
+      const shouldAutoPreview =
+        activeObj?.language === 'markdown' ||
+        activeObj?.language === 'csv' ||
+        activeObj?.language === 'html';
+      set((s) => ({
         tabs: saved.tabs,
-        activeTabId: saved.activeTabId || saved.tabs[0].id,
+        activeTabId: resolvedActiveId,
         workspaceDir: dir,
-      });
+        showSplitPreview: shouldAutoPreview ? true : s.showSplitPreview,
+      }));
     } else if (dir) {
       set({ workspaceDir: dir });
     }
@@ -1274,10 +1292,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         return;
       }
     } else {
-      set({
-        activeTabId: activeTab.id,
-        runnerCommand: defaultCommandForTab(activeTab),
-      });
+      const resolvedLang =
+        (!activeTab.tabKind || activeTab.tabKind === 'code') &&
+        (!activeTab.language || activeTab.language === 'plaintext')
+          ? detectLanguageFromPath(activeTab.name || activeTab.path)
+          : activeTab.language;
+      if (resolvedLang && resolvedLang !== activeTab.language) {
+        activeTab = { ...activeTab, language: resolvedLang };
+        const updatedTabs = get().tabs.map((t) =>
+          t.id === activeTab!.id ? activeTab! : t
+        );
+        set({ tabs: updatedTabs });
+      }
+      set((s) => ({
+        activeTabId: activeTab!.id,
+        runnerCommand: defaultCommandForTab(activeTab!),
+        showSplitPreview:
+          resolvedLang === 'markdown' || resolvedLang === 'csv' || resolvedLang === 'html'
+            ? true
+            : s.showSplitPreview,
+      }));
       persistTabsToStorage(get().tabs, activeTab.id, parentDir);
     }
 
@@ -1526,10 +1560,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setActiveTab: (id: string) => {
     const tab = get().tabs.find((t) => t.id === id);
-    set({
+    set((s) => ({
       activeTabId: id,
-      runnerCommand: tab ? defaultCommandForTab(tab) : get().runnerCommand,
-    });
+      runnerCommand: tab ? defaultCommandForTab(tab) : s.runnerCommand,
+      showSplitPreview:
+        tab && (tab.language === 'markdown' || tab.language === 'csv' || tab.language === 'html')
+          ? true
+          : s.showSplitPreview,
+    }));
   },
 
   updateTabContent: (id: string, content: string) => {
@@ -1564,6 +1602,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setTabLanguage: (id: string, language: string) => {
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === id ? { ...t, language } : t)),
+      showSplitPreview:
+        language === 'markdown' || language === 'csv' || language === 'html'
+          ? true
+          : s.showSplitPreview,
     }));
   },
 
