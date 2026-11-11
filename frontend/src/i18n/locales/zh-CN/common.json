@@ -31,7 +31,8 @@
     "refresh": "刷新目录树 (F5)",
     "loading": "正在加载...",
     "empty": "无子文件夹",
-    "symlink": "快捷方式 / 符号链接"
+    "symlink": "快捷方式 / 符号链接",
+    "copyPath": "复制文件夹路径"
   },
   "sidebar": {
     "favorites": "收藏夹",

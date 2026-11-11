@@ -17,11 +17,12 @@ import {
   Star,
   Plus,
   Edit3,
+  Copy,
 } from 'lucide-react';
 import { useFolderTreeStore, buildFlatTree, FlatTreeNode } from './store';
 import { useBrowserStore } from '../../browser/store';
 import { useOperationsStore } from '../../operations/store';
-import { enqueueOperation } from '../../../lib/wails';
+import { enqueueOperation, writeNativeClipboardText } from '../../../lib/wails';
 
 interface FolderTreeProps {
   onNavigate?: () => void;
@@ -45,6 +46,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
   const { openPrompt } = useOperationsStore();
 
   const parentRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dragHoverPath, setDragHoverPath] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -53,6 +55,39 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
     x: number;
     y: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const handlePointerDown = (e: MouseEvent | PointerEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenu(null);
+      }
+    };
+
+    const handleDismiss = () => setContextMenu(null);
+    const scrollEl = parentRef.current;
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('resize', handleDismiss);
+    scrollEl?.addEventListener('scroll', handleDismiss, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('resize', handleDismiss);
+      scrollEl?.removeEventListener('scroll', handleDismiss);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     if (roots.length === 0) {
@@ -393,12 +428,24 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
 
       {contextMenu && (
         <div
+          ref={contextMenuRef}
+          role="menu"
           style={{
             ...styles.contextMenu,
-            left: contextMenu.x,
-            top: contextMenu.y,
+            left:
+              typeof window !== 'undefined'
+                ? Math.max(8, Math.min(contextMenu.x, window.innerWidth - 220))
+                : contextMenu.x,
+            top:
+              typeof window !== 'undefined'
+                ? Math.max(8, Math.min(contextMenu.y, window.innerHeight - 190))
+                : contextMenu.y,
           }}
           onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
         >
           <button
             type="button"
@@ -425,6 +472,20 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
                 ? t('sidebar.removeFavorite')
                 : t('sidebar.addFavorite')}
             </span>
+          </button>
+          <button
+            type="button"
+            style={styles.menuItem}
+            onClick={() => {
+              const pathToCopy = contextMenu.path;
+              setContextMenu(null);
+              void writeNativeClipboardText(pathToCopy).catch(() => {
+                void navigator.clipboard?.writeText(pathToCopy);
+              });
+            }}
+          >
+            <Copy size={13} />
+            <span>{t('tree.copyPath')}</span>
           </button>
           <button
             type="button"

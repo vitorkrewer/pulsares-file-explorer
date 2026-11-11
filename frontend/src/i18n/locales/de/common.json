@@ -31,7 +31,8 @@
     "refresh": "Baumansicht aktualisieren (F5)",
     "loading": "Wird geladen...",
     "empty": "Keine Unterordner",
-    "symlink": "Verknüpfung / Symbolischer Link"
+    "symlink": "Verknüpfung / Symbolischer Link",
+    "copyPath": "Ordnerpfad kopieren"
   },
   "sidebar": {
     "favorites": "Favoriten",

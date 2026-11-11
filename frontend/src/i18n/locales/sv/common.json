@@ -31,7 +31,8 @@
     "refresh": "Uppdatera träd (F5)",
     "loading": "Laddar...",
     "empty": "Inga undermappar",
-    "symlink": "Genväg / Symbolisk länk"
+    "symlink": "Genväg / Symbolisk länk",
+    "copyPath": "Kopiera mappsökväg"
   },
   "sidebar": {
     "favorites": "Favoriter",

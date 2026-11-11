@@ -31,7 +31,8 @@
     "refresh": "Aggiorna albero (F5)",
     "loading": "Caricamento in corso...",
     "empty": "Nessuna sottocartella",
-    "symlink": "Collegamento / Link simbolico"
+    "symlink": "Collegamento / Link simbolico",
+    "copyPath": "Copia percorso della cartella"
   },
   "sidebar": {
     "favorites": "Preferiti",

@@ -31,7 +31,8 @@
     "refresh": "Actualiser l'arborescence (F5)",
     "loading": "Chargement...",
     "empty": "Aucun sous-dossier",
-    "symlink": "Raccourci / Lien symbolique"
+    "symlink": "Raccourci / Lien symbolique",
+    "copyPath": "Copier le chemin du dossier"
   },
   "sidebar": {
     "favorites": "Favoris",

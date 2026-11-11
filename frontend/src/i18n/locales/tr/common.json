@@ -31,7 +31,8 @@
     "refresh": "Ağacı yenile (F5)",
     "loading": "Yükleniyor...",
     "empty": "Alt klasör yok",
-    "symlink": "Kısayol / Sembolik bağlantı"
+    "symlink": "Kısayol / Sembolik bağlantı",
+    "copyPath": "Klasör yolunu kopyala"
   },
   "sidebar": {
     "favorites": "Sık Kullanılanlar",

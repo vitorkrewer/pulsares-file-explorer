@@ -31,7 +31,8 @@
     "refresh": "Actualizar árbol (F5)",
     "loading": "Cargando...",
     "empty": "Sin subcarpetas",
-    "symlink": "Acceso directo / Enlace simbólico"
+    "symlink": "Acceso directo / Enlace simbólico",
+    "copyPath": "Copiar ruta de la carpeta"
   },
   "sidebar": {
     "favorites": "Favoritos",

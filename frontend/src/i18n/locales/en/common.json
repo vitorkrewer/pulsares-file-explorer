@@ -31,7 +31,8 @@
     "refresh": "Refresh tree (F5)",
     "loading": "Loading...",
     "empty": "No subfolders",
-    "symlink": "Shortcut / Symbolic link"
+    "symlink": "Shortcut / Symbolic link",
+    "copyPath": "Copy folder path"
   },
   "sidebar": {
     "favorites": "Favorites",

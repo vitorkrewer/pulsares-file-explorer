@@ -31,7 +31,8 @@
     "refresh": "Atualizar árvore (F5)",
     "loading": "Carregando...",
     "empty": "Sem subpastas",
-    "symlink": "Atalho / Link simbólico"
+    "symlink": "Atalho / Link simbólico",
+    "copyPath": "Copiar caminho da pasta"
   },
   "sidebar": {
     "favorites": "Favoritos",
