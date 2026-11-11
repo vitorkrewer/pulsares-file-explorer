@@ -15,7 +15,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +55,7 @@ type PreviewData struct {
 	DataURI     string              `json:"dataUri,omitempty"`
 	ImageWidth  int                 `json:"imageWidth,omitempty"`
 	ImageHeight int                 `json:"imageHeight,omitempty"`
+	PageCount   int                 `json:"pageCount,omitempty"`
 	ChildCount  int                 `json:"childCount,omitempty"`
 	SlideCount  int                 `json:"slideCount,omitempty"`
 	Slides      []PresentationSlide `json:"slides,omitempty"`
@@ -246,25 +249,29 @@ func (s *Service) ReadPreview(path string, maxTextBytes int) (PreviewData, error
 				if cfg, _, err := image.DecodeConfig(bytes.NewReader(raw)); err == nil {
 					data.ImageWidth = cfg.Width
 					data.ImageHeight = cfg.Height
+				} else if ext == "svg" {
+					data.ImageWidth, data.ImageHeight = extractSVGDimensions(raw)
 				}
 			}
-		} else if thumbURI, err := s.Thumbnail(path, 512); err == nil {
-			data.DataURI = thumbURI
+		} else {
+			if f, err := os.Open(path); err == nil {
+				if cfg, _, decErr := image.DecodeConfig(f); decErr == nil {
+					data.ImageWidth = cfg.Width
+					data.ImageHeight = cfg.Height
+				}
+				_ = f.Close()
+			}
+			data.DataURI = LocalMediaURL(path)
 		}
 		return data, nil
 	}
 
-	// PDF
+	// PDF (sempre via servidor HTTP loopback local para suportar arquivos grandes e controles de página/zoom)
 	if ext == "pdf" {
 		data.Kind = PreviewPDF
 		data.MimeType = "application/pdf"
-		if info.Size() <= 4*1024*1024 {
-			if raw, err := os.ReadFile(path); err == nil {
-				data.DataURI = "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(raw)
-			}
-		} else {
-			data.DataURI = LocalMediaURL(path)
-		}
+		data.PageCount = estimatePDFPageCount(path, info.Size())
+		data.DataURI = LocalMediaURL(path)
 		return data, nil
 	}
 
@@ -376,7 +383,7 @@ func isSupportedRasterExt(ext string) bool {
 
 func isImageExt(ext string) bool {
 	switch ext {
-	case "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico":
+	case "png", "jpg", "jpeg", "jfif", "gif", "webp", "svg", "bmp", "ico", "avif", "tif", "tiff":
 		return true
 	default:
 		return false
@@ -397,9 +404,110 @@ func imageMime(ext string) string {
 		return "image/bmp"
 	case "ico":
 		return "image/x-icon"
+	case "avif":
+		return "image/avif"
+	case "tif", "tiff":
+		return "image/tiff"
 	default:
 		return "image/jpeg"
 	}
+}
+
+var (
+	pdfPageNodePattern  = regexp.MustCompile(`/Type\s*/Page\b`)
+	pdfPagesTreePattern = regexp.MustCompile(`/Type\s*/Pages\b[^>]*?/Count\s+(\d+)`)
+	svgTagPattern       = regexp.MustCompile(`(?is)<svg\b[^>]*>`)
+	svgWidthAttrPattern = regexp.MustCompile(`(?i)\bwidth\s*=\s*["']\s*([0-9]+(?:\.[0-9]+)?)`)
+	svgHeightAttrPat    = regexp.MustCompile(`(?i)\bheight\s*=\s*["']\s*([0-9]+(?:\.[0-9]+)?)`)
+	svgViewBoxPattern   = regexp.MustCompile(`(?i)\bviewBox\s*=\s*["']\s*[-+0-9.]+\s+[-+0-9.]+\s+([0-9]+(?:\.[0-9]+)?)\s+([0-9]+(?:\.[0-9]+)?)`)
+)
+
+// estimatePDFPageCount inspeciona o cabeçalho/estrutura do PDF sem bibliotecas externas
+// para informar a contagem estimada de páginas no renderizador nativo.
+func estimatePDFPageCount(path string, size int64) int {
+	if size <= 0 {
+		return 0
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	const maxScan = 2 * 1024 * 1024
+	var sample []byte
+	if size <= maxScan {
+		sample, _ = io.ReadAll(f)
+	} else {
+		head := make([]byte, maxScan/2)
+		nHead, _ := io.ReadFull(f, head)
+		tail := make([]byte, maxScan/2)
+		_, _ = f.Seek(size-int64(len(tail)), io.SeekStart)
+		nTail, _ := io.ReadFull(f, tail)
+		sample = append(head[:nHead], tail[:nTail]...)
+	}
+	if len(sample) == 0 {
+		return 0
+	}
+
+	maxTreeCount := 0
+	for _, m := range pdfPagesTreePattern.FindAllSubmatch(sample, -1) {
+		if len(m) >= 2 {
+			if c, convErr := strconv.Atoi(string(m[1])); convErr == nil && c > maxTreeCount {
+				maxTreeCount = c
+			}
+		}
+	}
+	if maxTreeCount > 0 {
+		return maxTreeCount
+	}
+
+	matches := pdfPageNodePattern.FindAllIndex(sample, -1)
+	count := 0
+	for _, loc := range matches {
+		end := loc[1]
+		if end < len(sample) && (sample[end] == 's' || sample[end] == 'S') {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+func extractSVGDimensions(raw []byte) (int, int) {
+	if len(raw) == 0 {
+		return 0, 0
+	}
+	head := raw
+	if len(head) > 16384 {
+		head = head[:16384]
+	}
+	tag := svgTagPattern.Find(head)
+	if len(tag) == 0 {
+		return 0, 0
+	}
+	var w, h int
+	if mw := svgWidthAttrPattern.FindSubmatch(tag); len(mw) >= 2 {
+		if wf, err := strconv.ParseFloat(string(mw[1]), 64); err == nil && wf > 0 {
+			w = int(wf + 0.5)
+		}
+	}
+	if mh := svgHeightAttrPat.FindSubmatch(tag); len(mh) >= 2 {
+		if hf, err := strconv.ParseFloat(string(mh[1]), 64); err == nil && hf > 0 {
+			h = int(hf + 0.5)
+		}
+	}
+	if (w == 0 || h == 0) && len(tag) > 0 {
+		if mv := svgViewBoxPattern.FindSubmatch(tag); len(mv) >= 3 {
+			if wf, err := strconv.ParseFloat(string(mv[1]), 64); err == nil && w == 0 && wf > 0 {
+				w = int(wf + 0.5)
+			}
+			if hf, err := strconv.ParseFloat(string(mv[2]), 64); err == nil && h == 0 && hf > 0 {
+				h = int(hf + 0.5)
+			}
+		}
+	}
+	return w, h
 }
 
 func isMediaExt(ext string) bool {

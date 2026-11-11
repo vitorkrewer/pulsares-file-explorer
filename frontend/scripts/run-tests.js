@@ -321,4 +321,67 @@ assert.equal(ZOOM_STEPS_TEST[resolveZoomIdxTest('list', 'comfortable', 'medium')
 assert.equal(ZOOM_STEPS_TEST[6].gridSize, 'xlarge');
 assert.equal(ZOOM_STEPS_TEST[0].density, 'compact');
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + Studio Web Preview + Terminal Follow-up + Clipboard History + Network Drives + Folder Zoom) passaram com sucesso.');
+// 10. Testar classificação de PDF/Imagens e sanitização de abas de mídia no Pulsares Studio (v1.2.0)
+const STUDIO_IMG_EXTS_TEST = new Set([
+  'png', 'jpg', 'jpeg', 'jfif', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif', 'tif', 'tiff',
+]);
+function isStudioPdfTest(nameOrPath) {
+  return String(nameOrPath || '').toLowerCase().endsWith('.pdf');
+}
+function isStudioImgTest(nameOrPath) {
+  const base = String(nameOrPath || '').split(/[/\\]/).pop().toLowerCase();
+  const dot = base.lastIndexOf('.');
+  return dot >= 0 && STUDIO_IMG_EXTS_TEST.has(base.slice(dot + 1));
+}
+function sanitizeStudioTabsTest(tabs) {
+  return tabs.slice(-15).map((t) => {
+    if (t.mediaSrc && t.mediaSrc.startsWith('data:')) {
+      const copy = { ...t };
+      delete copy.mediaSrc;
+      return copy;
+    }
+    return t;
+  });
+}
+
+assert.equal(isStudioPdfTest('C:\\Projetos\\arquitetura.PDF'), true);
+assert.equal(isStudioPdfTest('README.md'), false);
+assert.equal(isStudioImgTest('/assets/logo.svg'), true);
+assert.equal(isStudioImgTest('C:\\ui\\hero.webp'), true);
+assert.equal(isStudioImgTest('C:\\ui\\icone.ico'), true);
+assert.equal(isStudioImgTest('main.go'), false);
+
+const sanitizedMediaTabs = sanitizeStudioTabsTest([
+  { id: 't1', name: 'foto.png', path: 'C:/foto.png', tabKind: 'image', mediaSrc: 'data:image/png;base64,AAAA' },
+  { id: 't2', name: 'guia.pdf', path: 'C:/guia.pdf', tabKind: 'pdf', mediaSrc: 'http://127.0.0.1:51234/__localmedia?path=C%3A%2Fguia.pdf' },
+]);
+assert.equal(sanitizedMediaTabs[0].mediaSrc, undefined);
+assert.ok(sanitizedMediaTabs[1].mediaSrc.includes('/__localmedia?path='));
+
+// 11. Testar desduplicação de abas e resolução de caminho relativo da Prévia Web em subpastas (v1.2.0)
+function normalizeStudioPathTest(p) {
+  return String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+function deduplicateTabsTest(tabs) {
+  const seen = new Set();
+  const out = [];
+  for (const tab of tabs) {
+    if (tab.path) {
+      const key = normalizeStudioPathTest(tab.path);
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+    }
+    out.push(tab);
+  }
+  return out;
+}
+const dedupedStudioTabs = deduplicateTabsTest([
+  { id: 'a', name: 'index.html', path: 'C:\\Users\\Vitor\\scorm\\index.html' },
+  { id: 'b', name: 'index.html', path: 'c:/Users/Vitor/scorm/index.html' },
+  { id: 'c', name: 'styles.css', path: 'C:\\Users\\Vitor\\scorm\\css\\styles.css' },
+]);
+assert.equal(dedupedStudioTabs.length, 2);
+assert.equal(dedupedStudioTabs[0].id, 'a');
+assert.equal(dedupedStudioTabs[1].id, 'c');
+
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + Studio Web/PDF/Image + Terminal Follow-up + Clipboard History + Network Drives + Folder Zoom) passaram com sucesso.');

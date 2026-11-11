@@ -347,6 +347,118 @@ func TestLocalProjectWebServer_HTMLAndAssets(t *testing.T) {
 	}
 }
 
+func TestReadPreview_PDFStreamingAndSVGDimensions(t *testing.T) {
+	tmp := t.TempDir()
+	svc := New(filepath.Join(tmp, "cache"), 10*1024*1024)
+
+	pdfPath := filepath.Join(tmp, "manual.pdf")
+	syntheticPDF := "%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\n%%EOF\n"
+	if err := os.WriteFile(pdfPath, []byte(syntheticPDF), 0o644); err != nil {
+		t.Fatalf("write pdf failed: %v", err)
+	}
+
+	pdfPrev, err := svc.ReadPreview(pdfPath, 4096)
+	if err != nil {
+		t.Fatalf("ReadPreview pdf failed: %v", err)
+	}
+	if pdfPrev.Kind != PreviewPDF || pdfPrev.PageCount != 2 {
+		t.Fatalf("expected PreviewPDF with PageCount=2, got kind=%s pages=%d", pdfPrev.Kind, pdfPrev.PageCount)
+	}
+	if !strings.Contains(pdfPrev.DataURI, "/__localmedia?path=") {
+		t.Fatalf("expected local streaming URL for PDF, got %s", pdfPrev.DataURI)
+	}
+
+	reqPDF := httptest.NewRequest(http.MethodGet, "/__localmedia?path="+url.QueryEscape(pdfPath), nil)
+	recPDF := httptest.NewRecorder()
+	ServeLocalMediaHTTP(recPDF, reqPDF)
+	if recPDF.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for PDF, got %d", recPDF.Code)
+	}
+	if recPDF.Header().Get("Content-Type") != "application/pdf" {
+		t.Fatalf("expected application/pdf, got %s", recPDF.Header().Get("Content-Type"))
+	}
+	if recPDF.Header().Get("Content-Disposition") != "inline" {
+		t.Fatalf("expected Content-Disposition inline, got %s", recPDF.Header().Get("Content-Disposition"))
+	}
+
+	svgPath := filepath.Join(tmp, "icone.svg")
+	svgRaw := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120"><rect width="240" height="120" fill="#2563eb"/></svg>`
+	if err := os.WriteFile(svgPath, []byte(svgRaw), 0o644); err != nil {
+		t.Fatalf("write svg failed: %v", err)
+	}
+	svgPrev, err := svc.ReadPreview(svgPath, 4096)
+	if err != nil {
+		t.Fatalf("ReadPreview svg failed: %v", err)
+	}
+	if svgPrev.Kind != PreviewImage || svgPrev.ImageWidth != 240 || svgPrev.ImageHeight != 120 {
+		t.Fatalf("expected SVG dimensions 240x120, got %+v", svgPrev)
+	}
+}
+
+func TestStudioLivePreview_NestedSubfoldersAndInMemoryOverlay(t *testing.T) {
+	// Simula caminho longo com espaços e acentos (estilo projetos SCORM / OneDrive)
+	baseRoot := filepath.Join(t.TempDir(), "Pós-Graduação em Direito - Ênfase Exame - 42 aulas", "scorm-curso-01")
+	cssDir := filepath.Join(baseRoot, "css")
+	imgDir := filepath.Join(baseRoot, "assets", "img")
+	jsDir := filepath.Join(baseRoot, "js")
+	for _, d := range []string{cssDir, imgDir, jsDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("mkdir %s failed: %v", d, err)
+		}
+	}
+
+	indexPath := filepath.Join(baseRoot, "index.html")
+	cssPath := filepath.Join(cssDir, "styles.css")
+	logoPath := filepath.Join(imgDir, "logo.png")
+	appJsPath := filepath.Join(jsDir, "app.js")
+
+	_ = os.WriteFile(indexPath, []byte(`<!DOCTYPE html><html><head><link rel="stylesheet" href="css/styles.css"></head><body><img src="assets/img/logo.png"><script src="js/app.js"></script></body></html>`), 0o644)
+	_ = os.WriteFile(cssPath, []byte(`body { color: #111827; background: url('../assets/img/logo.png'); }`), 0o644)
+	var pngBuf bytes.Buffer
+	_ = EncodeSamplePNG(&pngBuf, 120, 40)
+	_ = os.WriteFile(logoPath, pngBuf.Bytes(), 0o644)
+	_ = os.WriteFile(appJsPath, []byte(`window.__loaded = true;`), 0o644)
+
+	previewURL := ResolveStudioProjectPreviewURL(baseRoot, "index.html", "")
+	if !strings.Contains(previewURL, "/__project/p_") {
+		t.Fatalf("expected compact token URL, got %s", previewURL)
+	}
+	u, err := url.Parse(previewURL)
+	if err != nil {
+		t.Fatalf("url.Parse failed: %v", err)
+	}
+	prefix := strings.TrimSuffix(u.Path, "index.html")
+
+	// 1. Verifica carregamento de subpastas css/styles.css e assets/img/logo.png a partir do disco
+	reqCSS := httptest.NewRequest(http.MethodGet, prefix+"css/styles.css", nil)
+	recCSS := httptest.NewRecorder()
+	ServeLocalMediaHTTP(recCSS, reqCSS)
+	if recCSS.Code != http.StatusOK || !strings.Contains(recCSS.Body.String(), "#111827") {
+		t.Fatalf("expected disk CSS 200 OK, got code=%d body=%s", recCSS.Code, recCSS.Body.String())
+	}
+
+	reqLogo := httptest.NewRequest(http.MethodGet, prefix+"assets/img/logo.png", nil)
+	recLogo := httptest.NewRecorder()
+	ServeLocalMediaHTTP(recLogo, reqLogo)
+	if recLogo.Code != http.StatusOK || recLogo.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("expected PNG 200 OK, got code=%d mime=%s", recLogo.Code, recLogo.Header().Get("Content-Type"))
+	}
+
+	// 2. Verifica overlay ao vivo em memória (edição em tempo real sem salvar no disco)
+	ReplaceStudioLiveBuffers(map[string]string{
+		cssPath: "body { color: #2563eb; font-weight: 700; }",
+	})
+	defer ReplaceStudioLiveBuffers(nil)
+
+	recLiveCSS := httptest.NewRecorder()
+	ServeLocalMediaHTTP(recLiveCSS, httptest.NewRequest(http.MethodGet, prefix+"css/styles.css", nil))
+	if recLiveCSS.Code != http.StatusOK || !strings.Contains(recLiveCSS.Body.String(), "#2563eb") {
+		t.Fatalf("expected live overlay CSS #2563eb, got code=%d body=%s", recLiveCSS.Code, recLiveCSS.Body.String())
+	}
+}
+
+
+
 
 
 

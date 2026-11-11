@@ -1,7 +1,10 @@
 package thumbs
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,12 +14,99 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
-	mediaServerOnce sync.Once
-	mediaServerBase string
+	mediaServerOnce    sync.Once
+	mediaServerBase    string
+	projectDirRegistry sync.Map // token ("p_<hex16>") -> cleanDirPath (string)
+
+	studioLiveMu      sync.RWMutex
+	studioLiveBuffers = make(map[string][]byte)
 )
+
+func normalizeLiveLookupKey(p string) string {
+	clean := filepath.Clean(strings.TrimSpace(p))
+	slash := filepath.ToSlash(clean)
+	return strings.ToLower(strings.TrimRight(slash, "/"))
+}
+
+func encodeSlashRelPath(rel string) string {
+	slash := filepath.ToSlash(strings.TrimSpace(rel))
+	parts := strings.Split(slash, "/")
+	encoded := make([]string, 0, len(parts))
+	for _, seg := range parts {
+		if seg == "" || seg == "." {
+			continue
+		}
+		encoded = append(encoded, url.PathEscape(seg))
+	}
+	return strings.Join(encoded, "/")
+}
+
+// RegisterProjectDir registra um diretório local no servidor de loopback usando um token curto e seguro
+// (evitando limites de tamanho de URL em caminhos longos) e retorna o prefixo HTTP completo com barra final.
+func RegisterProjectDir(dirPath string) string {
+	cleanDir := filepath.Clean(strings.TrimSpace(dirPath))
+	if cleanDir == "" || cleanDir == "." {
+		cleanDir = os.TempDir()
+	}
+	sum := sha256.Sum256([]byte(normalizeLiveLookupKey(cleanDir)))
+	token := "p_" + hex.EncodeToString(sum[:8])
+	projectDirRegistry.Store(token, cleanDir)
+	if base := ensureMediaServer(); base != "" {
+		return base + "/__project/" + token + "/"
+	}
+	return "/__project/" + token + "/"
+}
+
+// ReplaceStudioLiveBuffers atualiza os buffers em memória das abas abertas no Pulsares Studio,
+// permitindo prévia web em tempo real mesmo antes de salvar no disco, sem quebrar caminhos relativos.
+func ReplaceStudioLiveBuffers(files map[string]string) {
+	next := make(map[string][]byte, len(files))
+	for k, v := range files {
+		trimmed := strings.TrimSpace(k)
+		if trimmed == "" {
+			continue
+		}
+		next[normalizeLiveLookupKey(trimmed)] = []byte(v)
+	}
+	studioLiveMu.Lock()
+	studioLiveBuffers = next
+	studioLiveMu.Unlock()
+}
+
+// ResolveStudioProjectPreviewURL registra a pasta raiz do projeto e retorna a URL HTTP real de loopback
+// para carregar o arquivo HTML (ou buffer sem título) com suporte total a subpastas, imagens, CSS, JS e localStorage.
+func ResolveStudioProjectPreviewURL(dirPath string, entryRelPath string, untitledHTML string) string {
+	cleanDir := filepath.Clean(strings.TrimSpace(dirPath))
+	if cleanDir == "" || cleanDir == "." || cleanDir == string(filepath.Separator) {
+		cleanDir = os.TempDir()
+	}
+	prefix := RegisterProjectDir(cleanDir)
+	if untitledHTML != "" {
+		virtualName := "__studio_untitled__.html"
+		virtualPath := filepath.Join(cleanDir, virtualName)
+		studioLiveMu.Lock()
+		studioLiveBuffers[normalizeLiveLookupKey(virtualPath)] = []byte(untitledHTML)
+		studioLiveMu.Unlock()
+		return prefix + virtualName
+	}
+	escapedRel := encodeSlashRelPath(entryRelPath)
+	if escapedRel == "" {
+		escapedRel = "index.html"
+	}
+	return prefix + escapedRel
+}
+
+func getStudioLiveBuffer(targetPath string) ([]byte, bool) {
+	key := normalizeLiveLookupKey(targetPath)
+	studioLiveMu.RLock()
+	data, ok := studioLiveBuffers[key]
+	studioLiveMu.RUnlock()
+	return data, ok
+}
 
 // ensureMediaServer inicia (uma única vez) um servidor HTTP local em 127.0.0.1:0 dedicado ao streaming
 // de vídeos, áudios, PDFs e projetos web locais via TCP real, contornando o buffer em memória
@@ -55,12 +145,7 @@ func LocalProjectURL(filePath string) string {
 	clean := filepath.Clean(filePath)
 	dir := filepath.Dir(clean)
 	baseName := filepath.Base(clean)
-	b64Dir := base64.RawURLEncoding.EncodeToString([]byte(dir))
-	relEscaped := url.PathEscape(baseName)
-	if base := ensureMediaServer(); base != "" {
-		return base + "/__project/" + b64Dir + "/" + relEscaped
-	}
-	return "/__project/" + b64Dir + "/" + relEscaped
+	return RegisterProjectDir(dir) + url.PathEscape(baseName)
 }
 
 // ServeLocalMediaHTTP serve arquivos locais de mídia, PDF e ativos de projetos web (/ __project /).
@@ -110,6 +195,9 @@ func ServeLocalMediaHTTP(w http.ResponseWriter, r *http.Request) {
 	if mimeType := mediaOrDocMime(ext); mimeType != "" {
 		w.Header().Set("Content-Type", mimeType)
 	}
+	if ext == "pdf" || isImageExt(ext) {
+		w.Header().Set("Content-Disposition", "inline")
+	}
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Cache-Control", "no-store")
 
@@ -129,31 +217,69 @@ func serveLocalProjectAsset(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	b64Dir := trimmed[:slashIdx]
+	dirToken := trimmed[:slashIdx]
 	relPart := trimmed[slashIdx+1:]
 
-	decodedDir, err := base64.RawURLEncoding.DecodeString(b64Dir)
-	if err != nil {
-		decodedDir, err = base64.StdEncoding.DecodeString(b64Dir)
-		if err != nil {
-			http.Error(w, "invalid project dir encoding", http.StatusBadRequest)
+	var baseDir string
+	if strings.HasPrefix(dirToken, "p_") {
+		val, ok := projectDirRegistry.Load(dirToken)
+		if !ok {
+			http.NotFound(w, r)
 			return
+		}
+		baseDir = filepath.Clean(val.(string))
+	} else {
+		decodedDir, err := base64.RawURLEncoding.DecodeString(dirToken)
+		if err != nil {
+			decodedDir, err = base64.StdEncoding.DecodeString(dirToken)
+			if err != nil {
+				http.Error(w, "invalid project dir encoding", http.StatusBadRequest)
+				return
+			}
+		}
+		baseDir = filepath.Clean(string(decodedDir))
+	}
+
+	if strings.Contains(relPart, "%") {
+		if unescaped, err := url.PathUnescape(relPart); err == nil {
+			relPart = unescaped
 		}
 	}
 
-	if unescaped, err := url.PathUnescape(relPart); err == nil {
-		relPart = unescaped
-	}
-
-	baseDir := filepath.Clean(string(decodedDir))
 	if relPart == "" || relPart == "/" {
 		relPart = "index.html"
 	}
 	targetPath := filepath.Clean(filepath.Join(baseDir, filepath.FromSlash(relPart)))
 
+	relCheck, relErr := filepath.Rel(baseDir, targetPath)
+	if relErr != nil || relCheck == ".." || strings.HasPrefix(relCheck, ".."+string(filepath.Separator)) {
+		http.Error(w, "forbidden path", http.StatusForbidden)
+		return
+	}
+
+	// 1. Verifica buffer ao vivo do Pulsares Studio em memória (edições em tempo real antes de salvar)
+	if liveData, ok := getStudioLiveBuffer(targetPath); ok {
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(targetPath), "."))
+		if mimeType := webAssetMime(ext); mimeType != "" {
+			w.Header().Set("Content-Type", mimeType)
+		}
+		w.Header().Set("Content-Disposition", "inline")
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		http.ServeContent(w, r, filepath.Base(targetPath), time.Now(), bytes.NewReader(liveData))
+		return
+	}
+
 	info, err := os.Stat(targetPath)
 	if err == nil && info.IsDir() {
-		targetPath = filepath.Join(targetPath, "index.html")
+		indexCandidate := filepath.Join(targetPath, "index.html")
+		if liveIndex, ok := getStudioLiveBuffer(indexCandidate); ok {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Content-Disposition", "inline")
+			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+			http.ServeContent(w, r, "index.html", time.Now(), bytes.NewReader(liveIndex))
+			return
+		}
+		targetPath = indexCandidate
 		info, err = os.Stat(targetPath)
 	}
 	if err != nil || info.IsDir() {
@@ -172,6 +298,9 @@ func serveLocalProjectAsset(w http.ResponseWriter, r *http.Request) {
 	if mimeType := webAssetMime(ext); mimeType != "" {
 		w.Header().Set("Content-Type", mimeType)
 	}
+	if ext == "pdf" || isImageExt(ext) {
+		w.Header().Set("Content-Disposition", "inline")
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }
@@ -186,6 +315,10 @@ func webAssetMime(ext string) string {
 		return "application/javascript; charset=utf-8"
 	case "json", "map":
 		return "application/json; charset=utf-8"
+	case "xml":
+		return "application/xml; charset=utf-8"
+	case "txt", "md", "csv":
+		return "text/plain; charset=utf-8"
 	case "svg":
 		return "image/svg+xml"
 	case "wasm":

@@ -5,6 +5,7 @@ import (
 	"embed"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -61,6 +62,15 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
 			Handler: localMediaHandler(),
+			Middleware: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasPrefix(r.URL.Path, "/__localmedia") || strings.HasPrefix(r.URL.Path, "/__project/") {
+						thumbs.ServeLocalMediaHTTP(w, r)
+						return
+					}
+					next.ServeHTTP(w, r)
+				})
+			},
 		},
 		BackgroundColour: &options.RGBA{R: 24, G: 24, B: 27, A: 1},
 		OnStartup: func(ctx context.Context) {

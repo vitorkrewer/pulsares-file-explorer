@@ -915,7 +915,7 @@ const PreviewBody: React.FC<{
   const parentDir = data.path ? data.path.replace(/[/\\][^/\\]+$/, '') : '';
 
   useEffect(() => {
-    if (!isHtml || !parentDir) {
+    if (!isHtml || !parentDir || Boolean(data.dataUri)) {
       setSiblingAssets({});
       return;
     }
@@ -972,11 +972,19 @@ const PreviewBody: React.FC<{
             />
             <div style={{ fontWeight: 600, fontSize: 13, wordBreak: 'break-all' }}>{data.name}</div>
           </div>
-          {(data.kind === 'markdown' || data.kind === 'code' || data.kind === 'text') && (
+          {(data.kind === 'markdown' ||
+            data.kind === 'code' ||
+            data.kind === 'text' ||
+            data.kind === 'pdf' ||
+            data.kind === 'image') && (
             <button
               type="button"
               onClick={() => void useEditorStore.getState().openFileInEditor(data.path)}
-              title="Editar no Pulsares Studio"
+              title={
+                data.kind === 'pdf' || data.kind === 'image'
+                  ? 'Abrir renderizador completo no Pulsares Studio'
+                  : 'Editar no Pulsares Studio'
+              }
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -993,7 +1001,7 @@ const PreviewBody: React.FC<{
               }}
             >
               <FileCode2 size={12} />
-              <span>Editar</span>
+              <span>{data.kind === 'pdf' || data.kind === 'image' ? 'Studio' : 'Editar'}</span>
             </button>
           )}
           {isDb && (
@@ -1146,17 +1154,30 @@ const PreviewBody: React.FC<{
                   backgroundColor: '#ffffff',
                 }}
               >
-                <iframe
-                  title={data.name}
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                  srcDoc={connectedHtmlDoc}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    border: 'none',
-                    backgroundColor: '#ffffff',
-                  }}
-                />
+                {data.dataUri ? (
+                  <iframe
+                    title={data.name}
+                    src={data.dataUri}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      backgroundColor: '#ffffff',
+                    }}
+                  />
+                ) : (
+                  <iframe
+                    title={data.name}
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                    srcDoc={connectedHtmlDoc}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      backgroundColor: '#ffffff',
+                    }}
+                  />
+                )}
               </div>
             ) : (
               <div style={styles.codeBox}>

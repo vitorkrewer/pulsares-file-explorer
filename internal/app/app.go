@@ -1815,3 +1815,11 @@ func (a *App) DBCreatorExecute(req dbcreator.CreateDBRequest) (*dbcreator.Create
 		}
 	})
 }
+
+func (a *App) ResolveStudioProjectURL(dirPath string, entryRelPath string, untitledHTML string) string {
+	return thumbs.ResolveStudioProjectPreviewURL(dirPath, entryRelPath, untitledHTML)
+}
+
+func (a *App) SyncStudioLiveFiles(files map[string]string) {
+	thumbs.ReplaceStudioLiveBuffers(files)
+}

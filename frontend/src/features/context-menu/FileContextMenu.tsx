@@ -34,7 +34,12 @@ import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { useTerminalStore } from '../terminal/store';
 import { usePreviewStore } from '../preview/store';
 import { useProductivityStore } from '../productivity/store';
-import { useEditorStore, isEditableTextFile } from '../editor/store';
+import {
+  useEditorStore,
+  isEditableTextFile,
+  isStudioPdfFile,
+  isStudioImageFile,
+} from '../editor/store';
 import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { useDBCreatorStore, isConvertibleToDB } from '../db-creator/store';
 import { SuiteAppIcon } from '../../ui/SuiteAppIcon';
@@ -130,6 +135,10 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
   const isEditable =
     entry && entry.kind !== 'dir'
       ? isEditableTextFile(entry.name, entryExt)
+      : false;
+  const isStudioMedia =
+    entry && entry.kind !== 'dir'
+      ? isStudioPdfFile(entry.name, entryExt) || isStudioImageFile(entry.name, entryExt)
       : false;
   const isDbFile =
     entry && entry.kind !== 'dir'
@@ -298,8 +307,8 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
           ) : (
             <MenuItem
               icon={<SuiteAppIcon variant="studio" size={15} />}
-              label="Editar no Pulsares Studio"
-              badge={isEditable ? 'Studio' : undefined}
+              label={isStudioMedia ? 'Abrir no Pulsares Studio' : 'Editar no Pulsares Studio'}
+              badge={isEditable || isStudioMedia ? 'Studio' : undefined}
               onClick={() =>
                 runAndClose(() => {
                   void openFileInEditor(entry.location.path);

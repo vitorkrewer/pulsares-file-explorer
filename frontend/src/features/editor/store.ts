@@ -7,6 +7,7 @@ import {
   openStudioWindowNative,
   listDirectorySnapshot,
   isDirectoryPath,
+  getPreview,
   StudioRunResult,
 } from '../../lib/wails';
 
@@ -41,6 +42,14 @@ export interface EditorTab {
   cursorLine: number;
   cursorCol: number;
   pinned?: boolean;
+  tabKind?: 'code' | 'pdf' | 'image';
+  mediaSrc?: string;
+  fileSize?: number;
+  mimeType?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  pageCount?: number;
+  svgViewMode?: 'preview' | 'code';
 }
 
 export type DevTransformKind =
@@ -150,6 +159,68 @@ export function isEditableTextFile(nameOrPath: string, extension?: string): bool
   if (dotIdx >= 0) {
     const parsedExt = base.slice(dotIdx + 1);
     return Boolean(EXTENSION_LANGUAGE_MAP[parsedExt]);
+  }
+  return false;
+}
+
+const STUDIO_IMAGE_EXTENSIONS = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'jfif',
+  'gif',
+  'webp',
+  'svg',
+  'bmp',
+  'ico',
+  'avif',
+  'tif',
+  'tiff',
+]);
+
+export function isStudioPdfFile(nameOrPath: string, extension?: string): boolean {
+  const ext = (extension || '').replace(/^\./, '').toLowerCase();
+  if (ext) return ext === 'pdf';
+  const base = (nameOrPath.split(/[/\\]/).pop() || nameOrPath).toLowerCase();
+  return base.endsWith('.pdf');
+}
+
+export function isStudioImageFile(nameOrPath: string, extension?: string): boolean {
+  const ext = (extension || '').replace(/^\./, '').toLowerCase();
+  if (ext && STUDIO_IMAGE_EXTENSIONS.has(ext)) return true;
+  const base = (nameOrPath.split(/[/\\]/).pop() || nameOrPath).toLowerCase();
+  const dotIdx = base.lastIndexOf('.');
+  if (dotIdx >= 0) {
+    return STUDIO_IMAGE_EXTENSIONS.has(base.slice(dotIdx + 1));
+  }
+  return false;
+}
+
+export function isStudioSupportedFile(nameOrPath: string, extension?: string): boolean {
+  return (
+    isEditableTextFile(nameOrPath, extension) ||
+    isStudioPdfFile(nameOrPath, extension) ||
+    isStudioImageFile(nameOrPath, extension)
+  );
+}
+
+export function isBinaryMediaTab(tab?: EditorTab | null): boolean {
+  if (!tab) return false;
+  if (tab.tabKind === 'pdf') return true;
+  if (tab.tabKind === 'image') {
+    return !tab.name.toLowerCase().endsWith('.svg');
+  }
+  return false;
+}
+
+export function isTabMediaPreviewActive(tab?: EditorTab | null): boolean {
+  if (!tab) return false;
+  if (tab.tabKind === 'pdf') return true;
+  if (tab.tabKind === 'image') {
+    if (tab.name.toLowerCase().endsWith('.svg') && tab.svgViewMode === 'code') {
+      return false;
+    }
+    return true;
   }
   return false;
 }
@@ -576,12 +647,43 @@ export function isStandaloneStudioWindow(): boolean {
   return params.get('studio') === '1';
 }
 
+export function normalizeStudioFilePath(p: string): string {
+  return (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
+export function deduplicateTabsByPath(tabs: EditorTab[]): EditorTab[] {
+  const seen = new Set<string>();
+  const out: EditorTab[] = [];
+  for (const tab of tabs) {
+    if (tab.path) {
+      const key = normalizeStudioFilePath(tab.path);
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+    }
+    out.push(tab);
+  }
+  return out;
+}
+
+export function sanitizeTabsForStorage(tabs: EditorTab[]): EditorTab[] {
+  return deduplicateTabsByPath(tabs)
+    .slice(-15)
+    .map((t) => {
+      if (t.mediaSrc && t.mediaSrc.startsWith('data:')) {
+        const copy = { ...t };
+        delete copy.mediaSrc;
+        return copy;
+      }
+      return t;
+    });
+}
+
 function persistTabsToStorage(tabs: EditorTab[], activeTabId: string | null, workspaceDir: string) {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return;
     window.localStorage.setItem(
       STUDIO_STORAGE_KEY,
-      JSON.stringify({ tabs: tabs.slice(-15), activeTabId, workspaceDir })
+      JSON.stringify({ tabs: sanitizeTabsForStorage(tabs), activeTabId, workspaceDir })
     );
   } catch {
     // ignora quota
@@ -605,15 +707,33 @@ function loadPersistedTabs(): {
       .replace(/\\/g, '/')
       .replace(/\/+$/, '')
       .toLowerCase();
-    const cleanTabs = rawTabs.filter((t) => {
-      const hasContent = Boolean(t.content && t.content.trim());
-      if (!t.path) return hasContent;
-      const normTabPath = t.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-      // Descarta abas fantasmas criadas indevidamente com o caminho de uma pasta ou sem extensão e vazias
-      if (normWs && normTabPath === normWs) return false;
-      if (!hasContent && !t.name.includes('.')) return false;
-      return true;
-    });
+    const cleanTabs = deduplicateTabsByPath(
+      rawTabs
+        .filter((t) => {
+          const hasContent = Boolean(t.content && t.content.trim());
+          if (!t.path) return hasContent;
+          const normTabPath = normalizeStudioFilePath(t.path);
+          // Descarta abas fantasmas criadas indevidamente com o caminho de uma pasta ou sem extensão e vazias
+          if (normWs && normTabPath === normWs) return false;
+          if (!hasContent && !t.name.includes('.')) return false;
+          return true;
+        })
+        .map((t): EditorTab => {
+          if (!t.tabKind && t.path) {
+            if (isStudioPdfFile(t.path)) {
+              return { ...t, tabKind: 'pdf' as const, language: 'pdf' };
+            }
+            if (isStudioImageFile(t.path)) {
+              return {
+                ...t,
+                tabKind: 'image' as const,
+                svgViewMode: t.svgViewMode || 'preview',
+              };
+            }
+          }
+          return t;
+        })
+    );
     const activeId =
       cleanTabs.find((t) => t.id === parsed.activeTabId)?.id ||
       cleanTabs[cleanTabs.length - 1]?.id ||
@@ -667,6 +787,16 @@ interface EditorState {
   revertTabContent: (id: string) => void;
   updateCursor: (id: string, line: number, col: number) => void;
   setTabLanguage: (id: string, language: string) => void;
+  setTabSvgViewMode: (id: string, mode: 'preview' | 'code') => void;
+  updateTabMediaMeta: (
+    id: string,
+    meta: Partial<
+      Pick<
+        EditorTab,
+        'mediaSrc' | 'fileSize' | 'mimeType' | 'imageWidth' | 'imageHeight' | 'pageCount'
+      >
+    >
+  ) => void;
   toggleLineEnding: (id: string) => void;
   saveTab: (id: string, fallbackDir?: string) => Promise<boolean>;
   saveAllTabs: (fallbackDir?: string) => Promise<void>;
@@ -807,6 +937,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (initialTarget) {
       if (await isDirectoryPath(initialTarget)) {
         await get().openFolderInEditor(initialTarget, true);
+      } else if (isStudioPdfFile(initialTarget) || isStudioImageFile(initialTarget)) {
+        await get().openFileInEditor(initialTarget, true);
       } else {
         try {
           await readTextFile(initialTarget);
@@ -918,6 +1050,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           if (!entryToOpen) {
             entryToOpen = files.find((f) => isEditableTextFile(f.name));
           }
+          if (!entryToOpen) {
+            entryToOpen = files.find((f) => isStudioPdfFile(f.name) || isStudioImageFile(f.name));
+          }
           if (entryToOpen) {
             await get().openFileInEditor(entryToOpen.location.path, true);
           }
@@ -938,55 +1073,140 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return;
     }
 
-    const parentDir = cleanPath.replace(/[/\\][^/\\]+$/, '') || get().workspaceDir;
-    if (parentDir) {
+    const rawParentDir = cleanPath.replace(/[/\\][^/\\]+$/, '');
+    const existingWs = get().workspaceDir;
+    const normExistingWs = normalizeStudioFilePath(existingWs);
+    const normCleanPath = normalizeStudioFilePath(cleanPath);
+    const isInsideExistingWs =
+      Boolean(normExistingWs) && normCleanPath.startsWith(`${normExistingWs}/`);
+    const parentDir = isInsideExistingWs ? existingWs : rawParentDir || existingWs;
+    if (parentDir && parentDir !== existingWs) {
       set({ workspaceDir: parentDir });
     }
 
-    // Remove abas sem-titulo vazias ou abas fantasmas de pasta antes de abrir o arquivo real
-    const normParent = (parentDir || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-    const cleanedExistingTabs = get().tabs.filter((t) => {
-      const hasContent = Boolean(t.content && t.content.trim());
-      if (!t.path) return hasContent;
-      const normTab = t.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-      if (normParent && normTab === normParent) return false;
-      if (!hasContent && !t.name.includes('.')) return false;
-      return true;
-    });
+    // Remove abas sem-titulo vazias, abas fantasmas de pasta e duplicatas antes de abrir o arquivo real
+    const normParent = normalizeStudioFilePath(parentDir || '');
+    const cleanedExistingTabs = deduplicateTabsByPath(
+      get().tabs.filter((t) => {
+        const hasContent = Boolean(t.content && t.content.trim());
+        if (!t.path) return hasContent;
+        const normTab = normalizeStudioFilePath(t.path);
+        if (normParent && normTab === normParent) return false;
+        if (!hasContent && !t.name.includes('.')) return false;
+        return true;
+      })
+    );
     if (cleanedExistingTabs.length !== get().tabs.length) {
       set({ tabs: cleanedExistingTabs });
     }
 
     // Carrega e registra a aba no estado persistido antes de abrir/focar a janela separada
-    const existing = get().tabs.find((t) => t.path === cleanPath);
+    const existing = get().tabs.find(
+      (t) => Boolean(t.path) && normalizeStudioFilePath(t.path) === normCleanPath
+    );
     let activeTab: EditorTab | null = existing || null;
 
     if (!activeTab) {
       try {
-        const payload = await readTextFile(cleanPath);
-        const lang = detectLanguageFromPath(payload.name || cleanPath);
+        const isPdf = isStudioPdfFile(cleanPath);
+        const isImg = !isPdf && isStudioImageFile(cleanPath);
+        const isSvg = isImg && cleanPath.toLowerCase().endsWith('.svg');
         const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        activeTab = {
-          id,
-          path: payload.path || cleanPath,
-          name: payload.name || cleanPath.split(/[/\\]/).pop() || cleanPath,
-          language: lang,
-          content: payload.content,
-          savedContent: payload.content,
-          lineEnding: payload.lineEnding || 'LF',
-          encoding: payload.encoding || 'UTF-8',
-          cursorLine: 1,
-          cursorCol: 1,
-        };
-        const nextTabs = [...get().tabs, activeTab];
-        set((s) => ({
-          tabs: nextTabs,
-          activeTabId: id,
-          runnerCommand: defaultCommandForTab(activeTab!),
-          showSplitPreview:
-            lang === 'markdown' || lang === 'csv' ? true : s.showSplitPreview,
-        }));
-        persistTabsToStorage(nextTabs, id, parentDir);
+        const fallbackName = cleanPath.split(/[/\\]/).pop() || cleanPath;
+
+        if (isSvg) {
+          const [payload, prev] = await Promise.all([
+            readTextFile(cleanPath),
+            getPreview(cleanPath, 4096).catch(() => null),
+          ]);
+          activeTab = {
+            id,
+            path: payload.path || cleanPath,
+            name: payload.name || fallbackName,
+            language: 'xml',
+            content: payload.content,
+            savedContent: payload.content,
+            lineEnding: payload.lineEnding || 'LF',
+            encoding: payload.encoding || 'UTF-8',
+            cursorLine: 1,
+            cursorCol: 1,
+            tabKind: 'image',
+            svgViewMode: 'preview',
+            mediaSrc: prev?.dataUri || `/__localmedia?path=${encodeURIComponent(cleanPath)}`,
+            fileSize: prev?.size ?? payload.size,
+            mimeType: prev?.mimeType || 'image/svg+xml',
+            imageWidth: prev?.imageWidth,
+            imageHeight: prev?.imageHeight,
+          };
+          const nextTabs = deduplicateTabsByPath([...get().tabs, activeTab]);
+          const resolvedId =
+            nextTabs.find((t) => normalizeStudioFilePath(t.path) === normCleanPath)?.id || id;
+          set({
+            tabs: nextTabs,
+            activeTabId: resolvedId,
+            runnerCommand: '',
+          });
+          persistTabsToStorage(nextTabs, resolvedId, parentDir);
+        } else if (isPdf || isImg) {
+          const prev = await getPreview(cleanPath, 4096);
+          const extBadge = (prev.extension || fallbackName.split('.').pop() || (isPdf ? 'PDF' : 'IMG')).toUpperCase();
+          activeTab = {
+            id,
+            path: prev.path || cleanPath,
+            name: prev.name || fallbackName,
+            language: isPdf ? 'pdf' : 'image',
+            content: '',
+            savedContent: '',
+            lineEnding: 'LF',
+            encoding: extBadge,
+            cursorLine: 1,
+            cursorCol: 1,
+            tabKind: isPdf ? 'pdf' : 'image',
+            mediaSrc: prev.dataUri || `/__localmedia?path=${encodeURIComponent(cleanPath)}`,
+            fileSize: prev.size,
+            mimeType: prev.mimeType || (isPdf ? 'application/pdf' : 'image/*'),
+            imageWidth: prev.imageWidth,
+            imageHeight: prev.imageHeight,
+            pageCount: prev.pageCount,
+          };
+          const nextTabs = deduplicateTabsByPath([...get().tabs, activeTab]);
+          const resolvedId =
+            nextTabs.find((t) => normalizeStudioFilePath(t.path) === normCleanPath)?.id || id;
+          set({
+            tabs: nextTabs,
+            activeTabId: resolvedId,
+            runnerCommand: '',
+            showDiffView: false,
+          });
+          persistTabsToStorage(nextTabs, resolvedId, parentDir);
+        } else {
+          const payload = await readTextFile(cleanPath);
+          const lang = detectLanguageFromPath(payload.name || cleanPath);
+          activeTab = {
+            id,
+            path: payload.path || cleanPath,
+            name: payload.name || fallbackName,
+            language: lang,
+            content: payload.content,
+            savedContent: payload.content,
+            lineEnding: payload.lineEnding || 'LF',
+            encoding: payload.encoding || 'UTF-8',
+            cursorLine: 1,
+            cursorCol: 1,
+            tabKind: 'code',
+          };
+          const nextTabs = deduplicateTabsByPath([...get().tabs, activeTab]);
+          const resolvedId =
+            nextTabs.find((t) => normalizeStudioFilePath(t.path) === normCleanPath)?.id || id;
+          set((s) => ({
+            tabs: nextTabs,
+            activeTabId: resolvedId,
+            runnerCommand: defaultCommandForTab(activeTab!),
+            showSplitPreview:
+              lang === 'markdown' || lang === 'csv' || lang === 'html' ? true : s.showSplitPreview,
+          }));
+          persistTabsToStorage(nextTabs, resolvedId, parentDir);
+        }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         if (errMsg === 'IS_DIRECTORY' || (await isDirectoryPath(cleanPath))) {
@@ -1170,17 +1390,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const cleanNew = newPath.replace(/[\\/]+$/, '');
     set((s) => {
       let changed = false;
-      const nextTabs = s.tabs.map((t) => {
+      const nextTabs: EditorTab[] = s.tabs.map((t): EditorTab => {
         if (!t.path) return t;
         const normTab = t.path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
         if (normTab === normOld) {
           changed = true;
           const nextName = cleanNew.split(/[/\\]/).pop() || t.name;
+          const nextIsPdf = isStudioPdfFile(nextName);
+          const nextIsImg = !nextIsPdf && isStudioImageFile(nextName);
+          const nextTabKind: EditorTab['tabKind'] = nextIsPdf
+            ? 'pdf'
+            : nextIsImg
+            ? 'image'
+            : 'code';
           return {
             ...t,
             path: cleanNew,
             name: nextName,
-            language: detectLanguageFromPath(nextName),
+            tabKind: nextTabKind,
+            language: nextIsPdf
+              ? 'pdf'
+              : nextIsImg && !nextName.toLowerCase().endsWith('.svg')
+              ? 'image'
+              : detectLanguageFromPath(nextName),
           };
         }
         if (normTab.startsWith(`${normOld}/`)) {
@@ -1279,10 +1511,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
   },
 
+  setTabSvgViewMode: (id: string, mode: 'preview' | 'code') => {
+    set((s) => {
+      const nextTabs = s.tabs.map((t) =>
+        t.id === id ? { ...t, svgViewMode: mode } : t
+      );
+      persistTabsToStorage(nextTabs, s.activeTabId, s.workspaceDir);
+      return { tabs: nextTabs };
+    });
+  },
+
+  updateTabMediaMeta: (id, meta) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, ...meta } : t)),
+    }));
+  },
+
   toggleLineEnding: (id: string) => {
     set((s) => ({
       tabs: s.tabs.map((t) => {
-        if (t.id !== id) return t;
+        if (t.id !== id || isBinaryMediaTab(t)) return t;
         const nextLE = t.lineEnding === 'LF' ? 'CRLF' : 'LF';
         const normalized = t.content.replace(/\r\n/g, '\n');
         const nextContent =
@@ -1294,7 +1542,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   saveTab: async (id: string, fallbackDir?: string) => {
     const tab = get().tabs.find((t) => t.id === id);
-    if (!tab) return false;
+    if (!tab || isBinaryMediaTab(tab)) return false;
 
     try {
       let targetPath = tab.path;
@@ -1345,7 +1593,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   formatActiveTab: () => {
     const { activeTabId, tabs, tabSize } = get();
     const tab = tabs.find((t) => t.id === activeTabId);
-    if (!tab) return;
+    if (!tab || isTabMediaPreviewActive(tab)) return;
 
     const sep = tab.lineEnding === 'CRLF' ? '\r\n' : '\n';
     const indentUnit = ' '.repeat(tabSize);
@@ -1607,7 +1855,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   transformActiveTab: (kind: DevTransformKind) => {
     const { activeTabId, tabs, tabSize } = get();
     const tab = tabs.find((t) => t.id === activeTabId);
-    if (!tab) return;
+    if (!tab || isTabMediaPreviewActive(tab)) return;
 
     const sep = tab.lineEnding === 'CRLF' ? '\r\n' : '\n';
     const raw = tab.content;

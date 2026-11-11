@@ -43,6 +43,7 @@ import {
   Scissors,
   ClipboardPaste,
   Files,
+  Eye,
 } from 'lucide-react';
 import {
   useEditorStore,
@@ -55,7 +56,13 @@ import {
   serializeCsvTable,
   EditorTab,
   isStandaloneStudioWindow,
+  isStudioPdfFile,
+  isStudioImageFile,
+  isBinaryMediaTab,
+  isTabMediaPreviewActive,
+  normalizeStudioFilePath,
 } from './store';
+import { StudioMediaViewer, formatStudioMediaBytes } from './StudioMediaViewer';
 import { useBrowserStore } from '../browser/store';
 import {
   Entry,
@@ -67,6 +74,8 @@ import {
   renameItem,
   runOperationAndWait,
   revealInSystemExplorer,
+  resolveStudioProjectURL,
+  syncStudioLiveFiles,
   subscribeEvent,
   StudioOpenFileEvent,
   windowMinimize,
@@ -606,6 +615,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
     revertTabContent,
     updateCursor,
     setTabLanguage,
+    setTabSvgViewMode,
     toggleLineEnding,
     saveTab,
     saveAllTabs,
@@ -688,9 +698,13 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
   const [csvSortCol, setCsvSortCol] = useState<number | null>(null);
   const [csvSortAsc, setCsvSortAsc] = useState(true);
   const [jsonFilterQuery, setJsonFilterQuery] = useState('');
+  const [liveWebPreviewUrl, setLiveWebPreviewUrl] = useState<string>('');
+  const [liveWebPreviewRev, setLiveWebPreviewRev] = useState<number>(0);
 
   const activeTab: EditorTab | null =
     tabs.find((t) => t.id === activeTabId) || tabs[0] || null;
+  const isActiveMediaPreview = isTabMediaPreviewActive(activeTab);
+  const isActiveSvg = Boolean(activeTab?.name.toLowerCase().endsWith('.svg'));
 
   const activeTabParentDir = useMemo(() => {
     if (activeTab?.path) {
@@ -702,11 +716,110 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
   const effectiveWorkspace = workspaceDir || activeTabParentDir || currentPath || '/';
 
   const activeProjectDir = useMemo(() => {
+    if (workspaceDir && activeTabParentDir) {
+      const normWs = normalizeStudioFilePath(workspaceDir);
+      const normParent = normalizeStudioFilePath(activeTabParentDir);
+      if (normParent === normWs || normParent.startsWith(`${normWs}/`)) {
+        return workspaceDir;
+      }
+    }
     if (activeTabParentDir) return activeTabParentDir;
     return effectiveWorkspace;
-  }, [activeTabParentDir, effectiveWorkspace]);
+  }, [workspaceDir, activeTabParentDir, effectiveWorkspace]);
 
-  // Documento HTML conectado para a Prévia em Tempo Real (une HTML + CSS + JS locais da pasta e das abas)
+  const webPreviewEntry = useMemo<{
+    entryRelPath: string;
+    untitledHtml: string;
+  } | null>(() => {
+    if (!activeTab) return null;
+    const toProjectRelative = (fullPath: string): string => {
+      const normFull = fullPath.replace(/\\/g, '/');
+      const normBase = activeProjectDir.replace(/\\/g, '/').replace(/\/+$/, '');
+      if (normBase && normFull.toLowerCase().startsWith(`${normBase.toLowerCase()}/`)) {
+        return normFull.slice(normBase.length + 1);
+      }
+      return normFull.split('/').pop() || 'index.html';
+    };
+
+    if (activeTab.language === 'html') {
+      if (activeTab.path) {
+        return { entryRelPath: toProjectRelative(activeTab.path), untitledHtml: '' };
+      }
+      return {
+        entryRelPath: '',
+        untitledHtml: activeTab.content || '<!DOCTYPE html><html><body></body></html>',
+      };
+    }
+
+    if (activeTab.language === 'css' || activeTab.language === 'javascript') {
+      const normProj = normalizeStudioFilePath(activeProjectDir);
+      const openHtmlTab = tabs.find(
+        (t) =>
+          t.language === 'html' &&
+          (!t.path ||
+            normalizeStudioFilePath(t.path).startsWith(`${normProj}/`) ||
+            normalizeStudioFilePath(t.path) === normProj)
+      );
+      if (openHtmlTab) {
+        if (openHtmlTab.path) {
+          return { entryRelPath: toProjectRelative(openHtmlTab.path), untitledHtml: '' };
+        }
+        return { entryRelPath: '', untitledHtml: openHtmlTab.content };
+      }
+      const hasIndexHtml =
+        siblingWebFiles['index.html'] !== undefined ||
+        workspaceEntries.some((e) => e.kind !== 'dir' && e.name.toLowerCase() === 'index.html');
+      if (hasIndexHtml) {
+        return { entryRelPath: 'index.html', untitledHtml: '' };
+      }
+      const hasIndexHtm =
+        siblingWebFiles['index.htm'] !== undefined ||
+        workspaceEntries.some((e) => e.kind !== 'dir' && e.name.toLowerCase() === 'index.htm');
+      if (hasIndexHtm) {
+        return { entryRelPath: 'index.htm', untitledHtml: '' };
+      }
+    }
+    return null;
+  }, [activeTab, activeProjectDir, tabs, siblingWebFiles, workspaceEntries]);
+
+  // Sincroniza buffers em edição com o servidor HTTP local de loopback para prévia real (com CSS, JS, subpastas, imagens e localStorage)
+  useEffect(() => {
+    if ((!isOpen && !isDedicatedWindow) || !showSplitPreview || !webPreviewEntry) {
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const liveMap: Record<string, string> = {};
+        tabs.forEach((t) => {
+          if (t.path && !isBinaryMediaTab(t)) {
+            liveMap[t.path] = t.content;
+          }
+        });
+        try {
+          await syncStudioLiveFiles(liveMap);
+          const resolvedUrl = await resolveStudioProjectURL(
+            activeProjectDir,
+            webPreviewEntry.entryRelPath,
+            webPreviewEntry.untitledHtml
+          );
+          if (!cancelled && resolvedUrl) {
+            setLiveWebPreviewUrl(resolvedUrl);
+            setLiveWebPreviewRev((r) => r + 1);
+          }
+        } catch {
+          // Mantém fallback srcDoc em modo navegador puro fora do Wails
+        }
+      })();
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [isOpen, isDedicatedWindow, showSplitPreview, activeProjectDir, webPreviewEntry, tabs]);
+
+  // Documento HTML conectado para fallback quando fora do runtime nativo Wails
   const connectedWebPreview = useMemo(() => {
     if (!activeTab) return null;
     if (activeTab.language === 'html') {
@@ -721,30 +834,30 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
       };
     }
     if (activeTab.language === 'css' || activeTab.language === 'javascript') {
-      // Se houver um index.html aberto nas abas ou na pasta do projeto, permite visualizar a prévia web conectada!
-      const openHtmlTab = tabs.find(
-        (t) =>
-          t.language === 'html' &&
-          (!t.path || t.path.toLowerCase().startsWith(activeProjectDir.toLowerCase()))
-      );
-      const htmlSource =
-        openHtmlTab?.content ||
-        siblingWebFiles['index.html'] ||
-        siblingWebFiles['index.htm'];
-      if (htmlSource) {
+      if (webPreviewEntry) {
+        const openHtmlTab = tabs.find(
+          (t) =>
+            t.language === 'html' &&
+            (!t.path ||
+              normalizeStudioFilePath(t.path).startsWith(
+                `${normalizeStudioFilePath(activeProjectDir)}/`
+              ))
+        );
+        const htmlSource =
+          openHtmlTab?.content ||
+          siblingWebFiles['index.html'] ||
+          siblingWebFiles['index.htm'] ||
+          '';
         return {
           isWebProject: true,
-          doc: buildConnectedWebPreviewDoc(
-            htmlSource,
-            activeProjectDir,
-            siblingWebFiles,
-            tabs
-          ),
+          doc: htmlSource
+            ? buildConnectedWebPreviewDoc(htmlSource, activeProjectDir, siblingWebFiles, tabs)
+            : '',
         };
       }
     }
     return null;
-  }, [activeTab, activeProjectDir, siblingWebFiles, tabs]);
+  }, [activeTab, activeProjectDir, siblingWebFiles, tabs, webPreviewEntry]);
 
   const parsedCsv = useMemo(() => {
     if (!activeTab || activeTab.language !== 'csv') return null;
@@ -891,18 +1004,46 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
         const webDir = activeProjectDir || targetDir;
         const webItems =
           webDir === targetDir ? sorted : await listDirectorySnapshot(webDir, false);
-        const webFiles = webItems.filter(
-          (it) =>
-            it.kind !== 'dir' &&
-            /\.(html?|css|m?js)$/i.test(it.name) &&
-            (it.size === undefined || it.size <= 2 * 1024 * 1024)
+        const rootWebTargets = webItems
+          .filter(
+            (it) =>
+              it.kind !== 'dir' &&
+              /\.(html?|css|m?js)$/i.test(it.name) &&
+              (it.size === undefined || it.size <= 2 * 1024 * 1024)
+          )
+          .map((it) => ({ relKey: it.name, fullPath: it.location.path }));
+
+        const commonAssetDirs = webItems.filter(
+          (it) => it.kind === 'dir' && /^(css|styles|js|scripts)$/i.test(it.name)
         );
-        if (webFiles.length > 0) {
+        const subDirTargetsNested = await Promise.all(
+          commonAssetDirs.map(async (dirEntry) => {
+            try {
+              const subItems = await listDirectorySnapshot(dirEntry.location.path, false);
+              return subItems
+                .filter(
+                  (sub) =>
+                    sub.kind !== 'dir' &&
+                    /\.(css|m?js)$/i.test(sub.name) &&
+                    (sub.size === undefined || sub.size <= 2 * 1024 * 1024)
+                )
+                .map((sub) => ({
+                  relKey: `${dirEntry.name}/${sub.name}`,
+                  fullPath: sub.location.path,
+                }));
+            } catch {
+              return [];
+            }
+          })
+        );
+        const allWebTargets = [...rootWebTargets, ...subDirTargetsNested.flat()];
+
+        if (allWebTargets.length > 0) {
           const pairs = await Promise.all(
-            webFiles.map(async (wf) => {
+            allWebTargets.map(async (wf) => {
               try {
-                const res = await readTextFile(wf.location.path);
-                return [wf.name, res.content] as const;
+                const res = await readTextFile(wf.fullPath);
+                return [wf.relKey, res.content] as const;
               } catch {
                 return null;
               }
@@ -996,6 +1137,16 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
       while (existingNames.has(candidateName.toLowerCase())) {
         candidateName = `${stem}-copia-${seq}${ext}`;
         seq++;
+      }
+      if (
+        isStudioPdfFile(entry.name) ||
+        (isStudioImageFile(entry.name) && !entry.name.toLowerCase().endsWith('.svg'))
+      ) {
+        await runOperationAndWait('copy', [entry.location.path], parentDir, 'rename');
+        await reloadWorkspaceEntries();
+        if (!isDedicatedWindow) void refresh();
+        showFlashStatus(`Arquivo duplicado na pasta do projeto`);
+        return;
       }
       const sourcePayload = await readTextFile(entry.location.path);
       const createdPath = await createFile(parentDir, candidateName);
@@ -1202,14 +1353,14 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
   }, [activeTab]);
 
   const diagnostics = useMemo(() => {
-    if (!activeTab) return [];
+    if (!activeTab || isActiveMediaPreview) return [];
     return computeDiagnostics(activeTab.content, activeTab.language);
-  }, [activeTab]);
+  }, [activeTab, isActiveMediaPreview]);
 
   const codeSymbols = useMemo(() => {
-    if (!activeTab) return [];
+    if (!activeTab || isActiveMediaPreview) return [];
     return extractCodeSymbols(activeTab.content, activeTab.language);
-  }, [activeTab]);
+  }, [activeTab, isActiveMediaPreview]);
 
   const diffLines = useMemo(() => {
     if (!activeTab || !showDiffView) return [];
@@ -1813,7 +1964,11 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
           <button
             type="button"
             onClick={() =>
-              openNewUntitledTab(effectiveWorkspace, activeTab?.language || 'typescript', true)
+              openNewUntitledTab(
+                effectiveWorkspace,
+                activeTab && !isActiveMediaPreview ? activeTab.language : 'typescript',
+                true
+              )
             }
             title="Novo arquivo (Ctrl+N)"
             style={headerBtnStyle}
@@ -1822,31 +1977,51 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
             <span>Novo</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (!activeTab) return;
-              void (async () => {
-                const ok = await saveTab(activeTab.id, effectiveWorkspace);
-                if (ok && !isDedicatedWindow) void refresh();
-              })();
-            }}
-            title="Salvar arquivo (Ctrl+S)"
-            style={{
-              ...headerBtnStyle,
-              backgroundColor:
-                activeTab && activeTab.content !== activeTab.savedContent
-                  ? 'var(--accent-primary)'
-                  : 'var(--bg-surface)',
-              color:
-                activeTab && activeTab.content !== activeTab.savedContent
-                  ? '#ffffff'
-                  : 'var(--text-primary)',
-            }}
-          >
-            <Save size={13} />
-            <span>Salvar</span>
-          </button>
+          {isActiveSvg && !isActiveMediaPreview && activeTab && (
+            <button
+              type="button"
+              onClick={() => setTabSvgViewMode(activeTab.id, 'preview')}
+              title="Alternar para o inspetor gráfico da imagem SVG"
+              style={{
+                ...headerBtnStyle,
+                borderColor: 'var(--accent-primary)',
+                backgroundColor: 'var(--accent-subtle)',
+                color: 'var(--accent-text)',
+                fontWeight: 600,
+              }}
+            >
+              <Eye size={13} />
+              <span>Visualizar SVG</span>
+            </button>
+          )}
+
+          {!isActiveMediaPreview && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!activeTab) return;
+                void (async () => {
+                  const ok = await saveTab(activeTab.id, effectiveWorkspace);
+                  if (ok && !isDedicatedWindow) void refresh();
+                })();
+              }}
+              title="Salvar arquivo (Ctrl+S)"
+              style={{
+                ...headerBtnStyle,
+                backgroundColor:
+                  activeTab && activeTab.content !== activeTab.savedContent
+                    ? 'var(--accent-primary)'
+                    : 'var(--bg-surface)',
+                color:
+                  activeTab && activeTab.content !== activeTab.savedContent
+                    ? '#ffffff'
+                    : 'var(--text-primary)',
+              }}
+            >
+              <Save size={13} />
+              <span>Salvar</span>
+            </button>
+          )}
 
           {dirtyCount > 1 && (
             <button
@@ -1860,115 +2035,119 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => void runStudioScript(effectiveWorkspace)}
-            title="Executar arquivo ou script no Console (Ctrl+Enter)"
-            style={{
-              ...headerBtnStyle,
-              borderColor: runnerOpen ? 'var(--accent-primary)' : 'var(--border-subtle)',
-            }}
-          >
-            <Play size={13} style={{ color: 'var(--status-success)' }} />
-            <span>Executar</span>
-          </button>
+          {!isActiveMediaPreview && (
+            <>
+              <button
+                type="button"
+                onClick={() => void runStudioScript(effectiveWorkspace)}
+                title="Executar arquivo ou script no Console (Ctrl+Enter)"
+                style={{
+                  ...headerBtnStyle,
+                  borderColor: runnerOpen ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                }}
+              >
+                <Play size={13} style={{ color: 'var(--status-success)' }} />
+                <span>Executar</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={formatActiveTab}
-            title={`Formatar código e estrutura (${(activeTab?.language || 'texto').toUpperCase()}) — Shift+Alt+F`}
-            style={headerBtnStyle}
-          >
-            <Sparkles size={13} style={{ color: 'var(--accent)' }} />
-            <span>Formatar</span>
-          </button>
+              <button
+                type="button"
+                onClick={formatActiveTab}
+                title={`Formatar código e estrutura (${(activeTab?.language || 'texto').toUpperCase()}) — Shift+Alt+F`}
+                style={headerBtnStyle}
+              >
+                <Sparkles size={13} style={{ color: 'var(--accent)' }} />
+                <span>Formatar</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={toggleWordWrap}
-            title="Alternar quebra automática de linha (Alt+Z)"
-            style={{
-              ...headerBtnStyle,
-              borderColor: wordWrap ? 'var(--accent-primary)' : 'var(--border-subtle)',
-              backgroundColor: wordWrap ? 'var(--accent-subtle)' : 'var(--bg-surface)',
-              color: wordWrap ? 'var(--accent-text)' : 'var(--text-primary)',
-            }}
-          >
-            <WrapText size={13} />
-            <span>Quebra</span>
-          </button>
+              <button
+                type="button"
+                onClick={toggleWordWrap}
+                title="Alternar quebra automática de linha (Alt+Z)"
+                style={{
+                  ...headerBtnStyle,
+                  borderColor: wordWrap ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                  backgroundColor: wordWrap ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+                  color: wordWrap ? 'var(--accent-text)' : 'var(--text-primary)',
+                }}
+              >
+                <WrapText size={13} />
+                <span>Quebra</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={toggleDiffView}
-            title="Comparar alterações com o arquivo salvo em disco (Diff)"
-            style={{
-              ...headerBtnStyle,
-              borderColor: showDiffView ? 'var(--accent-primary)' : 'var(--border-subtle)',
-            }}
-          >
-            <GitCompare size={13} />
-            <span>Diff</span>
-          </button>
+              <button
+                type="button"
+                onClick={toggleDiffView}
+                title="Comparar alterações com o arquivo salvo em disco (Diff)"
+                style={{
+                  ...headerBtnStyle,
+                  borderColor: showDiffView ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                }}
+              >
+                <GitCompare size={13} />
+                <span>Diff</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setFindBarOpen(!findBarOpen)}
-            title="Localizar e Substituir (Ctrl+F)"
-            style={{
-              ...headerBtnStyle,
-              borderColor: findBarOpen ? 'var(--accent-primary)' : 'var(--border-subtle)',
-            }}
-          >
-            <Search size={13} />
-            <span>Buscar</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => setFindBarOpen(!findBarOpen)}
+                title="Localizar e Substituir (Ctrl+F)"
+                style={{
+                  ...headerBtnStyle,
+                  borderColor: findBarOpen ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                }}
+              >
+                <Search size={13} />
+                <span>Buscar</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSuggestIdx(0);
-              setSuggestOpen((v) => !v);
-            }}
-            title="Inserir Snippet de código (Ctrl+Space)"
-            style={headerBtnStyle}
-          >
-            <Wand2 size={13} />
-            <span>Snippets</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSuggestIdx(0);
+                  setSuggestOpen((v) => !v);
+                }}
+                title="Inserir Snippet de código (Ctrl+Space)"
+                style={headerBtnStyle}
+              >
+                <Wand2 size={13} />
+                <span>Snippets</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={toggleSplitPreview}
-            title="Alternar painel interativo lado a lado (Tabela CSV / Inspetor JSON / Markdown / HTML)"
-            style={{
-              ...headerBtnStyle,
-              borderColor: showSplitPreview ? 'var(--accent-primary)' : 'var(--border-subtle)',
-              backgroundColor: showSplitPreview ? 'var(--accent-subtle)' : 'var(--bg-surface)',
-              color: showSplitPreview ? 'var(--accent-text)' : 'var(--text-primary)',
-            }}
-          >
-            {activeTab?.language === 'csv' ? <Table2 size={13} /> : <Columns2 size={13} />}
-            <span>
-              {activeTab?.language === 'csv'
-                ? 'Tabela CSV'
-                : activeTab?.language === 'json'
-                ? 'Inspetor JSON'
-                : 'Prévia'}
-            </span>
-          </button>
+              <button
+                type="button"
+                onClick={toggleSplitPreview}
+                title="Alternar painel interativo lado a lado (Tabela CSV / Inspetor JSON / Markdown / HTML)"
+                style={{
+                  ...headerBtnStyle,
+                  borderColor: showSplitPreview ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                  backgroundColor: showSplitPreview ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+                  color: showSplitPreview ? 'var(--accent-text)' : 'var(--text-primary)',
+                }}
+              >
+                {activeTab?.language === 'csv' ? <Table2 size={13} /> : <Columns2 size={13} />}
+                <span>
+                  {activeTab?.language === 'csv'
+                    ? 'Tabela CSV'
+                    : activeTab?.language === 'json'
+                    ? 'Inspetor JSON'
+                    : 'Prévia'}
+                </span>
+              </button>
 
-          <button
-            type="button"
-            onClick={toggleMinimap}
-            title="Mostrar/ocultar Minimapa de código"
-            style={{
-              ...headerBtnStyle,
-              borderColor: showMinimap ? 'var(--accent-primary)' : 'var(--border-subtle)',
-            }}
-          >
-            <MapIcon size={13} />
-          </button>
+              <button
+                type="button"
+                onClick={toggleMinimap}
+                title="Mostrar/ocultar Minimapa de código"
+                style={{
+                  ...headerBtnStyle,
+                  borderColor: showMinimap ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                }}
+              >
+                <MapIcon size={13} />
+              </button>
+            </>
+          )}
 
           {!isDedicatedWindow && (
             <>
@@ -2169,7 +2348,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
       </div>
 
       {/* Barra de Localizar, Substituir e Ir para Linha */}
-      {findBarOpen && (
+      {findBarOpen && !isActiveMediaPreview && (
         <div
           style={{
             display: 'flex',
@@ -2887,7 +3066,15 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
           {activeTab ? (
             <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
-              {showDiffView ? (
+              {isActiveMediaPreview ? (
+                <StudioMediaViewer
+                  tab={activeTab}
+                  onSwitchSvgToCode={
+                    isActiveSvg ? () => setTabSvgViewMode(activeTab.id, 'code') : undefined
+                  }
+                  onNotify={showFlashStatus}
+                />
+              ) : showDiffView ? (
                 /* Visualizador de Diff (Disco vs Buffer Atual) */
                 <div
                   style={{
@@ -3242,7 +3429,12 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                   {showSplitPreview && (
                     <div
                       style={{
-                        width: activeTab.language === 'csv' || activeTab.language === 'json' ? '50%' : '44%',
+                        width:
+                          activeTab.language === 'csv' ||
+                          activeTab.language === 'json' ||
+                          Boolean(connectedWebPreview?.isWebProject)
+                            ? '50%'
+                            : '44%',
                         borderLeft: '1px solid var(--border-subtle)',
                         backgroundColor: 'var(--bg-surface)',
                         padding: '12px 14px',
@@ -3323,6 +3515,17 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                                 JSON → CSV
                               </button>
                             </>
+                          )}
+                          {connectedWebPreview?.isWebProject && (
+                            <button
+                              type="button"
+                              onClick={() => setLiveWebPreviewRev((r) => r + 1)}
+                              style={headerBtnStyle}
+                              title="Recarregar prévia em tempo real"
+                            >
+                              <RefreshCw size={12} />
+                              <span>Recarregar</span>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -3816,18 +4019,37 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                       ) : activeTab.language === 'markdown' ? (
                         <div>{renderMarkdownPreview(activeTab.content)}</div>
                       ) : connectedWebPreview?.isWebProject ? (
-                        <iframe
-                          title="HTML Live Preview"
-                          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                          srcDoc={connectedWebPreview.doc}
-                          style={{
-                            width: '100%',
-                            height: '92%',
-                            border: '1px solid var(--border-subtle)',
-                            borderRadius: 'var(--radius-sm)',
-                            backgroundColor: '#ffffff',
-                          }}
-                        />
+                        liveWebPreviewUrl ? (
+                          <iframe
+                            key={`live-web-${liveWebPreviewRev}`}
+                            title="HTML Live Preview"
+                            src={`${liveWebPreviewUrl}${
+                              liveWebPreviewUrl.includes('?') ? '&' : '?'
+                            }v=${liveWebPreviewRev}`}
+                            style={{
+                              flex: 1,
+                              width: '100%',
+                              minHeight: '320px',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: 'var(--radius-sm)',
+                              backgroundColor: '#ffffff',
+                            }}
+                          />
+                        ) : (
+                          <iframe
+                            title="HTML Live Preview"
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                            srcDoc={connectedWebPreview.doc}
+                            style={{
+                              flex: 1,
+                              width: '100%',
+                              minHeight: '320px',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: 'var(--radius-sm)',
+                              backgroundColor: '#ffffff',
+                            }}
+                          />
+                        )
                       ) : (
                         <pre
                           style={{
@@ -3901,7 +4123,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                     Nenhum documento aberto
                   </h3>
                   <p style={{ margin: 0, fontSize: '12px', lineHeight: '1.5', color: 'var(--text-muted)' }}>
-                    Crie um novo documento ou selecione um arquivo de texto no explorador para visualizá-lo e editá-lo no Pulsares Studio.
+                    Crie um novo documento ou selecione um arquivo de código, PDF ou imagem no explorador do projeto para abri-lo no Pulsares Studio.
                   </p>
                 </div>
               )}
@@ -4090,27 +4312,49 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {activeTab ? (
-            <>
-              <span>
-                Ln {activeTab.cursorLine}, Col {activeTab.cursorCol}
-              </span>
-              <span>
-                {lines.length} linhas • {activeTab.content.length} caract.
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                {diagnostics.length === 0 ? (
-                  <>
-                    <CheckCircle2 size={12} style={{ color: 'var(--status-success)' }} />
-                    <span>Sem alertas</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle size={12} style={{ color: 'var(--status-warning)' }} />
-                    <span>{diagnostics.length} alerta(s)</span>
-                  </>
-                )}
-              </span>
-            </>
+            isActiveMediaPreview ? (
+              <>
+                <span>
+                  {activeTab.tabKind === 'pdf'
+                    ? 'Documento PDF'
+                    : `Imagem ${(activeTab.name.split('.').pop() || 'IMG').toUpperCase()}`}
+                </span>
+                {activeTab.tabKind === 'pdf' && activeTab.pageCount && activeTab.pageCount > 0 ? (
+                  <span>
+                    {activeTab.pageCount} {activeTab.pageCount === 1 ? 'página' : 'páginas'}
+                  </span>
+                ) : activeTab.imageWidth && activeTab.imageHeight ? (
+                  <span>
+                    {activeTab.imageWidth} × {activeTab.imageHeight} px
+                  </span>
+                ) : null}
+                {activeTab.fileSize && activeTab.fileSize > 0 ? (
+                  <span>{formatStudioMediaBytes(activeTab.fileSize)}</span>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <span>
+                  Ln {activeTab.cursorLine}, Col {activeTab.cursorCol}
+                </span>
+                <span>
+                  {lines.length} linhas • {activeTab.content.length} caract.
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  {diagnostics.length === 0 ? (
+                    <>
+                      <CheckCircle2 size={12} style={{ color: 'var(--status-success)' }} />
+                      <span>Sem alertas</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={12} style={{ color: 'var(--status-warning)' }} />
+                      <span>{diagnostics.length} alerta(s)</span>
+                    </>
+                  )}
+                </span>
+              </>
+            )
           ) : (
             <span>Pulsares Studio</span>
           )}
@@ -4132,7 +4376,13 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
           )}
         </div>
 
-        {activeTab && (
+        {activeTab && isActiveMediaPreview && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span>{activeTab.mimeType || activeTab.encoding}</span>
+          </div>
+        )}
+
+        {activeTab && !isActiveMediaPreview && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               type="button"
@@ -4307,6 +4557,12 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                   <>
                     <Folder size={13} style={{ color: 'var(--accent)' }} />
                     <span style={{ flex: 1, textAlign: 'left' }}>Abrir pasta</span>
+                  </>
+                ) : isStudioPdfFile(projectCtxMenu.entry.name) ||
+                  isStudioImageFile(projectCtxMenu.entry.name) ? (
+                  <>
+                    <Eye size={13} style={{ color: 'var(--accent)' }} />
+                    <span style={{ flex: 1, textAlign: 'left' }}>Visualizar no Studio</span>
                   </>
                 ) : (
                   <>

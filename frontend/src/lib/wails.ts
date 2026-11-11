@@ -148,6 +148,7 @@ export interface PreviewData {
   dataUri?: string;
   imageWidth?: number;
   imageHeight?: number;
+  pageCount?: number;
   childCount?: number;
   slideCount?: number;
   slides?: PresentationSlide[];
@@ -555,6 +556,12 @@ declare global {
           WriteTextFile: (path: string, content: string) => Promise<void>;
           RunStudioCommand: (cwd: string, command: string) => Promise<StudioRunResult>;
           OpenStudioWindow: (targetPath: string) => Promise<void>;
+          ResolveStudioProjectURL: (
+            dirPath: string,
+            entryRelPath: string,
+            untitledHTML: string
+          ) => Promise<string>;
+          SyncStudioLiveFiles: (files: Record<string, string>) => Promise<void>;
           DBInspectSchema: (dbPath: string) => Promise<DBSchemaInfo>;
           DBQueryTable: (
             dbPath: string,
@@ -1867,5 +1874,23 @@ export async function disconnectNetworkDrive(target: string): Promise<void> {
     await window.go.app.App.DisconnectNetworkDrive(target);
   }
 }
+
+export async function resolveStudioProjectURL(
+  dirPath: string,
+  entryRelPath: string,
+  untitledHTML = ''
+): Promise<string> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ResolveStudioProjectURL === 'function') {
+    return (await window.go.app.App.ResolveStudioProjectURL(dirPath, entryRelPath, untitledHTML)) || '';
+  }
+  return '';
+}
+
+export async function syncStudioLiveFiles(files: Record<string, string>): Promise<void> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.SyncStudioLiveFiles === 'function') {
+    await window.go.app.App.SyncStudioLiveFiles(files);
+  }
+}
+
 
 
