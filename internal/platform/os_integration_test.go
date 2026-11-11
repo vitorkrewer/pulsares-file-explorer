@@ -86,6 +86,31 @@ func TestCloudStorageDetectionAndStatus(t *testing.T) {
 	if nonCloud.IsInCloud {
 		t.Fatalf("expected temp dir %q not to be in cloud, got %+v", tmp, nonCloud)
 	}
+
+	cases := []struct {
+		folder string
+		wantID string
+	}{
+		{"OneDrive - Grupo Focus", "onedrive"},
+		{"GoogleDrive-user@gmail.com", "gdrive"},
+		{"Dropbox (Business)", "dropbox"},
+		{"iCloudDrive", "icloud"},
+		{"Nextcloud", "nextcloud"},
+		{"ownCloud", "owncloud"},
+		{"pCloudDrive", "pcloud"},
+		{"Proton Drive", "proton"},
+		{"SynologyDrive", "synology"},
+		{"Qsync", "qsync"},
+		{"Seafile", "seafile"},
+		{"Tresorit", "tresorit"},
+		{"Yandex.Disk", "yandex"},
+	}
+	for _, tc := range cases {
+		id, _, _, _, ok := ClassifyCloudFolderByName(tc.folder)
+		if !ok || id != tc.wantID {
+			t.Fatalf("ClassifyCloudFolderByName(%q) = (%q, %v), want (%q, true)", tc.folder, id, ok, tc.wantID)
+		}
+	}
 }
 
 

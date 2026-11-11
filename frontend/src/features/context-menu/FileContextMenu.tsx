@@ -133,6 +133,24 @@ function getCloudProviderColor(providerId: string): string {
       return '#0061fe';
     case 'icloud':
       return '#0284c7';
+    case 'nextcloud':
+    case 'owncloud':
+      return '#0082c9';
+    case 'pcloud':
+      return '#17b5c8';
+    case 'proton':
+      return '#6d4aff';
+    case 'synology':
+    case 'qsync':
+      return '#059669';
+    case 'seafile':
+      return '#ea580c';
+    case 'tresorit':
+      return '#0d9488';
+    case 'yandex':
+      return '#dc2626';
+    case 'rclone':
+      return '#7c3aed';
     case 'mega':
       return '#d9272e';
     default:
@@ -383,7 +401,9 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
         ? 'Fixado no PC'
         : cloudStatus.pinState === 'online_only'
           ? 'Na Nuvem'
-          : 'No PC';
+          : cloudStatus.pinState === 'syncing'
+            ? 'Sincronizando'
+            : 'No PC';
 
     return (
       <div

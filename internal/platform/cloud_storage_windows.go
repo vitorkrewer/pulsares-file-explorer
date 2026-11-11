@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"unsafe"
 )
 
 const (
@@ -20,6 +21,8 @@ const (
 	fileAttributeRecallOnDataAccess = 0x00400000
 )
 
+var procGetVolumeInformationW = kernel32.NewProc("GetVolumeInformationW")
+
 type dropboxInfoJSON struct {
 	Personal *struct {
 		Path string `json:"path"`
@@ -29,12 +32,37 @@ type dropboxInfoJSON struct {
 	} `json:"business"`
 }
 
-// ListConnectedClouds detecta provedores de nuvem instalados e sincronizados no Windows (OneDrive, Google Drive, Dropbox, iCloud, Nextcloud, MEGA, Box).
+func getVolumeLabelWindows(driveRoot string) (volName string, fsName string) {
+	rootPtr, err := syscall.UTF16PtrFromString(driveRoot)
+	if err != nil {
+		return "", ""
+	}
+	volBuf := make([]uint16, 261)
+	fsBuf := make([]uint16, 261)
+	var serial, maxComp, flags uint32
+	r, _, _ := procGetVolumeInformationW.Call(
+		uintptr(unsafe.Pointer(rootPtr)),
+		uintptr(unsafe.Pointer(&volBuf[0])),
+		uintptr(len(volBuf)),
+		uintptr(unsafe.Pointer(&serial)),
+		uintptr(unsafe.Pointer(&maxComp)),
+		uintptr(unsafe.Pointer(&flags)),
+		uintptr(unsafe.Pointer(&fsBuf[0])),
+		uintptr(len(fsBuf)),
+	)
+	if r == 0 {
+		return "", ""
+	}
+	return strings.TrimSpace(syscall.UTF16ToString(volBuf)), strings.TrimSpace(syscall.UTF16ToString(fsBuf))
+}
+
+// ListConnectedClouds detecta provedores de nuvem instalados e sincronizados no Windows
+// (OneDrive, Google Drive, Dropbox, iCloud Drive, Nextcloud, ownCloud, MEGA, Box, pCloud, Proton Drive, Synology Drive, QNAP Qsync, Seafile, Tresorit, Yandex Disk e Rclone/WinFsp).
 func ListConnectedClouds() []CloudProviderInfo {
 	var clouds []CloudProviderInfo
 	seenRoots := make(map[string]bool)
 
-	addCloud := func(id, name, provider, accountName, rootPath, webURL string) {
+	addCloud := func(id, name, provider, accountName, rootPath, webURL, remoteSpec string) {
 		cleanRoot := filepath.Clean(strings.TrimSpace(rootPath))
 		if cleanRoot == "" || cleanRoot == "." {
 			return
@@ -50,6 +78,9 @@ func ListConnectedClouds() []CloudProviderInfo {
 		seenRoots[key] = true
 		if name == "" {
 			name = filepath.Base(cleanRoot)
+			if name == `\` || name == "." || len(cleanRoot) <= 3 {
+				name = fmt.Sprintf("%s (%s)", provider, strings.TrimSuffix(cleanRoot, `\`))
+			}
 		}
 		clouds = append(clouds, CloudProviderInfo{
 			ID:          id,
@@ -58,6 +89,7 @@ func ListConnectedClouds() []CloudProviderInfo {
 			AccountName: accountName,
 			RootPath:    cleanRoot,
 			WebURL:      webURL,
+			RemoteSpec:  remoteSpec,
 		})
 	}
 
@@ -84,36 +116,51 @@ func ListConnectedClouds() []CloudProviderInfo {
 							portal = webURL[:idx+len(".sharepoint.com")]
 						}
 					}
-					addCloud("onedrive", label, "OneDrive", displayName, userFolder, portal)
+					addCloud("onedrive", label, "OneDrive", displayName, userFolder, portal, "")
 				}
 			}
 		}
 		syscall.RegCloseKey(hAccounts)
 	}
 
-	// 2. OneDrive via SyncEngines\Providers\OneDrive (inclui bibliotecas do SharePoint sincronizadas)
-	if hSync, err := regOpenKey(syscall.HKEY_CURRENT_USER, `Software\SyncEngines\Providers\OneDrive`, syscall.KEY_ENUMERATE_SUB_KEYS); err == nil {
-		for _, sub := range regReadSubKeyNames(hSync) {
-			if hProv, err := regOpenKey(syscall.HKEY_CURRENT_USER, `Software\SyncEngines\Providers\OneDrive\`+sub, syscall.KEY_QUERY_VALUE); err == nil {
-				mountPt, _ := regGetStringValue(hProv, "MountPoint")
-				urlNs, _ := regGetStringValue(hProv, "UrlNamespace")
-				syscall.RegCloseKey(hProv)
-				if mountPt != "" {
-					portal := "https://onedrive.live.com"
-					if strings.HasPrefix(strings.ToLower(urlNs), "http") {
-						portal = urlNs
+	// 2. Todos os provedores Cloud Files API registrados em HKCU\Software\SyncEngines\Providers\*
+	// (OneDrive, iCloudDrive, Nextcloud, ProtonDrive, SynologyDrive, Dropbox, Box, SeaDrive, etc.)
+	if hProviders, err := regOpenKey(syscall.HKEY_CURRENT_USER, `Software\SyncEngines\Providers`, syscall.KEY_ENUMERATE_SUB_KEYS); err == nil {
+		for _, provKey := range regReadSubKeyNames(hProviders) {
+			provPath := `Software\SyncEngines\Providers\` + provKey
+			if hProvGroup, err := regOpenKey(syscall.HKEY_CURRENT_USER, provPath, syscall.KEY_ENUMERATE_SUB_KEYS); err == nil {
+				for _, instKey := range regReadSubKeyNames(hProvGroup) {
+					if hInst, err := regOpenKey(syscall.HKEY_CURRENT_USER, provPath+`\`+instKey, syscall.KEY_QUERY_VALUE); err == nil {
+						mountPt, _ := regGetStringValue(hInst, "MountPoint")
+						urlNs, _ := regGetStringValue(hInst, "UrlNamespace")
+						syscall.RegCloseKey(hInst)
+						if mountPt != "" {
+							id, provName, acct, defURL, ok := ClassifyCloudFolderByName(provKey)
+							if !ok {
+								id, provName, acct, defURL, ok = ClassifyCloudFolderByName(filepath.Base(mountPt))
+							}
+							if !ok {
+								id = strings.ToLower(provKey)
+								provName = provKey
+							}
+							portal := defURL
+							if strings.HasPrefix(strings.ToLower(urlNs), "http") {
+								portal = urlNs
+							}
+							addCloud(id, filepath.Base(mountPt), provName, acct, mountPt, portal, "")
+						}
 					}
-					addCloud("onedrive", filepath.Base(mountPt), "OneDrive", "", mountPt, portal)
 				}
+				syscall.RegCloseKey(hProvGroup)
 			}
 		}
-		syscall.RegCloseKey(hSync)
+		syscall.RegCloseKey(hProviders)
 	}
 
 	// 3. OneDrive via Variáveis de Ambiente
 	for _, envKey := range []string{"OneDriveCommercial", "OneDriveConsumer", "OneDrive"} {
 		if val := strings.TrimSpace(os.Getenv(envKey)); val != "" {
-			addCloud("onedrive", filepath.Base(val), "OneDrive", "", val, "https://onedrive.live.com")
+			addCloud("onedrive", filepath.Base(val), "OneDrive", "", val, "https://onedrive.live.com", "")
 		}
 	}
 
@@ -127,10 +174,10 @@ func ListConnectedClouds() []CloudProviderInfo {
 			var info dropboxInfoJSON
 			if json.Unmarshal(raw, &info) == nil {
 				if info.Personal != nil && info.Personal.Path != "" {
-					addCloud("dropbox", "Dropbox (Pessoal)", "Dropbox", "Pessoal", info.Personal.Path, "https://www.dropbox.com/home")
+					addCloud("dropbox", "Dropbox (Pessoal)", "Dropbox", "Pessoal", info.Personal.Path, "https://www.dropbox.com/home", "")
 				}
 				if info.Business != nil && info.Business.Path != "" {
-					addCloud("dropbox", "Dropbox (Business)", "Dropbox", "Business", info.Business.Path, "https://www.dropbox.com/home")
+					addCloud("dropbox", "Dropbox (Business)", "Dropbox", "Business", info.Business.Path, "https://www.dropbox.com/home", "")
 				}
 			}
 		}
@@ -142,23 +189,45 @@ func ListConnectedClouds() []CloudProviderInfo {
 		syscall.RegCloseKey(hGDrive)
 		if len(mountPt) == 1 {
 			driveRoot := strings.ToUpper(mountPt) + `:\`
-			addCloud("gdrive", fmt.Sprintf("Google Drive (%s:)", strings.ToUpper(mountPt)), "Google Drive", "", driveRoot, "https://drive.google.com/drive/my-drive")
+			addCloud("gdrive", fmt.Sprintf("Google Drive (%s:)", strings.ToUpper(mountPt)), "Google Drive", "", driveRoot, "https://drive.google.com/drive/my-drive", "")
 		} else if mountPt != "" {
-			addCloud("gdrive", "Google Drive", "Google Drive", "", mountPt, "https://drive.google.com/drive/my-drive")
+			addCloud("gdrive", "Google Drive", "Google Drive", "", mountPt, "https://drive.google.com/drive/my-drive", "")
 		}
 	}
 
-	// Verifica unidades montadas que contenham "Meu Drive" ou "My Drive" (Google Drive File Stream)
+	// 6. Inspeção de Unidades Virtuais de Nuvem (Google Drive, pCloud Drive, SeaDrive, Tresorit, Rclone / WinFsp)
 	for _, d := range GetDrives() {
-		for _, subName := range []string{"Meu Drive", "My Drive"} {
-			candidate := filepath.Join(d.Path, subName)
-			if fi, err := os.Stat(candidate); err == nil && fi.IsDir() {
-				addCloud("gdrive", fmt.Sprintf("Google Drive (%s)", strings.TrimSuffix(d.Path, `\`)), "Google Drive", "", d.Path, "https://drive.google.com/drive/my-drive")
+		volLabel, fsName := getVolumeLabelWindows(d.Path)
+		lowLabel := strings.ToLower(volLabel)
+		lowFS := strings.ToLower(fsName)
+		driveLetter := strings.TrimSuffix(d.Path, `\`)
+
+		switch {
+		case strings.Contains(lowLabel, "google drive"):
+			addCloud("gdrive", fmt.Sprintf("Google Drive (%s)", driveLetter), "Google Drive", "", d.Path, "https://drive.google.com/drive/my-drive", "")
+		case strings.Contains(lowLabel, "pcloud"):
+			addCloud("pcloud", fmt.Sprintf("pCloud Drive (%s)", driveLetter), "pCloud Drive", "", d.Path, "https://my.pcloud.com", "")
+		case strings.Contains(lowLabel, "seadrive") || strings.Contains(lowLabel, "seafile"):
+			addCloud("seafile", fmt.Sprintf("SeaDrive (%s)", driveLetter), "Seafile", "", d.Path, "", "")
+		case strings.Contains(lowLabel, "tresorit"):
+			addCloud("tresorit", fmt.Sprintf("Tresorit (%s)", driveLetter), "Tresorit", "", d.Path, "https://web.tresorit.com", "")
+		case strings.Contains(lowFS, "winfsp") || strings.Contains(lowFS, "rclone") || strings.Contains(lowLabel, "rclone"):
+			label := volLabel
+			if label == "" {
+				label = "Rclone Cloud"
+			}
+			addCloud("rclone", fmt.Sprintf("%s (%s)", label, driveLetter), "Rclone Cloud", "", d.Path, "", d.RemoteTarget)
+		default:
+			for _, subName := range []string{"Meu Drive", "My Drive"} {
+				candidate := filepath.Join(d.Path, subName)
+				if fi, err := os.Stat(candidate); err == nil && fi.IsDir() {
+					addCloud("gdrive", fmt.Sprintf("Google Drive (%s)", driveLetter), "Google Drive", "", d.Path, "https://drive.google.com/drive/my-drive", "")
+				}
 			}
 		}
 	}
 
-	// 6. Pastas de nuvem conhecidas no diretório do usuário (OneDrive*, Google Drive*, Dropbox*, iCloudDrive*, Nextcloud*, MEGA*, Box*)
+	// 7. Pastas de nuvem conhecidas no diretório do usuário
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		if entries, err := os.ReadDir(home); err == nil {
 			for _, entry := range entries {
@@ -166,24 +235,8 @@ func ListConnectedClouds() []CloudProviderInfo {
 					continue
 				}
 				name := entry.Name()
-				low := strings.ToLower(name)
-				full := filepath.Join(home, name)
-				switch {
-				case strings.HasPrefix(low, "onedrive"):
-					acct := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(name, "OneDrive"), "-"))
-					addCloud("onedrive", name, "OneDrive", acct, full, "https://onedrive.live.com")
-				case strings.HasPrefix(low, "google drive") || low == "meu drive" || low == "my drive":
-					addCloud("gdrive", name, "Google Drive", "", full, "https://drive.google.com/drive/my-drive")
-				case strings.HasPrefix(low, "dropbox"):
-					addCloud("dropbox", name, "Dropbox", "", full, "https://www.dropbox.com/home")
-				case low == "iclouddrive" || low == "icloud drive":
-					addCloud("icloud", "iCloud Drive", "iCloud Drive", "", full, "https://www.icloud.com/iclouddrive")
-				case strings.HasPrefix(low, "nextcloud"):
-					addCloud("nextcloud", name, "Nextcloud", "", full, "")
-				case strings.HasPrefix(low, "mega"):
-					addCloud("mega", name, "MEGA", "", full, "https://mega.nz/fm")
-				case low == "box" || low == "box sync":
-					addCloud("box", name, "Box", "", full, "https://app.box.com")
+				if id, prov, acct, webURL, ok := ClassifyCloudFolderByName(name); ok {
+					addCloud(id, name, prov, acct, filepath.Join(home, name), webURL, "")
 				}
 			}
 		}
@@ -199,20 +252,8 @@ func GetCloudItemStatus(targetPath string) CloudItemStatus {
 		return CloudItemStatus{IsInCloud: false}
 	}
 
-	cleanLower := strings.ToLower(clean)
 	clouds := ListConnectedClouds()
-
-	var matched *CloudProviderInfo
-	for i := range clouds {
-		rootLower := strings.ToLower(clouds[i].RootPath)
-		if cleanLower == rootLower || strings.HasPrefix(cleanLower, strings.TrimSuffix(rootLower, `\`)+`\`) {
-			// Prefere o prefixo mais específico caso haja aninhamento
-			if matched == nil || len(clouds[i].RootPath) > len(matched.RootPath) {
-				matched = &clouds[i]
-			}
-		}
-	}
-
+	matched := normalizeCloudRootMatch(clean, clouds)
 	if matched == nil {
 		return CloudItemStatus{IsInCloud: false}
 	}
@@ -235,6 +276,7 @@ func GetCloudItemStatus(targetPath string) CloudItemStatus {
 		PinLabel:     pinLabel,
 		WebURL:       matched.WebURL,
 		CanPin:       true,
+		RemoteSpec:   matched.RemoteSpec,
 	}
 }
 
@@ -270,7 +312,6 @@ func ExecuteCloudAction(targetPath string, action string) error {
 
 	switch strings.ToLower(strings.TrimSpace(action)) {
 	case "pin":
-		// Define FILE_ATTRIBUTE_PINNED (+P) e remove FILE_ATTRIBUTE_UNPINNED (-U) via attrib.exe nativo do Windows Cloud Files
 		_ = applyWindowsPinAttributes(clean, true)
 		info, err := os.Stat(clean)
 		if err == nil && info.IsDir() {
@@ -281,7 +322,6 @@ func ExecuteCloudAction(targetPath string, action string) error {
 		return exec.Command("attrib.exe", "+P", "-U", clean).Run()
 
 	case "unpin":
-		// Define FILE_ATTRIBUTE_UNPINNED (+U) e remove FILE_ATTRIBUTE_PINNED (-P) para liberar espaço local
 		_ = applyWindowsPinAttributes(clean, false)
 		info, err := os.Stat(clean)
 		if err == nil && info.IsDir() {
@@ -294,7 +334,6 @@ func ExecuteCloudAction(targetPath string, action string) error {
 	case "hydrate":
 		_ = exec.Command("attrib.exe", "-U", clean).Run()
 		if info, err := os.Stat(clean); err == nil && !info.IsDir() {
-			// Ler o primeiro byte aciona o minifiltro cldflt.sys para baixar o arquivo imediatamente em background
 			go func(p string) {
 				if f, err := os.Open(p); err == nil {
 					buf := make([]byte, 1)
@@ -316,8 +355,7 @@ func ExecuteCloudAction(targetPath string, action string) error {
 		return OpenPath(webURL)
 
 	case "share":
-		// Tenta acionar o verbo nativo de compartilhamento do provedor no Shell do Windows; fallback para o portal web
-		if err := invokeCloudShellVerb(clean, []string{"share", "compartilhar", "link", "onedrive", "google drive", "dropbox"}); err == nil {
+		if err := invokeCloudShellVerb(clean, []string{"share", "compartilhar", "link", "onedrive", "google drive", "dropbox", "nextcloud", "owncloud", "pcloud", "proton", "mega", "tresorit"}); err == nil {
 			return nil
 		}
 		if status.WebURL != "" {
@@ -326,7 +364,7 @@ func ExecuteCloudAction(targetPath string, action string) error {
 		return nil
 
 	case "version_history":
-		if err := invokeCloudShellVerb(clean, []string{"version", "versõ", "versao", "histórico", "historico", "history"}); err == nil {
+		if err := invokeCloudShellVerb(clean, []string{"version", "versõ", "versao", "histórico", "historico", "history", "activity", "atividade"}); err == nil {
 			return nil
 		}
 		if status.WebURL != "" {
@@ -387,4 +425,3 @@ exit 2
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
 	return cmd.Run()
 }
-

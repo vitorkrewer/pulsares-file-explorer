@@ -2128,10 +2128,11 @@ export interface CloudItemStatus {
   displayName: string;
   rootPath: string;
   relativePath: string;
-  pinState: 'pinned' | 'online_only' | 'available' | '';
+  pinState: 'pinned' | 'online_only' | 'available' | 'syncing' | '';
   pinLabel: string;
   webUrl: string;
   canPin: boolean;
+  remoteSpec?: string;
 }
 
 export async function listConnectedClouds(): Promise<CloudProviderInfo[]> {
