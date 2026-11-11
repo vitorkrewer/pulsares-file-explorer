@@ -6,20 +6,23 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Film,
   FlipHorizontal2,
   FlipVertical2,
   FolderOpen,
   Grid3X3,
   Image as ImageIcon,
   Maximize2,
+  Music,
   PanelLeft,
   RefreshCw,
+  Repeat,
   RotateCcw,
   RotateCw,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { EditorTab, useEditorStore } from './store';
+import { EditorTab, isStudioAudioVideoFile, useEditorStore } from './store';
 import {
   getPreview,
   openPath,
@@ -976,6 +979,346 @@ const StudioImageViewer: React.FC<{
   );
 };
 
+const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg']);
+
+function formatDurationLabel(sec: number): string {
+  if (!Number.isFinite(sec) || sec <= 0) return '';
+  const totalSec = Math.floor(sec);
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
+}
+
+const StudioAudioVideoViewer: React.FC<{
+  tab: EditorTab;
+  onNotify?: (message: string) => void;
+}> = ({ tab, onNotify }) => {
+  const updateTabMediaMeta = useEditorStore((s) => s.updateTabMediaMeta);
+  const ext = (tab.name.split('.').pop() || '').toLowerCase();
+  const isAudio = AUDIO_EXTENSIONS.has(ext) && ext !== 'ogv';
+
+  const [streamUrl, setStreamUrl] = useState<string>(
+    tab.mediaSrc || (tab.path ? `/__localmedia?path=${encodeURIComponent(tab.path)}` : '')
+  );
+  const [fileSize, setFileSize] = useState<number>(tab.fileSize || 0);
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const [loop, setLoop] = useState<boolean>(false);
+  const [duration, setDuration] = useState<number>(0);
+  const [videoDims, setVideoDims] = useState<{ w: number; h: number }>({
+    w: tab.imageWidth || 0,
+    h: tab.imageHeight || 0,
+  });
+  const [reloadSeq, setReloadSeq] = useState<number>(0);
+  const [loadError, setLoadError] = useState<boolean>(false);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const refreshMediaMetadata = useCallback(
+    async (manual = false) => {
+      if (!tab.path) return;
+      setLoadError(false);
+      try {
+        const prev = await getPreview(tab.path, 4096);
+        let liveUrl =
+          prev.dataUri || `/__localmedia?path=${encodeURIComponent(tab.path)}`;
+        if (manual && !liveUrl.startsWith('data:')) {
+          liveUrl += `${liveUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
+        }
+        setStreamUrl(liveUrl);
+        if (prev.size && prev.size > 0) {
+          setFileSize(prev.size);
+        }
+        updateTabMediaMeta(tab.id, {
+          mediaSrc: liveUrl,
+          fileSize: prev.size || tab.fileSize,
+          mimeType: prev.mimeType || tab.mimeType,
+        });
+        if (manual) {
+          setReloadSeq((n) => n + 1);
+          onNotify?.('Mídia recarregada do disco');
+        }
+      } catch {
+        setStreamUrl(`/__localmedia?path=${encodeURIComponent(tab.path)}`);
+      }
+    },
+    [onNotify, tab.fileSize, tab.id, tab.mimeType, tab.path, updateTabMediaMeta]
+  );
+
+  useEffect(() => {
+    setDuration(0);
+    setLoadError(false);
+    void refreshMediaMetadata(false);
+  }, [tab.path, refreshMediaMetadata]);
+
+  const applyPlaybackRate = (rate: number) => {
+    setPlaybackRate(rate);
+    if (videoRef.current) videoRef.current.playbackRate = rate;
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+  };
+
+  const formatBadge = (ext || tab.encoding || (isAudio ? 'AUDIO' : 'VIDEO')).toUpperCase();
+  const durationLabel = formatDurationLabel(duration);
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        minHeight: 0,
+        backgroundColor: 'var(--bg-app)',
+      }}
+    >
+      {/* Barra de controles do Inspetor de Áudio e Vídeo */}
+      <div style={toolbarBarStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span
+            style={{
+              ...badgePillStyle,
+              backgroundColor: isAudio
+                ? 'rgba(168, 85, 247, 0.14)'
+                : 'rgba(14, 165, 233, 0.14)',
+              color: isAudio ? '#c084fc' : '#38bdf8',
+              borderColor: isAudio
+                ? 'rgba(168, 85, 247, 0.32)'
+                : 'rgba(14, 165, 233, 0.32)',
+            }}
+          >
+            {isAudio ? <Music size={12} /> : <Film size={12} />}
+            <span>{formatBadge}</span>
+          </span>
+          {!isAudio && videoDims.w > 0 && videoDims.h > 0 && (
+            <span style={{ ...metaTextStyle, fontWeight: 600, color: 'var(--text-primary)' }}>
+              {videoDims.w} × {videoDims.h} px
+            </span>
+          )}
+          {durationLabel && <span style={metaTextStyle}>{durationLabel}</span>}
+          {fileSize > 0 && (
+            <span style={metaTextStyle}>{formatStudioMediaBytes(fileSize)}</span>
+          )}
+        </div>
+
+        {/* Controles centrais: Velocidade de Reprodução e Loop */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={segmentedGroupStyle} title="Velocidade de reprodução">
+            {([0.5, 1, 1.25, 1.5, 2] as const).map((spd) => {
+              const active = Math.abs(playbackRate - spd) < 0.01;
+              return (
+                <button
+                  key={spd}
+                  type="button"
+                  onClick={() => applyPlaybackRate(spd)}
+                  style={{
+                    ...iconToolBtnStyle,
+                    padding: '3px 7px',
+                    fontSize: '10px',
+                    fontWeight: active ? 700 : 500,
+                    backgroundColor: active ? 'var(--accent-subtle)' : 'transparent',
+                    color: active ? 'var(--accent-text)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {spd}x
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setLoop((v) => !v)}
+            title="Alternar repetição contínua (Loop)"
+            style={{
+              ...actionBtnStyle,
+              borderColor: loop ? 'var(--accent-primary)' : 'var(--border-subtle)',
+              backgroundColor: loop ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+              color: loop ? 'var(--accent-text)' : 'var(--text-primary)',
+            }}
+          >
+            <Repeat size={12} />
+            <span>Loop</span>
+          </button>
+        </div>
+
+        {/* Ações direitas (Recarregar, Mostrar na Pasta, Abrir Externamente) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <button
+            type="button"
+            onClick={() => void refreshMediaMetadata(true)}
+            title="Recarregar mídia do disco"
+            style={actionBtnStyle}
+          >
+            <RefreshCw size={13} />
+            <span>Recarregar</span>
+          </button>
+          {tab.path && (
+            <>
+              <button
+                type="button"
+                onClick={() => void revealInSystemExplorer(tab.path)}
+                title="Mostrar na pasta"
+                style={actionBtnStyle}
+              >
+                <FolderOpen size={13} />
+                <span>Mostrar na Pasta</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void openPath(tab.path)}
+                title="Abrir no reprodutor padrão do sistema"
+                style={actionBtnStyle}
+              >
+                <ExternalLink size={13} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Palco principal de reprodução HTML5 */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          minHeight: 0,
+          overflow: 'auto',
+          backgroundColor: '#09090b',
+        }}
+      >
+        {loadError ? (
+          <div
+            style={{
+              padding: '16px 22px',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-secondary)',
+              fontSize: '12px',
+            }}
+          >
+            Não foi possível reproduzir esta mídia ({tab.name}).
+          </div>
+        ) : !streamUrl ? (
+          <div style={{ color: '#cbd5e1', fontSize: '12px' }}>
+            Carregando mídia...
+          </div>
+        ) : isAudio ? (
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              padding: '28px 24px',
+              borderRadius: 'var(--radius-lg)',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: '0 18px 42px rgba(0, 0, 0, 0.45)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '16px',
+            }}
+          >
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '18px',
+                background:
+                  'linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(59, 130, 246, 0.22))',
+                border: '1px solid rgba(168, 85, 247, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#c084fc',
+              }}
+            >
+              <Music size={30} />
+            </div>
+            <div style={{ textAlign: 'center', maxWidth: '100%' }}>
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: '14px',
+                  color: 'var(--text-primary)',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {tab.name}
+              </div>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--text-muted)',
+                  marginTop: '4px',
+                }}
+              >
+                {formatBadge}
+                {durationLabel ? ` • ${durationLabel}` : ''}
+                {fileSize > 0 ? ` • ${formatStudioMediaBytes(fileSize)}` : ''}
+              </div>
+            </div>
+            <audio
+              key={`${tab.path}|${reloadSeq}`}
+              ref={audioRef}
+              controls
+              autoPlay={false}
+              loop={loop}
+              src={streamUrl}
+              onLoadedMetadata={(e) => {
+                e.currentTarget.playbackRate = playbackRate;
+                if (Number.isFinite(e.currentTarget.duration)) {
+                  setDuration(e.currentTarget.duration);
+                }
+              }}
+              onError={() => setLoadError(true)}
+              style={{ width: '100%' }}
+            />
+          </div>
+        ) : (
+          <video
+            key={`${tab.path}|${reloadSeq}`}
+            ref={videoRef}
+            controls
+            autoPlay={false}
+            loop={loop}
+            src={streamUrl}
+            onLoadedMetadata={(e) => {
+              e.currentTarget.playbackRate = playbackRate;
+              if (Number.isFinite(e.currentTarget.duration)) {
+                setDuration(e.currentTarget.duration);
+              }
+              const vw = e.currentTarget.videoWidth;
+              const vh = e.currentTarget.videoHeight;
+              if (vw > 0 && vh > 0) {
+                setVideoDims({ w: vw, h: vh });
+                updateTabMediaMeta(tab.id, {
+                  imageWidth: vw,
+                  imageHeight: vh,
+                });
+              }
+            }}
+            onError={() => setLoadError(true)}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: '#000000',
+              boxShadow: '0 16px 40px rgba(0, 0, 0, 0.5)',
+              outline: 'none',
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const StudioMediaViewer: React.FC<StudioMediaViewerProps> = ({
   tab,
   onSwitchSvgToCode,
@@ -983,6 +1326,9 @@ export const StudioMediaViewer: React.FC<StudioMediaViewerProps> = ({
 }) => {
   if (tab.tabKind === 'pdf') {
     return <StudioPdfViewer tab={tab} onNotify={onNotify} />;
+  }
+  if (tab.tabKind === 'media' || isStudioAudioVideoFile(tab.name)) {
+    return <StudioAudioVideoViewer tab={tab} onNotify={onNotify} />;
   }
   return (
     <StudioImageViewer

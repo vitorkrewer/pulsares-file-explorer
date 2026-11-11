@@ -5,6 +5,9 @@ package platform
 // SetWindowsAppID é um no-op em plataformas não-Windows.
 func SetWindowsAppID(appID string) {}
 
+// EnsureInteractiveDesktop é um no-op em plataformas não-Windows.
+func EnsureInteractiveDesktop() {}
+
 // ApplyWindowIcon é um no-op em plataformas não-Windows.
 func ApplyWindowIcon(windowClass string, iconType string) {}
 

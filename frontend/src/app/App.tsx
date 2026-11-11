@@ -791,6 +791,7 @@ export const App: React.FC = () => {
     return (
       <div style={styles.appRoot}>
         <DBStudioModal standalone />
+        <DBCreatorModal />
       </div>
     );
   }

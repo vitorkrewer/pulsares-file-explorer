@@ -260,6 +260,9 @@ func serveLocalProjectAsset(w http.ResponseWriter, r *http.Request) {
 	// 1. Verifica buffer ao vivo do Pulsares Studio em memória (edições em tempo real antes de salvar)
 	if liveData, ok := getStudioLiveBuffer(targetPath); ok {
 		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(targetPath), "."))
+		if ext == "html" || ext == "htm" {
+			liveData = injectStudioConsoleBridge(liveData)
+		}
 		if mimeType := webAssetMime(ext); mimeType != "" {
 			w.Header().Set("Content-Type", mimeType)
 		}
@@ -273,6 +276,7 @@ func serveLocalProjectAsset(w http.ResponseWriter, r *http.Request) {
 	if err == nil && info.IsDir() {
 		indexCandidate := filepath.Join(targetPath, "index.html")
 		if liveIndex, ok := getStudioLiveBuffer(indexCandidate); ok {
+			liveIndex = injectStudioConsoleBridge(liveIndex)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Content-Disposition", "inline")
 			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
@@ -287,6 +291,18 @@ func serveLocalProjectAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(targetPath), "."))
+	if (ext == "html" || ext == "htm") && info.Size() <= 4*1024*1024 {
+		if rawHTML, readErr := os.ReadFile(targetPath); readErr == nil {
+			bridged := injectStudioConsoleBridge(rawHTML)
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Content-Disposition", "inline")
+			w.Header().Set("Cache-Control", "no-store")
+			http.ServeContent(w, r, info.Name(), info.ModTime(), bytes.NewReader(bridged))
+			return
+		}
+	}
+
 	f, err := os.Open(targetPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -294,7 +310,6 @@ func serveLocalProjectAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 
-	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(targetPath), "."))
 	if mimeType := webAssetMime(ext); mimeType != "" {
 		w.Header().Set("Content-Type", mimeType)
 	}
@@ -303,6 +318,23 @@ func serveLocalProjectAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+const studioConsoleBridgeScript = `<script data-pulsares-bridge="1">(function(){if(window.__pulsaresBridge)return;window.__pulsaresBridge=1;function send(level,args){try{var msg=Array.prototype.slice.call(args).map(function(a){if(a===null)return"null";if(a===undefined)return"undefined";if(typeof a==="object"){try{return JSON.stringify(a)}catch(_){return String(a)}}return String(a)}).join(" ");if(window.parent&&window.parent!==window){window.parent.postMessage({type:"PULSARES_PREVIEW_CONSOLE",level:level,message:msg,ts:Date.now()},"*")}}catch(_){}}["log","info","warn","error"].forEach(function(k){var orig=console[k];console[k]=function(){send(k,arguments);if(orig)return orig.apply(console,arguments)}});window.addEventListener("error",function(e){send("error",[e.message||"Erro de execução",e.filename?(e.filename+":"+e.lineno):""])});window.addEventListener("unhandledrejection",function(e){send("error",["Promise rejeitada:",e.reason])});})();</script>`
+
+func injectStudioConsoleBridge(raw []byte) []byte {
+	s := string(raw)
+	if strings.Contains(s, "data-pulsares-bridge") {
+		return raw
+	}
+	lower := strings.ToLower(s)
+	if headIdx := strings.Index(lower, "<head"); headIdx >= 0 {
+		if closeHead := strings.IndexByte(s[headIdx:], '>'); closeHead >= 0 {
+			insertPos := headIdx + closeHead + 1
+			return []byte(s[:insertPos] + studioConsoleBridgeScript + s[insertPos:])
+		}
+	}
+	return []byte(studioConsoleBridgeScript + s)
 }
 
 func webAssetMime(ext string) string {

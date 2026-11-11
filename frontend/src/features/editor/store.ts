@@ -42,7 +42,7 @@ export interface EditorTab {
   cursorLine: number;
   cursorCol: number;
   pinned?: boolean;
-  tabKind?: 'code' | 'pdf' | 'image';
+  tabKind?: 'code' | 'pdf' | 'image' | 'media';
   mediaSrc?: string;
   fileSize?: number;
   mimeType?: string;
@@ -178,6 +178,19 @@ const STUDIO_IMAGE_EXTENSIONS = new Set([
   'tiff',
 ]);
 
+const STUDIO_MEDIA_EXTENSIONS = new Set([
+  'mp4',
+  'webm',
+  'ogg',
+  'ogv',
+  'mov',
+  'mp3',
+  'wav',
+  'flac',
+  'm4a',
+  'aac',
+]);
+
 export function isStudioPdfFile(nameOrPath: string, extension?: string): boolean {
   const ext = (extension || '').replace(/^\./, '').toLowerCase();
   if (ext) return ext === 'pdf';
@@ -196,17 +209,29 @@ export function isStudioImageFile(nameOrPath: string, extension?: string): boole
   return false;
 }
 
+export function isStudioAudioVideoFile(nameOrPath: string, extension?: string): boolean {
+  const ext = (extension || '').replace(/^\./, '').toLowerCase();
+  if (ext && STUDIO_MEDIA_EXTENSIONS.has(ext)) return true;
+  const base = (nameOrPath.split(/[/\\]/).pop() || nameOrPath).toLowerCase();
+  const dotIdx = base.lastIndexOf('.');
+  if (dotIdx >= 0) {
+    return STUDIO_MEDIA_EXTENSIONS.has(base.slice(dotIdx + 1));
+  }
+  return false;
+}
+
 export function isStudioSupportedFile(nameOrPath: string, extension?: string): boolean {
   return (
     isEditableTextFile(nameOrPath, extension) ||
     isStudioPdfFile(nameOrPath, extension) ||
-    isStudioImageFile(nameOrPath, extension)
+    isStudioImageFile(nameOrPath, extension) ||
+    isStudioAudioVideoFile(nameOrPath, extension)
   );
 }
 
 export function isBinaryMediaTab(tab?: EditorTab | null): boolean {
   if (!tab) return false;
-  if (tab.tabKind === 'pdf') return true;
+  if (tab.tabKind === 'pdf' || tab.tabKind === 'media') return true;
   if (tab.tabKind === 'image') {
     return !tab.name.toLowerCase().endsWith('.svg');
   }
@@ -215,7 +240,7 @@ export function isBinaryMediaTab(tab?: EditorTab | null): boolean {
 
 export function isTabMediaPreviewActive(tab?: EditorTab | null): boolean {
   if (!tab) return false;
-  if (tab.tabKind === 'pdf') return true;
+  if (tab.tabKind === 'pdf' || tab.tabKind === 'media') return true;
   if (tab.tabKind === 'image') {
     if (tab.name.toLowerCase().endsWith('.svg') && tab.svgViewMode === 'code') {
       return false;
@@ -730,6 +755,14 @@ function loadPersistedTabs(): {
                 svgViewMode: t.svgViewMode || 'preview',
               };
             }
+            if (isStudioAudioVideoFile(t.path)) {
+              return {
+                ...t,
+                tabKind: 'media' as const,
+                language: 'media',
+                mediaSrc: t.mediaSrc || `/__localmedia?path=${encodeURIComponent(t.path)}`,
+              };
+            }
           }
           return t;
         })
@@ -763,7 +796,7 @@ interface EditorState {
   showMinimap: boolean;
   showSplitPreview: boolean;
   showDiffView: boolean;
-  sidebarTab: 'files' | 'symbols' | 'tools' | null;
+  sidebarTab: 'files' | 'search' | 'symbols' | 'tools' | null;
   findBarOpen: boolean;
   quickOpenVisible: boolean;
   runnerOpen: boolean;
@@ -815,7 +848,7 @@ interface EditorState {
   toggleMinimap: () => void;
   toggleSplitPreview: () => void;
   toggleDiffView: () => void;
-  setSidebarTab: (tab: 'files' | 'symbols' | 'tools' | null) => void;
+  setSidebarTab: (tab: 'files' | 'search' | 'symbols' | 'tools' | null) => void;
   setFindBarOpen: (open: boolean) => void;
   setQuickOpenVisible: (visible: boolean) => void;
   setRunnerOpen: (open: boolean) => void;
@@ -937,7 +970,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (initialTarget) {
       if (await isDirectoryPath(initialTarget)) {
         await get().openFolderInEditor(initialTarget, true);
-      } else if (isStudioPdfFile(initialTarget) || isStudioImageFile(initialTarget)) {
+      } else if (
+        isStudioPdfFile(initialTarget) ||
+        isStudioImageFile(initialTarget) ||
+        isStudioAudioVideoFile(initialTarget)
+      ) {
         await get().openFileInEditor(initialTarget, true);
       } else {
         try {
@@ -1051,7 +1088,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             entryToOpen = files.find((f) => isEditableTextFile(f.name));
           }
           if (!entryToOpen) {
-            entryToOpen = files.find((f) => isStudioPdfFile(f.name) || isStudioImageFile(f.name));
+            entryToOpen = files.find(
+              (f) =>
+                isStudioPdfFile(f.name) ||
+                isStudioImageFile(f.name) ||
+                isStudioAudioVideoFile(f.name)
+            );
           }
           if (entryToOpen) {
             await get().openFileInEditor(entryToOpen.location.path, true);
@@ -1110,6 +1152,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       try {
         const isPdf = isStudioPdfFile(cleanPath);
         const isImg = !isPdf && isStudioImageFile(cleanPath);
+        const isMedia = !isPdf && !isImg && isStudioAudioVideoFile(cleanPath);
         const isSvg = isImg && cleanPath.toLowerCase().endsWith('.svg');
         const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         const fallbackName = cleanPath.split(/[/\\]/).pop() || cleanPath;
@@ -1147,24 +1190,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             runnerCommand: '',
           });
           persistTabsToStorage(nextTabs, resolvedId, parentDir);
-        } else if (isPdf || isImg) {
+        } else if (isPdf || isImg || isMedia) {
           const prev = await getPreview(cleanPath, 4096);
-          const extBadge = (prev.extension || fallbackName.split('.').pop() || (isPdf ? 'PDF' : 'IMG')).toUpperCase();
+          const extBadge = (
+            prev.extension ||
+            fallbackName.split('.').pop() ||
+            (isPdf ? 'PDF' : isMedia ? 'MEDIA' : 'IMG')
+          ).toUpperCase();
           activeTab = {
             id,
             path: prev.path || cleanPath,
             name: prev.name || fallbackName,
-            language: isPdf ? 'pdf' : 'image',
+            language: isPdf ? 'pdf' : isMedia ? 'media' : 'image',
             content: '',
             savedContent: '',
             lineEnding: 'LF',
             encoding: extBadge,
             cursorLine: 1,
             cursorCol: 1,
-            tabKind: isPdf ? 'pdf' : 'image',
+            tabKind: isPdf ? ('pdf' as const) : isMedia ? ('media' as const) : ('image' as const),
             mediaSrc: prev.dataUri || `/__localmedia?path=${encodeURIComponent(cleanPath)}`,
             fileSize: prev.size,
-            mimeType: prev.mimeType || (isPdf ? 'application/pdf' : 'image/*'),
+            mimeType:
+              prev.mimeType || (isPdf ? 'application/pdf' : isMedia ? 'video/*' : 'image/*'),
             imageWidth: prev.imageWidth,
             imageHeight: prev.imageHeight,
             pageCount: prev.pageCount,
@@ -1398,10 +1446,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           const nextName = cleanNew.split(/[/\\]/).pop() || t.name;
           const nextIsPdf = isStudioPdfFile(nextName);
           const nextIsImg = !nextIsPdf && isStudioImageFile(nextName);
+          const nextIsMedia = !nextIsPdf && !nextIsImg && isStudioAudioVideoFile(nextName);
           const nextTabKind: EditorTab['tabKind'] = nextIsPdf
             ? 'pdf'
             : nextIsImg
             ? 'image'
+            : nextIsMedia
+            ? 'media'
             : 'code';
           return {
             ...t,
@@ -1410,9 +1461,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             tabKind: nextTabKind,
             language: nextIsPdf
               ? 'pdf'
+              : nextIsMedia
+              ? 'media'
               : nextIsImg && !nextName.toLowerCase().endsWith('.svg')
               ? 'image'
               : detectLanguageFromPath(nextName),
+            mediaSrc: nextIsMedia
+              ? `/__localmedia?path=${encodeURIComponent(cleanNew)}`
+              : t.mediaSrc,
           };
         }
         if (normTab.startsWith(`${normOld}/`)) {

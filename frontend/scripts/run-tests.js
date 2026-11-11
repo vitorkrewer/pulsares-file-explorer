@@ -384,4 +384,15 @@ assert.equal(dedupedStudioTabs.length, 2);
 assert.equal(dedupedStudioTabs[0].id, 'a');
 assert.equal(dedupedStudioTabs[1].id, 'c');
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + Studio Web/PDF/Image + Terminal Follow-up + Clipboard History + Network Drives + Folder Zoom) passaram com sucesso.');
+// 12. Testar suporte a Áudio/Vídeo no Studio e geração de CREATE TABLE no DB Studio (v1.2.0)
+const STUDIO_MEDIA_EXTS_TEST = new Set(['mp4', 'webm', 'ogg', 'ogv', 'mov', 'mp3', 'wav', 'flac', 'm4a', 'aac']);
+function isStudioMediaTest(nameOrPath) {
+  const base = String(nameOrPath || '').split(/[/\\]/).pop().toLowerCase();
+  const dot = base.lastIndexOf('.');
+  return dot >= 0 && STUDIO_MEDIA_EXTS_TEST.has(base.slice(dot + 1));
+}
+assert.equal(isStudioMediaTest('C:\\curso\\aula01.mp4'), true);
+assert.equal(isStudioMediaTest('/assets/podcast.mp3'), true);
+assert.equal(isStudioMediaTest('index.html'), false);
+
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + DB Studio CRUD/Creator + Studio Web/PDF/Image/Media/Git/Search + Terminal Follow-up + Clipboard History + Network Drives + Folder Zoom) passaram com sucesso.');

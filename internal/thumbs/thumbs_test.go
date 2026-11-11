@@ -455,6 +455,13 @@ func TestStudioLivePreview_NestedSubfoldersAndInMemoryOverlay(t *testing.T) {
 	if recLiveCSS.Code != http.StatusOK || !strings.Contains(recLiveCSS.Body.String(), "#2563eb") {
 		t.Fatalf("expected live overlay CSS #2563eb, got code=%d body=%s", recLiveCSS.Code, recLiveCSS.Body.String())
 	}
+
+	// 3. Verifica injeção da ponte de Console da Prévia Web no HTML servido
+	recHTML := httptest.NewRecorder()
+	ServeLocalMediaHTTP(recHTML, httptest.NewRequest(http.MethodGet, prefix+"index.html", nil))
+	if recHTML.Code != http.StatusOK || !strings.Contains(recHTML.Body.String(), "PULSARES_PREVIEW_CONSOLE") {
+		t.Fatalf("expected console bridge injected in HTML response, got code=%d body=%s", recHTML.Code, recHTML.Body.String())
+	}
 }
 
 

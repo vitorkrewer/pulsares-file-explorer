@@ -5,12 +5,12 @@ import (
 	"embed"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"pulsares-file-explorer/internal/app"
 	"pulsares-file-explorer/internal/platform"
 	"pulsares-file-explorer/internal/thumbs"
@@ -27,6 +27,8 @@ func localMediaHandler() http.Handler {
 }
 
 func main() {
+	platform.EnsureInteractiveDesktop()
+
 	explorerApp := app.NewApp()
 	title := "Pulsares Explorer"
 	appID := "Pulsares.Explorer"
@@ -62,20 +64,16 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
 			Handler: localMediaHandler(),
-			Middleware: func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if strings.HasPrefix(r.URL.Path, "/__localmedia") || strings.HasPrefix(r.URL.Path, "/__project/") {
-						thumbs.ServeLocalMediaHTTP(w, r)
-						return
-					}
-					next.ServeHTTP(w, r)
-				})
-			},
 		},
 		BackgroundColour: &options.RGBA{R: 24, G: 24, B: 27, A: 1},
 		OnStartup: func(ctx context.Context) {
 			platform.ApplyWindowIcon(windowClass, iconType)
 			explorerApp.Startup(ctx)
+			wailsRuntime.WindowShow(ctx)
+		},
+		OnDomReady: func(ctx context.Context) {
+			wailsRuntime.WindowUnminimise(ctx)
+			wailsRuntime.WindowShow(ctx)
 		},
 		OnShutdown: explorerApp.Shutdown,
 		Windows: &windows.Options{

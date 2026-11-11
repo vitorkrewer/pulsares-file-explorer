@@ -466,7 +466,7 @@ export interface DBRelationshipInfo {
 export interface DBObjectInfo {
   name: string;
   type: 'table' | 'view' | 'index';
-  tableName: string;
+  tableName?: string;
   rowCount: number;
   sql: string;
   columns: DBColumnInfo[];
@@ -478,6 +478,7 @@ export interface DBSchemaInfo {
   name: string;
   size: number;
   sqliteVer: string;
+  sqliteVersion?: string;
   tables: DBObjectInfo[];
   views: DBObjectInfo[];
   indexes: DBObjectInfo[];
@@ -488,6 +489,7 @@ export interface DBQueryResult {
   columns: string[];
   rows: string[][];
   totalRows: number;
+  totalCount?: number;
   rowsAffected: number;
   durationMs: number;
   isSelect: boolean;
@@ -613,8 +615,52 @@ declare global {
           GetSetting: (key: string) => Promise<string>;
           SetSetting: (key: string, val: string) => Promise<void>;
           ShowSaveFileDialog?: (opts: SaveFileDialogOptions) => Promise<string>;
+          ShowOpenFileDialog?: (opts: SaveFileDialogOptions) => Promise<string>;
           DBCreatorInspectSource?: (sourcePath: string) => Promise<DBCreatorInspection>;
           DBCreatorExecute?: (req: DBCreatorRequest) => Promise<DBCreatorResult>;
+          DBCreateDatabaseFromScratch?: (
+            destPath: string,
+            initialSQL: string,
+            enableWAL: boolean
+          ) => Promise<string>;
+          DBUpdateCell?: (
+            dbPath: string,
+            tableName: string,
+            pkCol: string,
+            pkVal: string,
+            targetCol: string,
+            newVal: string,
+            isNull: boolean
+          ) => Promise<void>;
+          DBInsertRow?: (
+            dbPath: string,
+            tableName: string,
+            rowValues: Record<string, string>,
+            nullCols: string[]
+          ) => Promise<void>;
+          DBDeleteRow?: (
+            dbPath: string,
+            tableName: string,
+            pkCol: string,
+            pkVal: string
+          ) => Promise<void>;
+          DBRunMaintenance?: (dbPath: string, action: string) => Promise<DBQueryResult>;
+          DBExportSQLDump?: (dbPath: string, targetTable: string) => Promise<string>;
+          StudioSearchInProject?: (
+            rootDir: string,
+            query: string,
+            useRegex: boolean,
+            caseSensitive: boolean
+          ) => Promise<StudioProjectSearchMatch[]>;
+          StudioReplaceInProject?: (
+            rootDir: string,
+            query: string,
+            replacement: string,
+            useRegex: boolean,
+            caseSensitive: boolean,
+            targetFiles: string[]
+          ) => Promise<number>;
+          StudioGetGitStatus?: (rootDir: string) => Promise<StudioGitStatus>;
           ListClipboardHistory?: () => Promise<ClipboardHistoryItem[]>;
           AddClipboardHistoryItem?: (
             kind: string,
@@ -1891,6 +1937,144 @@ export async function syncStudioLiveFiles(files: Record<string, string>): Promis
     await window.go.app.App.SyncStudioLiveFiles(files);
   }
 }
+
+export interface StudioProjectSearchMatch {
+  path: string;
+  relPath: string;
+  fileName: string;
+  line: number;
+  col: number;
+  lineText: string;
+}
+
+export interface StudioGitStatus {
+  isRepo: boolean;
+  branch: string;
+  files: Record<string, string>;
+}
+
+export async function showOpenFileDialog(opts: SaveFileDialogOptions): Promise<string> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ShowOpenFileDialog === 'function') {
+    return (await window.go.app.App.ShowOpenFileDialog(opts)) || '';
+  }
+  return '';
+}
+
+export async function dbCreateDatabaseFromScratch(
+  destPath: string,
+  initialSQL = '',
+  enableWAL = true
+): Promise<string> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.DBCreateDatabaseFromScratch === 'function') {
+    return await window.go.app.App.DBCreateDatabaseFromScratch(destPath, initialSQL, enableWAL);
+  }
+  return destPath;
+}
+
+export async function dbUpdateCell(
+  dbPath: string,
+  tableName: string,
+  pkCol: string,
+  pkVal: string,
+  targetCol: string,
+  newVal: string,
+  isNull = false
+): Promise<void> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.DBUpdateCell === 'function') {
+    await window.go.app.App.DBUpdateCell(dbPath, tableName, pkCol, pkVal, targetCol, newVal, isNull);
+  }
+}
+
+export async function dbInsertRow(
+  dbPath: string,
+  tableName: string,
+  rowValues: Record<string, string>,
+  nullCols: string[] = []
+): Promise<void> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.DBInsertRow === 'function') {
+    await window.go.app.App.DBInsertRow(dbPath, tableName, rowValues, nullCols);
+  }
+}
+
+export async function dbDeleteRow(
+  dbPath: string,
+  tableName: string,
+  pkCol: string,
+  pkVal: string
+): Promise<void> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.DBDeleteRow === 'function') {
+    await window.go.app.App.DBDeleteRow(dbPath, tableName, pkCol, pkVal);
+  }
+}
+
+export async function dbRunMaintenance(
+  dbPath: string,
+  action: 'vacuum' | 'analyze' | 'integrity' | 'foreign_keys' | 'wal_checkpoint'
+): Promise<DBQueryResult> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.DBRunMaintenance === 'function') {
+    return await window.go.app.App.DBRunMaintenance(dbPath, action);
+  }
+  return {
+    columns: ['Status'],
+    rows: [[`Comando ${action} simulado`]],
+    totalRows: 1,
+    rowsAffected: 0,
+    durationMs: 1,
+    isSelect: true,
+    message: `Manutenção (${action}) concluída`,
+  };
+}
+
+export async function dbExportSQLDump(dbPath: string, targetTable = ''): Promise<string> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.DBExportSQLDump === 'function') {
+    return (await window.go.app.App.DBExportSQLDump(dbPath, targetTable)) || '';
+  }
+  return `-- SQL Dump (${targetTable || 'completo'})\nBEGIN TRANSACTION;\nCOMMIT;\n`;
+}
+
+export async function studioSearchInProject(
+  rootDir: string,
+  query: string,
+  useRegex = false,
+  caseSensitive = false
+): Promise<StudioProjectSearchMatch[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.StudioSearchInProject === 'function') {
+    return (await window.go.app.App.StudioSearchInProject(rootDir, query, useRegex, caseSensitive)) || [];
+  }
+  return [];
+}
+
+export async function studioReplaceInProject(
+  rootDir: string,
+  query: string,
+  replacement: string,
+  useRegex = false,
+  caseSensitive = false,
+  targetFiles: string[] = []
+): Promise<number> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.StudioReplaceInProject === 'function') {
+    return (
+      (await window.go.app.App.StudioReplaceInProject(
+        rootDir,
+        query,
+        replacement,
+        useRegex,
+        caseSensitive,
+        targetFiles
+      )) || 0
+    );
+  }
+  return 0;
+}
+
+export async function studioGetGitStatus(rootDir: string): Promise<StudioGitStatus> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.StudioGetGitStatus === 'function') {
+    const res = await window.go.app.App.StudioGetGitStatus(rootDir);
+    if (res) return res;
+  }
+  return { isRepo: false, branch: '', files: {} };
+}
+
 
 
 

@@ -11,7 +11,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	goruntime "runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1250,6 +1252,7 @@ type DBRelationshipInfo struct {
 type DBObjectInfo struct {
 	Name        string             `json:"name"`
 	Type        string             `json:"type"` // "table" | "view" | "index" | "trigger"
+	TableName   string             `json:"tableName"`
 	RowCount    int64              `json:"rowCount"`
 	SQL         string             `json:"sql"`
 	Columns     []DBColumnInfo     `json:"columns"`
@@ -1260,6 +1263,7 @@ type DBSchemaInfo struct {
 	Path          string               `json:"path"`
 	Name          string               `json:"name"`
 	Size          int64                `json:"size"`
+	SQLiteVer     string               `json:"sqliteVer"`
 	SQLiteVersion string               `json:"sqliteVersion"`
 	Tables        []DBObjectInfo       `json:"tables"`
 	Views         []DBObjectInfo       `json:"views"`
@@ -1407,7 +1411,7 @@ func (a *App) DBInspectSchema(dbPath string) (DBSchemaInfo, error) {
 	_ = db.QueryRow("SELECT sqlite_version()").Scan(&sqliteVer)
 
 	masterRows, err := db.Query(`
-		SELECT type, name, COALESCE(sql, '')
+		SELECT type, name, COALESCE(tbl_name, ''), COALESCE(sql, '')
 		FROM sqlite_master
 		WHERE name NOT LIKE 'sqlite_%'
 		ORDER BY type, name
@@ -1420,12 +1424,13 @@ func (a *App) DBInspectSchema(dbPath string) (DBSchemaInfo, error) {
 	type rawMaster struct {
 		objType string
 		name    string
+		tblName string
 		sqlDef  string
 	}
 	var rawList []rawMaster
 	for masterRows.Next() {
 		var m rawMaster
-		if err := masterRows.Scan(&m.objType, &m.name, &m.sqlDef); err == nil {
+		if err := masterRows.Scan(&m.objType, &m.name, &m.tblName, &m.sqlDef); err == nil {
 			rawList = append(rawList, m)
 		}
 	}
@@ -1435,6 +1440,7 @@ func (a *App) DBInspectSchema(dbPath string) (DBSchemaInfo, error) {
 		Path:          clean,
 		Name:          filepath.Base(clean),
 		Size:          size,
+		SQLiteVer:     sqliteVer,
 		SQLiteVersion: sqliteVer,
 		Tables:        []DBObjectInfo{},
 		Views:         []DBObjectInfo{},
@@ -1446,6 +1452,7 @@ func (a *App) DBInspectSchema(dbPath string) (DBSchemaInfo, error) {
 		obj := DBObjectInfo{
 			Name:        item.name,
 			Type:        item.objType,
+			TableName:   item.tblName,
 			SQL:         item.sqlDef,
 			ForeignKeys: []DBForeignKeyInfo{},
 		}
@@ -1822,4 +1829,537 @@ func (a *App) ResolveStudioProjectURL(dirPath string, entryRelPath string, untit
 
 func (a *App) SyncStudioLiveFiles(files map[string]string) {
 	thumbs.ReplaceStudioLiveBuffers(files)
+}
+
+func (a *App) ShowOpenFileDialog(opts SaveFileDialogOptions) (string, error) {
+	if a.ctx == nil {
+		return "", errors.New("app context not initialized")
+	}
+	dialogOpts := runtime.OpenDialogOptions{
+		Title:            opts.Title,
+		DefaultDirectory: opts.DefaultDirectory,
+		DefaultFilename:  opts.DefaultFilename,
+	}
+	if opts.FilterPattern != "" {
+		displayName := opts.FilterDisplayName
+		if displayName == "" {
+			displayName = "Arquivos"
+		}
+		dialogOpts.Filters = []runtime.FileFilter{
+			{
+				DisplayName: displayName,
+				Pattern:     opts.FilterPattern,
+			},
+			{
+				DisplayName: "Todos os arquivos (*.*)",
+				Pattern:     "*.*",
+			},
+		}
+	}
+	return runtime.OpenFileDialog(a.ctx, dialogOpts)
+}
+
+// DBCreateDatabaseFromScratch cria um novo banco de dados SQLite (.db / .sqlite) do zero,
+// opcionalmente aplicando um script DDL inicial e o modo WAL, garantindo cabeçalho SQLite 3 válido.
+func (a *App) DBCreateDatabaseFromScratch(destPath string, initialSQL string, enableWAL bool) (string, error) {
+	cleanDest := strings.TrimSpace(destPath)
+	if cleanDest == "" {
+		return "", errors.New("informe o caminho de destino para o novo banco de dados")
+	}
+	cleanDest = filepath.Clean(cleanDest)
+	if filepath.Ext(cleanDest) == "" {
+		cleanDest += ".db"
+	}
+	parentDir := filepath.Dir(cleanDest)
+	if parentDir != "" && parentDir != "." {
+		if err := os.MkdirAll(parentDir, 0o755); err != nil {
+			return "", fmt.Errorf("não foi possível criar a pasta de destino: %w", err)
+		}
+	}
+
+	db, err := sql.Open("sqlite", cleanDest)
+	if err != nil {
+		return "", fmt.Errorf("falha ao inicializar arquivo SQLite: %w", err)
+	}
+	defer db.Close()
+
+	if enableWAL {
+		_, _ = db.Exec("PRAGMA journal_mode = WAL;")
+	}
+	_, _ = db.Exec("PRAGMA foreign_keys = ON;")
+
+	// Garante que a página raiz e o cabeçalho mágico de 16 bytes do SQLite 3 sejam gravados em disco
+	// mesmo quando o usuário cria um banco em branco sem tabelas iniciais.
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS _pulsares_bootstrap (id INTEGER PRIMARY KEY);
+		DROP TABLE _pulsares_bootstrap;
+	`); err != nil {
+		return "", fmt.Errorf("erro ao gravar estrutura inicial do banco: %w", err)
+	}
+
+	trimmedSQL := strings.TrimSpace(initialSQL)
+	if trimmedSQL != "" {
+		if _, err := db.Exec(trimmedSQL); err != nil {
+			return "", fmt.Errorf("erro ao executar DDL inicial: %w", err)
+		}
+	}
+
+	return cleanDest, nil
+}
+
+func (a *App) DBUpdateCell(dbPath string, tableName string, pkCol string, pkVal string, targetCol string, newVal string, isNull bool) error {
+	db, _, err := openUserSQLite(dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if strings.TrimSpace(tableName) == "" || strings.TrimSpace(pkCol) == "" || strings.TrimSpace(targetCol) == "" {
+		return errors.New("tabela, chave primária e coluna alvo são obrigatórias")
+	}
+
+	stmt := fmt.Sprintf(
+		"UPDATE %s SET %s = ? WHERE CAST(%s AS TEXT) = ?",
+		quoteSQLIdent(tableName),
+		quoteSQLIdent(targetCol),
+		quoteSQLIdent(pkCol),
+	)
+	var valArg interface{} = newVal
+	if isNull {
+		valArg = nil
+	}
+	res, err := db.Exec(stmt, valArg, pkVal)
+	if err != nil {
+		return err
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("nenhum registro correspondente a %s = %s foi encontrado", pkCol, pkVal)
+	}
+	return nil
+}
+
+func (a *App) DBInsertRow(dbPath string, tableName string, rowValues map[string]string, nullCols []string) error {
+	db, _, err := openUserSQLite(dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if strings.TrimSpace(tableName) == "" {
+		return errors.New("nome da tabela não informado")
+	}
+
+	nullSet := make(map[string]bool, len(nullCols))
+	for _, nc := range nullCols {
+		nullSet[nc] = true
+	}
+
+	var colNames []string
+	for k := range rowValues {
+		if strings.TrimSpace(k) != "" {
+			colNames = append(colNames, k)
+		}
+	}
+	for nc := range nullSet {
+		if _, exists := rowValues[nc]; !exists && strings.TrimSpace(nc) != "" {
+			colNames = append(colNames, nc)
+		}
+	}
+	sort.Strings(colNames)
+
+	if len(colNames) == 0 {
+		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s DEFAULT VALUES", quoteSQLIdent(tableName)))
+		return err
+	}
+
+	quotedCols := make([]string, 0, len(colNames))
+	placeholders := make([]string, 0, len(colNames))
+	args := make([]interface{}, 0, len(colNames))
+	for _, c := range colNames {
+		quotedCols = append(quotedCols, quoteSQLIdent(c))
+		placeholders = append(placeholders, "?")
+		if nullSet[c] {
+			args = append(args, nil)
+		} else {
+			args = append(args, rowValues[c])
+		}
+	}
+
+	stmt := fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s)",
+		quoteSQLIdent(tableName),
+		strings.Join(quotedCols, ", "),
+		strings.Join(placeholders, ", "),
+	)
+	_, err = db.Exec(stmt, args...)
+	return err
+}
+
+func (a *App) DBDeleteRow(dbPath string, tableName string, pkCol string, pkVal string) error {
+	db, _, err := openUserSQLite(dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if strings.TrimSpace(tableName) == "" || strings.TrimSpace(pkCol) == "" {
+		return errors.New("tabela e coluna chave são obrigatórias")
+	}
+	stmt := fmt.Sprintf(
+		"DELETE FROM %s WHERE CAST(%s AS TEXT) = ?",
+		quoteSQLIdent(tableName),
+		quoteSQLIdent(pkCol),
+	)
+	_, err = db.Exec(stmt, pkVal)
+	return err
+}
+
+func (a *App) DBRunMaintenance(dbPath string, action string) (DBQueryResult, error) {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "vacuum":
+		return a.DBExecuteSQL(dbPath, "VACUUM;")
+	case "analyze":
+		return a.DBExecuteSQL(dbPath, "ANALYZE;")
+	case "integrity":
+		return a.DBExecuteSQL(dbPath, "PRAGMA integrity_check;")
+	case "foreign_keys":
+		return a.DBExecuteSQL(dbPath, "PRAGMA foreign_key_check;")
+	case "wal_checkpoint":
+		return a.DBExecuteSQL(dbPath, "PRAGMA wal_checkpoint(TRUNCATE);")
+	default:
+		return DBQueryResult{}, fmt.Errorf("ação de manutenção desconhecida: %s", action)
+	}
+}
+
+func escapeSQLLiteral(val string) string {
+	return "'" + strings.ReplaceAll(val, "'", "''") + "'"
+}
+
+func (a *App) DBExportSQLDump(dbPath string, targetTable string) (string, error) {
+	db, clean, err := openUserSQLite(dbPath)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+
+	var sb strings.Builder
+	sb.WriteString("-- Pulsares DB Studio SQL Dump\n")
+	sb.WriteString(fmt.Sprintf("-- Banco: %s\n", filepath.Base(clean)))
+	sb.WriteString(fmt.Sprintf("-- Gerado em: %s\n\n", time.Now().Format(time.RFC3339)))
+	sb.WriteString("PRAGMA foreign_keys = OFF;\nBEGIN TRANSACTION;\n\n")
+
+	query := `SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`
+	var args []interface{}
+	if strings.TrimSpace(targetTable) != "" {
+		query += ` AND name = ?`
+		args = append(args, strings.TrimSpace(targetTable))
+	}
+	query += ` ORDER BY name`
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return "", err
+	}
+	type tblMeta struct {
+		name string
+		ddl  string
+	}
+	var tables []tblMeta
+	for rows.Next() {
+		var m tblMeta
+		if err := rows.Scan(&m.name, &m.ddl); err == nil {
+			tables = append(tables, m)
+		}
+	}
+	_ = rows.Close()
+
+	for _, t := range tables {
+		if strings.TrimSpace(t.ddl) != "" {
+			sb.WriteString(fmt.Sprintf("-- Estrutura da tabela %s\n", t.name))
+			sb.WriteString(strings.TrimSuffix(strings.TrimSpace(t.ddl), ";") + ";\n\n")
+		}
+
+		dataRows, err := db.Query(fmt.Sprintf("SELECT * FROM %s LIMIT 10000", quoteSQLIdent(t.name)))
+		if err != nil {
+			continue
+		}
+		cols, err := dataRows.Columns()
+		if err != nil || len(cols) == 0 {
+			_ = dataRows.Close()
+			continue
+		}
+		quotedCols := make([]string, len(cols))
+		for i, c := range cols {
+			quotedCols[i] = quoteSQLIdent(c)
+		}
+		colListStr := strings.Join(quotedCols, ", ")
+
+		rawVals := make([]interface{}, len(cols))
+		scanPtrs := make([]interface{}, len(cols))
+		for i := range rawVals {
+			scanPtrs[i] = &rawVals[i]
+		}
+
+		rowCount := 0
+		for dataRows.Next() {
+			if err := dataRows.Scan(scanPtrs...); err != nil {
+				break
+			}
+			valLiterals := make([]string, len(cols))
+			for i, v := range rawVals {
+				switch val := v.(type) {
+				case nil:
+					valLiterals[i] = "NULL"
+				case int64, float64:
+					valLiterals[i] = fmt.Sprintf("%v", val)
+				case []byte:
+					valLiterals[i] = escapeSQLLiteral(string(val))
+				default:
+					valLiterals[i] = escapeSQLLiteral(fmt.Sprintf("%v", val))
+				}
+			}
+			sb.WriteString(fmt.Sprintf(
+				"INSERT INTO %s (%s) VALUES (%s);\n",
+				quoteSQLIdent(t.name),
+				colListStr,
+				strings.Join(valLiterals, ", "),
+			))
+			rowCount++
+		}
+		_ = dataRows.Close()
+		if rowCount > 0 {
+			sb.WriteString("\n")
+		}
+	}
+
+	sb.WriteString("COMMIT;\nPRAGMA foreign_keys = ON;\n")
+	return sb.String(), nil
+}
+
+type StudioProjectSearchMatch struct {
+	Path     string `json:"path"`
+	RelPath  string `json:"relPath"`
+	FileName string `json:"fileName"`
+	Line     int    `json:"line"`
+	Col      int    `json:"col"`
+	LineText string `json:"lineText"`
+}
+
+var skippedStudioSearchDirs = map[string]bool{
+	".git":         true,
+	"node_modules": true,
+	"dist":         true,
+	"build":        true,
+	".next":        true,
+	"vendor":       true,
+	"target":       true,
+	"__pycache__":  true,
+}
+
+func compileStudioPattern(query string, useRegex bool, caseSensitive bool) (*regexp.Regexp, error) {
+	pattern := query
+	if !useRegex {
+		pattern = regexp.QuoteMeta(query)
+	}
+	if !caseSensitive {
+		pattern = "(?i)" + pattern
+	}
+	return regexp.Compile(pattern)
+}
+
+func (a *App) StudioSearchInProject(rootDir string, query string, useRegex bool, caseSensitive bool) ([]StudioProjectSearchMatch, error) {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootDir))
+	if cleanRoot == "" || strings.TrimSpace(query) == "" {
+		return []StudioProjectSearchMatch{}, nil
+	}
+	re, err := compileStudioPattern(query, useRegex, caseSensitive)
+	if err != nil {
+		return nil, fmt.Errorf("expressão de busca inválida: %w", err)
+	}
+
+	matches := make([]StudioProjectSearchMatch, 0, 64)
+	const maxMatches = 400
+
+	_ = filepath.WalkDir(cleanRoot, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != cleanRoot && skippedStudioSearchDirs[strings.ToLower(d.Name())] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if len(matches) >= maxMatches {
+			return filepath.SkipAll
+		}
+		info, err := d.Info()
+		if err != nil || info.Size() == 0 || info.Size() > 2*1024*1024 {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil || bytes.IndexByte(raw[:min(len(raw), 512)], 0) >= 0 {
+			return nil
+		}
+		rel, relErr := filepath.Rel(cleanRoot, path)
+		if relErr != nil {
+			rel = d.Name()
+		}
+		relSlash := filepath.ToSlash(rel)
+		lines := strings.Split(string(raw), "\n")
+		for idx, line := range lines {
+			loc := re.FindStringIndex(line)
+			if loc != nil {
+				snippet := strings.TrimRight(line, "\r")
+				if len(snippet) > 220 {
+					snippet = snippet[:220] + "…"
+				}
+				matches = append(matches, StudioProjectSearchMatch{
+					Path:     path,
+					RelPath:  relSlash,
+					FileName: d.Name(),
+					Line:     idx + 1,
+					Col:      loc[0] + 1,
+					LineText: snippet,
+				})
+				if len(matches) >= maxMatches {
+					return filepath.SkipAll
+				}
+			}
+		}
+		return nil
+	})
+
+	return matches, nil
+}
+
+func (a *App) StudioReplaceInProject(rootDir string, query string, replacement string, useRegex bool, caseSensitive bool, targetFiles []string) (int, error) {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootDir))
+	if cleanRoot == "" || strings.TrimSpace(query) == "" {
+		return 0, nil
+	}
+	re, err := compileStudioPattern(query, useRegex, caseSensitive)
+	if err != nil {
+		return 0, fmt.Errorf("expressão inválida: %w", err)
+	}
+
+	targetSet := make(map[string]bool, len(targetFiles))
+	for _, tf := range targetFiles {
+		if strings.TrimSpace(tf) != "" {
+			targetSet[filepath.Clean(tf)] = true
+		}
+	}
+
+	modifiedFiles := 0
+	_ = filepath.WalkDir(cleanRoot, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != cleanRoot && skippedStudioSearchDirs[strings.ToLower(d.Name())] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		cleanPath := filepath.Clean(path)
+		if len(targetSet) > 0 && !targetSet[cleanPath] {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil || info.Size() == 0 || info.Size() > 2*1024*1024 {
+			return nil
+		}
+		raw, err := os.ReadFile(cleanPath)
+		if err != nil || bytes.IndexByte(raw[:min(len(raw), 512)], 0) >= 0 {
+			return nil
+		}
+		content := string(raw)
+		if !re.MatchString(content) {
+			return nil
+		}
+		var updated string
+		if useRegex {
+			updated = re.ReplaceAllString(content, replacement)
+		} else {
+			updated = re.ReplaceAllLiteralString(content, replacement)
+		}
+		if updated != content {
+			if err := os.WriteFile(cleanPath, []byte(updated), info.Mode().Perm()); err == nil {
+				modifiedFiles++
+			}
+		}
+		return nil
+	})
+
+	return modifiedFiles, nil
+}
+
+type StudioGitStatus struct {
+	IsRepo bool              `json:"isRepo"`
+	Branch string            `json:"branch"`
+	Files  map[string]string `json:"files"`
+}
+
+func (a *App) StudioGetGitStatus(rootDir string) StudioGitStatus {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootDir))
+	res := StudioGitStatus{
+		IsRepo: false,
+		Branch: "",
+		Files:  map[string]string{},
+	}
+	if cleanRoot == "" {
+		return res
+	}
+	info, err := os.Stat(cleanRoot)
+	if err != nil || !info.IsDir() {
+		return res
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	branchCmd := exec.CommandContext(ctx, "git", "-C", cleanRoot, "rev-parse", "--abbrev-ref", "HEAD")
+	branchOut, err := branchCmd.Output()
+	if err != nil {
+		return res
+	}
+	res.IsRepo = true
+	res.Branch = strings.TrimSpace(string(branchOut))
+
+	statusCmd := exec.CommandContext(ctx, "git", "-C", cleanRoot, "status", "--porcelain", "-uall")
+	statusOut, err := statusCmd.Output()
+	if err != nil {
+		return res
+	}
+	lines := strings.Split(strings.ReplaceAll(string(statusOut), "\r\n", "\n"), "\n")
+	for _, line := range lines {
+		if len(line) < 4 {
+			continue
+		}
+		xy := strings.TrimSpace(line[:2])
+		rel := strings.TrimSpace(line[3:])
+		if arrowIdx := strings.Index(rel, " -> "); arrowIdx >= 0 {
+			rel = strings.TrimSpace(rel[arrowIdx+4:])
+		}
+		rel = strings.Trim(rel, `"`)
+		if rel == "" {
+			continue
+		}
+		badge := "M"
+		switch {
+		case strings.Contains(xy, "?"):
+			badge = "U"
+		case strings.Contains(xy, "A"):
+			badge = "A"
+		case strings.Contains(xy, "D"):
+			badge = "D"
+		case strings.Contains(xy, "R"):
+			badge = "R"
+		}
+		fullKey := strings.ToLower(filepath.ToSlash(filepath.Clean(filepath.Join(cleanRoot, filepath.FromSlash(rel)))))
+		res.Files[fullKey] = badge
+		res.Files[strings.ToLower(filepath.ToSlash(rel))] = badge
+	}
+	return res
 }

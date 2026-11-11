@@ -32,6 +32,7 @@ import {
   ArrowUpDown,
   Regex,
   ChevronRight,
+  ChevronDown,
   Square,
   WrapText,
   Table2,
@@ -44,6 +45,9 @@ import {
   ClipboardPaste,
   Files,
   Eye,
+  Monitor,
+  Tablet,
+  Smartphone,
 } from 'lucide-react';
 import {
   useEditorStore,
@@ -58,6 +62,7 @@ import {
   isStandaloneStudioWindow,
   isStudioPdfFile,
   isStudioImageFile,
+  isStudioAudioVideoFile,
   isBinaryMediaTab,
   isTabMediaPreviewActive,
   normalizeStudioFilePath,
@@ -76,6 +81,11 @@ import {
   revealInSystemExplorer,
   resolveStudioProjectURL,
   syncStudioLiveFiles,
+  studioSearchInProject,
+  studioReplaceInProject,
+  studioGetGitStatus,
+  StudioProjectSearchMatch,
+  StudioGitStatus,
   subscribeEvent,
   StudioOpenFileEvent,
   windowMinimize,
@@ -142,17 +152,27 @@ export function buildConnectedWebPreviewDoc(
 
   let html = rawHtml;
 
-  // 1. Injeta <base href="/__project/<b64>/"> para resolver imagens, fontes, subpastas e recursos relativos via servidor local
+  // 1. Injeta <base href="/__project/<b64>/"> e ponte de console para resolver recursos relativos e capturar logs em tempo real
+  const consoleBridgeScript = `<script>(function(){if(window.__pulsaresConsoleHooked)return;window.__pulsaresConsoleHooked=true;var orig={log:console.log,info:console.info,warn:console.warn,error:console.error};function fmt(a){try{if(typeof a==='object'&&a!==null)return JSON.stringify(a);return String(a);}catch(e){return String(a);}}function send(lvl,args){try{var msg=Array.prototype.slice.call(args).map(fmt).join(' ');window.parent.postMessage({type:'PULSARES_PREVIEW_CONSOLE',level:lvl,message:msg,ts:Date.now()},'*');}catch(e){}}['log','info','warn','error'].forEach(function(k){console[k]=function(){send(k,arguments);if(orig[k])orig[k].apply(console,arguments);};});window.addEventListener('error',function(ev){send('error',[ev.message||'Erro de script']);});})();</script>`;
+
   if (projectDir && typeof window !== 'undefined') {
     const b64 = encodeBase64Url(projectDir);
     if (b64) {
-      const baseTag = `<base href="${window.location.origin}/__project/${b64}/" />`;
+      const baseTag = `<base href="${window.location.origin}/__project/${b64}/" />\n  ${consoleBridgeScript}`;
       if (/<head[^>]*>/i.test(html)) {
         html = html.replace(/<head([^>]*)>/i, `<head$1>\n  ${baseTag}`);
       } else {
         html = `${baseTag}\n${html}`;
       }
+    } else if (/<head[^>]*>/i.test(html)) {
+      html = html.replace(/<head([^>]*)>/i, `<head$1>\n  ${consoleBridgeScript}`);
+    } else {
+      html = `${consoleBridgeScript}\n${html}`;
     }
+  } else if (/<head[^>]*>/i.test(html)) {
+    html = html.replace(/<head([^>]*)>/i, `<head$1>\n  ${consoleBridgeScript}`);
+  } else {
+    html = `${consoleBridgeScript}\n${html}`;
   }
 
   // 2. Substitui <link ... rel="stylesheet" ... href="..."> locais pelo conteúdo CSS conectado em tempo real
@@ -701,6 +721,33 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
   const [liveWebPreviewUrl, setLiveWebPreviewUrl] = useState<string>('');
   const [liveWebPreviewRev, setLiveWebPreviewRev] = useState<number>(0);
 
+  // Árvore multinível do projeto + Git Status
+  const [expandedProjectDirs, setExpandedProjectDirs] = useState<Record<string, boolean>>({});
+  const expandedProjectDirsRef = useRef<Record<string, boolean>>({});
+  expandedProjectDirsRef.current = expandedProjectDirs;
+  const [subDirEntriesMap, setSubDirEntriesMap] = useState<Record<string, Entry[]>>({});
+  const [gitStatus, setGitStatus] = useState<StudioGitStatus>({
+    isRepo: false,
+    branch: '',
+    files: {},
+  });
+
+  // Busca & Substituição Global no Projeto (Ctrl+Shift+F)
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
+  const [projectReplaceQuery, setProjectReplaceQuery] = useState('');
+  const [projectSearchRegex, setProjectSearchRegex] = useState(false);
+  const [projectSearchCase, setProjectSearchCase] = useState(false);
+  const [projectSearchMatches, setProjectSearchMatches] = useState<StudioProjectSearchMatch[]>([]);
+  const [projectSearchLoading, setProjectSearchLoading] = useState(false);
+  const [projectReplaceBusy, setProjectReplaceBusy] = useState(false);
+
+  // Viewport Responsiva & Console ao Vivo da Prévia Web (HTML)
+  const [previewViewport, setPreviewViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [previewConsoleOpen, setPreviewConsoleOpen] = useState(false);
+  const [previewConsoleLogs, setPreviewConsoleLogs] = useState<
+    Array<{ level: 'log' | 'info' | 'warn' | 'error'; message: string; ts: number }>
+  >([]);
+
   const activeTab: EditorTab | null =
     tabs.find((t) => t.id === activeTabId) || tabs[0] || null;
   const isActiveMediaPreview = isTabMediaPreviewActive(activeTab);
@@ -913,7 +960,20 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
             await saveTab(activeTab.id, effectiveWorkspace);
           }
           if (!isDedicatedWindow) void refresh();
+          try {
+            const st = await studioGetGitStatus(effectiveWorkspace);
+            setGitStatus(st);
+          } catch {
+            // ignora
+          }
         })();
+        return;
+      }
+
+      // Ctrl+Shift+F: Busca Global no Projeto
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setSidebarTab('search');
         return;
       }
 
@@ -946,6 +1006,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
     saveAllTabs,
     refresh,
     setFindBarOpen,
+    setSidebarTab,
     openNewUntitledTab,
   ]);
 
@@ -1057,12 +1118,197 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
         } else {
           setSiblingWebFiles({});
         }
+
+        // Atualiza status Git do projeto e subpastas expandidas
+        try {
+          const st = await studioGetGitStatus(targetDir);
+          setGitStatus(st);
+        } catch {
+          setGitStatus({ isRepo: false, branch: '', files: {} });
+        }
+
+        const curExpanded = expandedProjectDirsRef.current;
+        const expandedKeys = Object.keys(curExpanded).filter(
+          (k) => curExpanded[k]
+        );
+        if (expandedKeys.length > 0) {
+          const refreshedSubs = await Promise.all(
+            expandedKeys.map(async (dirKey) => {
+              try {
+                const subItems = await listDirectorySnapshot(dirKey, false);
+                const sortedSub = [...subItems].sort((a, b) => {
+                  if (a.kind === 'dir' && b.kind !== 'dir') return -1;
+                  if (a.kind !== 'dir' && b.kind === 'dir') return 1;
+                  return a.name.localeCompare(b.name);
+                });
+                return [dirKey, sortedSub] as const;
+              } catch {
+                return null;
+              }
+            })
+          );
+          setSubDirEntriesMap((prev) => {
+            const next = { ...prev };
+            refreshedSubs.forEach((pair) => {
+              if (pair) next[pair[0]] = pair[1];
+            });
+            return next;
+          });
+        }
       } catch {
         // ignora pasta inacessível
       }
     },
-    [effectiveWorkspace, activeProjectDir]
+    [effectiveWorkspace, activeProjectDir, closeTab, openFolderInEditor]
   );
+
+  const toggleProjectDirExpand = async (dirPath: string) => {
+    const isCurrentlyExpanded = Boolean(expandedProjectDirs[dirPath]);
+    if (isCurrentlyExpanded) {
+      setExpandedProjectDirs((prev) => ({ ...prev, [dirPath]: false }));
+      return;
+    }
+    setExpandedProjectDirs((prev) => ({ ...prev, [dirPath]: true }));
+    try {
+      const subItems = await listDirectorySnapshot(dirPath, false);
+      const sortedSub = [...subItems].sort((a, b) => {
+        if (a.kind === 'dir' && b.kind !== 'dir') return -1;
+        if (a.kind !== 'dir' && b.kind === 'dir') return 1;
+        return a.name.localeCompare(b.name);
+      });
+      setSubDirEntriesMap((prev) => ({ ...prev, [dirPath]: sortedSub }));
+    } catch {
+      // ignora subpasta inacessível
+    }
+  };
+
+  const getGitBadgeForEntry = (entryPath: string, isDir: boolean): string | null => {
+    if (!gitStatus.isRepo || !gitStatus.files) return null;
+    const normWs = effectiveWorkspace.replace(/\\/g, '/').replace(/\/+$/, '');
+    const normEntry = entryPath.replace(/\\/g, '/').replace(/\/+$/, '');
+    if (!normWs || !normEntry.toLowerCase().startsWith(`${normWs.toLowerCase()}/`)) {
+      return null;
+    }
+    const relPath = normEntry.slice(normWs.length + 1);
+    const relLower = relPath.toLowerCase();
+    if (!isDir) {
+      if (gitStatus.files[relPath]) return gitStatus.files[relPath];
+      for (const [k, v] of Object.entries(gitStatus.files)) {
+        if (k.toLowerCase() === relLower) return v;
+      }
+      return null;
+    }
+    const dirPrefix = `${relLower}/`;
+    for (const k of Object.keys(gitStatus.files)) {
+      if (k.toLowerCase().startsWith(dirPrefix)) {
+        return 'M';
+      }
+    }
+    return null;
+  };
+
+  const findProjectEntryByPath = (targetPath: string): Entry | undefined => {
+    const inRoot = workspaceEntries.find((it) => it.location.path === targetPath);
+    if (inRoot) return inRoot;
+    for (const subList of Object.values(subDirEntriesMap)) {
+      const found = subList.find((it) => it.location.path === targetPath);
+      if (found) return found;
+    }
+    return undefined;
+  };
+
+  const handleRunProjectSearch = async () => {
+    const q = projectSearchQuery.trim();
+    if (!q || !effectiveWorkspace) {
+      setProjectSearchMatches([]);
+      return;
+    }
+    setProjectSearchLoading(true);
+    try {
+      const res = await studioSearchInProject(
+        effectiveWorkspace,
+        q,
+        projectSearchRegex,
+        projectSearchCase
+      );
+      setProjectSearchMatches(res || []);
+    } catch (err) {
+      showFlashStatus(
+        `Erro na busca: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      setProjectSearchLoading(false);
+    }
+  };
+
+  const handleRunProjectReplaceAll = async () => {
+    const q = projectSearchQuery.trim();
+    if (!q || !effectiveWorkspace || projectReplaceBusy) return;
+    setProjectReplaceBusy(true);
+    try {
+      const count = await studioReplaceInProject(
+        effectiveWorkspace,
+        q,
+        projectReplaceQuery,
+        projectSearchRegex,
+        projectSearchCase,
+        []
+      );
+      // Recarrega abas abertas que possam ter sido modificadas em disco
+      const currentTabs = useEditorStore.getState().tabs;
+      const updatedTabs = await Promise.all(
+        currentTabs.map(async (t) => {
+          if (!t.path || isBinaryMediaTab(t)) return t;
+          try {
+            const fresh = await readTextFile(t.path);
+            return {
+              ...t,
+              content: fresh.content,
+              savedContent: fresh.content,
+            };
+          } catch {
+            return t;
+          }
+        })
+      );
+      useEditorStore.setState({ tabs: updatedTabs });
+      await handleRunProjectSearch();
+      await reloadWorkspaceEntries(effectiveWorkspace);
+      showFlashStatus(
+        count > 0
+          ? `Substituição concluída em ${count} arquivo(s)`
+          : 'Nenhum arquivo precisou ser alterado'
+      );
+    } catch (err) {
+      showFlashStatus(
+        `Erro ao substituir: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      setProjectReplaceBusy(false);
+    }
+  };
+
+  // Escuta mensagens postMessage do iframe da Prévia em Tempo Real (PULSARES_PREVIEW_CONSOLE)
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data as {
+        type?: string;
+        level?: 'log' | 'info' | 'warn' | 'error';
+        message?: string;
+        ts?: number;
+      } | null;
+      if (!data || data.type !== 'PULSARES_PREVIEW_CONSOLE') return;
+      const lvl =
+        data.level === 'warn' || data.level === 'error' || data.level === 'info'
+          ? data.level
+          : 'log';
+      const msg = typeof data.message === 'string' ? data.message : String(data.message ?? '');
+      const ts = typeof data.ts === 'number' ? data.ts : Date.now();
+      setPreviewConsoleLogs((prev) => [...prev.slice(-149), { level: lvl, message: msg, ts }]);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   // Carrega arquivos da pasta do projeto e ativos web irmãos (.html, .css, .js) para conectar na Prévia
   useEffect(() => {
@@ -1140,6 +1386,7 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
       }
       if (
         isStudioPdfFile(entry.name) ||
+        isStudioAudioVideoFile(entry.name) ||
         (isStudioImageFile(entry.name) && !entry.name.toLowerCase().endsWith('.svg'))
       ) {
         await runOperationAndWait('copy', [entry.location.path], parentDir, 'rename');
@@ -1601,7 +1848,19 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
           await saveTab(activeTab.id, effectiveWorkspace);
         }
         if (!isDedicatedWindow) void refresh();
+        try {
+          const st = await studioGetGitStatus(effectiveWorkspace);
+          setGitStatus(st);
+        } catch {
+          // ignora
+        }
       })();
+      return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      setSidebarTab('search');
       return;
     }
 
@@ -2003,6 +2262,12 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                 void (async () => {
                   const ok = await saveTab(activeTab.id, effectiveWorkspace);
                   if (ok && !isDedicatedWindow) void refresh();
+                  try {
+                    const st = await studioGetGitStatus(effectiveWorkspace);
+                    setGitStatus(st);
+                  } catch {
+                    // ignora
+                  }
                 })();
               }}
               title="Salvar arquivo (Ctrl+S)"
@@ -2482,6 +2747,20 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
 
           <button
             type="button"
+            onClick={() => setSidebarTab(sidebarTab === 'search' ? null : 'search')}
+            title="Busca Global no Projeto (Ctrl+Shift+F)"
+            style={{
+              ...activityBtnStyle,
+              color: sidebarTab === 'search' ? 'var(--accent)' : 'var(--text-muted)',
+              borderLeft:
+                sidebarTab === 'search' ? '2px solid var(--accent)' : '2px solid transparent',
+            }}
+          >
+            <Search size={16} />
+          </button>
+
+          <button
+            type="button"
             onClick={() => setSidebarTab(sidebarTab === 'symbols' ? null : 'symbols')}
             title="Outline & Símbolos do Código"
             style={{
@@ -2598,15 +2877,15 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (!selectedProjectEntryPath) return;
-                    const selEntry = workspaceEntries.find(
-                      (it) => it.location.path === selectedProjectEntryPath
-                    );
+                    const selEntry = findProjectEntryByPath(selectedProjectEntryPath);
                     if (!selEntry) return;
                     if (e.key === 'F2') {
                       e.preventDefault();
                       setProjectModal({
                         kind: 'rename',
-                        targetDir: effectiveWorkspace,
+                        targetDir:
+                          selEntry.location.path.replace(/[/\\][^/\\]+$/, '') ||
+                          effectiveWorkspace,
                         entry: selEntry,
                         inputValue: selEntry.name,
                         error: null,
@@ -2616,7 +2895,9 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                       e.preventDefault();
                       setProjectModal({
                         kind: 'delete',
-                        targetDir: effectiveWorkspace,
+                        targetDir:
+                          selEntry.location.path.replace(/[/\\][^/\\]+$/, '') ||
+                          effectiveWorkspace,
                         entry: selEntry,
                         inputValue: selEntry.name,
                         error: null,
@@ -2678,109 +2959,391 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                       <span>..</span>
                     </div>
                   )}
-                  {filteredWorkspaceEntries.map((entry) => {
-                    const isCurrentFile = activeTab?.path === entry.location.path;
-                    const isSelectedItem = selectedProjectEntryPath === entry.location.path;
-                    const isDropHovered =
-                      entry.kind === 'dir' && dropTargetFolderPath === entry.location.path;
-                    const isCutClip =
-                      studioFileClipboard?.mode === 'cut' &&
-                      studioFileClipboard.path === entry.location.path;
-                    return (
+                  {(() => {
+                    const renderTreeEntry = (entry: Entry, depth = 0): React.ReactNode => {
+                      const isDir = entry.kind === 'dir';
+                      const isExpanded = isDir && Boolean(expandedProjectDirs[entry.location.path]);
+                      const isCurrentFile = activeTab?.path === entry.location.path;
+                      const isSelectedItem = selectedProjectEntryPath === entry.location.path;
+                      const isDropHovered =
+                        isDir && dropTargetFolderPath === entry.location.path;
+                      const isCutClip =
+                        studioFileClipboard?.mode === 'cut' &&
+                        studioFileClipboard.path === entry.location.path;
+                      const gitBadge = getGitBadgeForEntry(entry.location.path, isDir);
+                      const gitColor =
+                        gitBadge === 'U' || gitBadge === 'A'
+                          ? '#22c55e'
+                          : gitBadge === 'D'
+                          ? '#ef4444'
+                          : '#f59e0b';
+                      const childEntries = isDir
+                        ? (subDirEntriesMap[entry.location.path] || []).filter((sub) =>
+                            !workspaceFilter.trim()
+                              ? true
+                              : sub.name
+                                  .toLowerCase()
+                                  .includes(workspaceFilter.trim().toLowerCase()) ||
+                                sub.kind === 'dir'
+                          )
+                        : [];
+
+                      return (
+                        <React.Fragment key={entry.location.path}>
+                          <div
+                            draggable
+                            onDragStart={(e) => {
+                              setDraggedProjectEntry(entry);
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.dataTransfer.setData('text/plain', entry.location.path);
+                            }}
+                            onDragEnd={() => {
+                              setDraggedProjectEntry(null);
+                              setDropTargetFolderPath(null);
+                            }}
+                            onDragOver={(e) => {
+                              if (
+                                !isDir ||
+                                !draggedProjectEntry ||
+                                draggedProjectEntry.location.path === entry.location.path
+                              ) {
+                                return;
+                              }
+                              e.preventDefault();
+                              e.stopPropagation();
+                              e.dataTransfer.dropEffect = 'move';
+                              setDropTargetFolderPath(entry.location.path);
+                            }}
+                            onDragLeave={() => {
+                              if (dropTargetFolderPath === entry.location.path) {
+                                setDropTargetFolderPath(null);
+                              }
+                            }}
+                            onDrop={(e) => {
+                              if (!isDir || !draggedProjectEntry) return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDropTargetFolderPath(null);
+                              if (draggedProjectEntry.location.path !== entry.location.path) {
+                                void handleMoveProjectEntryDirect(
+                                  draggedProjectEntry,
+                                  entry.location.path
+                                );
+                              }
+                              setDraggedProjectEntry(null);
+                            }}
+                            onClick={() => {
+                              setSelectedProjectEntryPath(entry.location.path);
+                              if (isDir) {
+                                void toggleProjectDirExpand(entry.location.path);
+                              } else {
+                                void openFileInEditor(entry.location.path, true);
+                              }
+                            }}
+                            onDoubleClick={() => {
+                              if (isDir) {
+                                setWorkspaceDir(entry.location.path);
+                              }
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSelectedProjectEntryPath(entry.location.path);
+                              setProjectCtxMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                entry,
+                              });
+                            }}
+                            style={{
+                              ...sidebarItemStyle,
+                              paddingLeft: `${8 + depth * 13}px`,
+                              backgroundColor: isDropHovered
+                                ? 'var(--accent-subtle)'
+                                : isCurrentFile || isSelectedItem
+                                ? 'var(--bg-selected)'
+                                : 'transparent',
+                              border: isDropHovered
+                                ? '1px dashed var(--accent-primary)'
+                                : '1px solid transparent',
+                              fontWeight: isCurrentFile ? 600 : 400,
+                              opacity: isCutClip ? 0.55 : 1,
+                            }}
+                            title={
+                              isDir
+                                ? `${entry.location.path} (Clique p/ expandir • Duplo clique p/ focar pasta • Clique direito p/ opções)`
+                                : `${entry.location.path} (Clique direito para opções)`
+                            }
+                          >
+                            {isDir ? (
+                              isExpanded ? (
+                                <ChevronDown
+                                  size={12}
+                                  style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+                                />
+                              ) : (
+                                <ChevronRight
+                                  size={12}
+                                  style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+                                />
+                              )
+                            ) : (
+                              <span style={{ width: '12px', flexShrink: 0 }} />
+                            )}
+                            <FileTypeIcon
+                              name={entry.name}
+                              kind={entry.kind}
+                              size={13}
+                              showBadge={false}
+                            />
+                            <span
+                              style={{
+                                flex: 1,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                color: gitBadge ? gitColor : undefined,
+                              }}
+                            >
+                              {entry.name}
+                            </span>
+                            {gitBadge && (
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  color: gitColor,
+                                  paddingLeft: '4px',
+                                  flexShrink: 0,
+                                  fontFamily: 'var(--font-mono)',
+                                }}
+                                title={`Status Git: ${gitBadge}`}
+                              >
+                                {gitBadge}
+                              </span>
+                            )}
+                          </div>
+                          {isDir &&
+                            isExpanded &&
+                            childEntries.map((sub) => renderTreeEntry(sub, depth + 1))}
+                        </React.Fragment>
+                      );
+                    };
+
+                    return filteredWorkspaceEntries.map((entry) => renderTreeEntry(entry, 0));
+                  })()}
+                </div>
+              </>
+            )}
+
+            {sidebarTab === 'search' && (
+              <>
+                <div style={sidebarHeaderStyle}>
+                  <span>BUSCA NO PROJETO</span>
+                  {projectSearchMatches.length > 0 && (
+                    <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                      {projectSearchMatches.length} ocorr.
+                    </span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    padding: '8px',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input
+                      type="text"
+                      value={projectSearchQuery}
+                      onChange={(e) => setProjectSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          void handleRunProjectSearch();
+                        }
+                      }}
+                      placeholder="Buscar no projeto..."
+                      style={{ ...findInputStyle, flex: 1, width: 'auto' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setProjectSearchCase((v) => !v)}
+                      title="Diferenciar maiúsculas/minúsculas (Aa)"
+                      style={{
+                        ...headerBtnStyle,
+                        padding: '3px 6px',
+                        fontWeight: 700,
+                        borderColor: projectSearchCase
+                          ? 'var(--accent-primary)'
+                          : 'var(--border-subtle)',
+                        backgroundColor: projectSearchCase
+                          ? 'var(--accent-subtle)'
+                          : 'var(--bg-surface)',
+                      }}
+                    >
+                      Aa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProjectSearchRegex((v) => !v)}
+                      title="Usar Expressão Regular (.*)"
+                      style={{
+                        ...headerBtnStyle,
+                        padding: '3px 6px',
+                        fontWeight: 700,
+                        borderColor: projectSearchRegex
+                          ? 'var(--accent-primary)'
+                          : 'var(--border-subtle)',
+                        backgroundColor: projectSearchRegex
+                          ? 'var(--accent-subtle)'
+                          : 'var(--bg-surface)',
+                      }}
+                    >
+                      .*
+                    </button>
+                  </div>
+
+                  <input
+                    type="text"
+                    value={projectReplaceQuery}
+                    onChange={(e) => setProjectReplaceQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        void handleRunProjectReplaceAll();
+                      }
+                    }}
+                    placeholder="Substituir em arquivos..."
+                    style={{ ...findInputStyle, width: '100%' }}
+                  />
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button
+                      type="button"
+                      disabled={projectSearchLoading}
+                      onClick={() => void handleRunProjectSearch()}
+                      style={{
+                        ...headerBtnStyle,
+                        flex: 1,
+                        justifyContent: 'center',
+                        backgroundColor: 'var(--accent-primary)',
+                        borderColor: 'var(--accent-primary)',
+                        color: '#ffffff',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <Search size={12} />
+                      <span>{projectSearchLoading ? 'Buscando...' : 'Buscar'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={projectReplaceBusy || !projectSearchQuery.trim()}
+                      onClick={() => void handleRunProjectReplaceAll()}
+                      title="Substituir todas as ocorrências nos arquivos do projeto"
+                      style={{
+                        ...headerBtnStyle,
+                        flex: 1,
+                        justifyContent: 'center',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <span>{projectReplaceBusy ? 'Aplicando...' : 'Substituir Tudo'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ flex: 1, overflowY: 'auto', padding: '4px' }}>
+                  {projectSearchLoading ? (
+                    <div style={{ padding: '12px 8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Pesquisando arquivos em {effectiveWorkspace.split(/[/\\]/).pop() || effectiveWorkspace}...
+                    </div>
+                  ) : projectSearchMatches.length === 0 ? (
+                    <div style={{ padding: '12px 8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {projectSearchQuery.trim()
+                        ? 'Nenhuma ocorrência encontrada no projeto.'
+                        : 'Digite um termo e pressione Enter para buscar em todos os arquivos do projeto.'}
+                    </div>
+                  ) : (
+                    projectSearchMatches.map((m, idx) => (
                       <div
-                        key={entry.location.path}
-                        draggable
-                        onDragStart={(e) => {
-                          setDraggedProjectEntry(entry);
-                          e.dataTransfer.effectAllowed = 'move';
-                          e.dataTransfer.setData('text/plain', entry.location.path);
-                        }}
-                        onDragEnd={() => {
-                          setDraggedProjectEntry(null);
-                          setDropTargetFolderPath(null);
-                        }}
-                        onDragOver={(e) => {
-                          if (
-                            entry.kind !== 'dir' ||
-                            !draggedProjectEntry ||
-                            draggedProjectEntry.location.path === entry.location.path
-                          ) {
-                            return;
-                          }
-                          e.preventDefault();
-                          e.stopPropagation();
-                          e.dataTransfer.dropEffect = 'move';
-                          setDropTargetFolderPath(entry.location.path);
-                        }}
-                        onDragLeave={() => {
-                          if (dropTargetFolderPath === entry.location.path) {
-                            setDropTargetFolderPath(null);
-                          }
-                        }}
-                        onDrop={(e) => {
-                          if (entry.kind !== 'dir' || !draggedProjectEntry) return;
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setDropTargetFolderPath(null);
-                          if (draggedProjectEntry.location.path !== entry.location.path) {
-                            void handleMoveProjectEntryDirect(
-                              draggedProjectEntry,
-                              entry.location.path
-                            );
-                          }
-                          setDraggedProjectEntry(null);
-                        }}
+                        key={`${m.path}:${m.line}:${m.col}:${idx}`}
                         onClick={() => {
-                          setSelectedProjectEntryPath(entry.location.path);
-                          if (entry.kind === 'dir') {
-                            setWorkspaceDir(entry.location.path);
-                          } else {
-                            void openFileInEditor(entry.location.path, true);
-                          }
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSelectedProjectEntryPath(entry.location.path);
-                          setProjectCtxMenu({
-                            x: e.clientX,
-                            y: e.clientY,
-                            entry,
-                          });
+                          void (async () => {
+                            await openFileInEditor(m.path, true);
+                            const targetTab = useEditorStore
+                              .getState()
+                              .tabs.find(
+                                (t) =>
+                                  normalizeStudioFilePath(t.path) ===
+                                  normalizeStudioFilePath(m.path)
+                              );
+                            if (targetTab) {
+                              updateCursor(targetTab.id, m.line, m.col || 1);
+                            }
+                            requestAnimationFrame(() => {
+                              jumpToLine(m.line);
+                            });
+                          })();
                         }}
                         style={{
-                          ...sidebarItemStyle,
-                          backgroundColor: isDropHovered
-                            ? 'var(--accent-subtle)'
-                            : isCurrentFile || isSelectedItem
-                            ? 'var(--bg-selected)'
-                            : 'transparent',
-                          border: isDropHovered
-                            ? '1px dashed var(--accent-primary)'
-                            : '1px solid transparent',
-                          fontWeight: isCurrentFile ? 600 : 400,
-                          opacity: isCutClip ? 0.55 : 1,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          padding: '5px 8px',
+                          borderRadius: 'var(--radius-sm)',
+                          cursor: 'default',
+                          borderBottom: '1px solid var(--border-subtle)',
                         }}
-                        title={`${entry.location.path} (Clique direito para opções)`}
+                        title={`${m.relPath}:${m.line}:${m.col}`}
                       >
-                        <FileTypeIcon
-                          name={entry.name}
-                          kind={entry.kind}
-                          size={13}
-                          showBadge={false}
-                        />
-                        <span
+                        <div
                           style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '4px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: 'var(--accent)',
+                          }}
+                        >
+                          <span
+                            style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {m.relPath}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              color: 'var(--text-muted)',
+                              fontFamily: 'var(--font-mono)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            :{m.line}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-secondary)',
+                            fontFamily: 'var(--font-mono)',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {entry.name}
-                        </span>
+                          {m.lineText}
+                        </div>
                       </div>
-                    );
-                  })}
+                    ))
+                  )}
                 </div>
               </>
             )}
@@ -3517,15 +4080,91 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                             </>
                           )}
                           {connectedWebPreview?.isWebProject && (
-                            <button
-                              type="button"
-                              onClick={() => setLiveWebPreviewRev((r) => r + 1)}
-                              style={headerBtnStyle}
-                              title="Recarregar prévia em tempo real"
-                            >
-                              <RefreshCw size={12} />
-                              <span>Recarregar</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewViewport('desktop')}
+                                style={{
+                                  ...headerBtnStyle,
+                                  borderColor:
+                                    previewViewport === 'desktop'
+                                      ? 'var(--accent-primary)'
+                                      : 'var(--border-subtle)',
+                                  backgroundColor:
+                                    previewViewport === 'desktop'
+                                      ? 'var(--accent-subtle)'
+                                      : 'var(--bg-surface)',
+                                }}
+                                title="Viewport Desktop (100%)"
+                              >
+                                <Monitor size={12} />
+                                <span>100%</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewViewport('tablet')}
+                                style={{
+                                  ...headerBtnStyle,
+                                  borderColor:
+                                    previewViewport === 'tablet'
+                                      ? 'var(--accent-primary)'
+                                      : 'var(--border-subtle)',
+                                  backgroundColor:
+                                    previewViewport === 'tablet'
+                                      ? 'var(--accent-subtle)'
+                                      : 'var(--bg-surface)',
+                                }}
+                                title="Viewport Tablet (768px)"
+                              >
+                                <Tablet size={12} />
+                                <span>768px</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewViewport('mobile')}
+                                style={{
+                                  ...headerBtnStyle,
+                                  borderColor:
+                                    previewViewport === 'mobile'
+                                      ? 'var(--accent-primary)'
+                                      : 'var(--border-subtle)',
+                                  backgroundColor:
+                                    previewViewport === 'mobile'
+                                      ? 'var(--accent-subtle)'
+                                      : 'var(--bg-surface)',
+                                }}
+                                title="Viewport Mobile (375px)"
+                              >
+                                <Smartphone size={12} />
+                                <span>375px</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewConsoleOpen((v) => !v)}
+                                style={{
+                                  ...headerBtnStyle,
+                                  borderColor: previewConsoleOpen
+                                    ? 'var(--accent-primary)'
+                                    : 'var(--border-subtle)',
+                                  backgroundColor: previewConsoleOpen
+                                    ? 'var(--accent-subtle)'
+                                    : 'var(--bg-surface)',
+                                }}
+                                title="Alternar Console da Prévia Web"
+                              >
+                                <Terminal size={12} />
+                                <span>Console ({previewConsoleLogs.length})</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setLiveWebPreviewRev((r) => r + 1)}
+                                style={headerBtnStyle}
+                                title="Recarregar prévia em tempo real"
+                              >
+                                <RefreshCw size={12} />
+                                <span>Recarregar</span>
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -4019,37 +4658,200 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                       ) : activeTab.language === 'markdown' ? (
                         <div>{renderMarkdownPreview(activeTab.content)}</div>
                       ) : connectedWebPreview?.isWebProject ? (
-                        liveWebPreviewUrl ? (
-                          <iframe
-                            key={`live-web-${liveWebPreviewRev}`}
-                            title="HTML Live Preview"
-                            src={`${liveWebPreviewUrl}${
-                              liveWebPreviewUrl.includes('?') ? '&' : '?'
-                            }v=${liveWebPreviewRev}`}
+                        <div
+                          style={{
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            minHeight: 0,
+                            gap: '8px',
+                          }}
+                        >
+                          <div
                             style={{
                               flex: 1,
-                              width: '100%',
-                              minHeight: '320px',
-                              border: '1px solid var(--border-subtle)',
+                              minHeight: '260px',
+                              display: 'flex',
+                              justifyContent: 'center',
+                              backgroundColor:
+                                previewViewport === 'desktop'
+                                  ? 'transparent'
+                                  : 'var(--bg-app)',
+                              padding: previewViewport === 'desktop' ? 0 : '8px',
                               borderRadius: 'var(--radius-sm)',
-                              backgroundColor: '#ffffff',
+                              overflow: 'auto',
                             }}
-                          />
-                        ) : (
-                          <iframe
-                            title="HTML Live Preview"
-                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                            srcDoc={connectedWebPreview.doc}
-                            style={{
-                              flex: 1,
-                              width: '100%',
-                              minHeight: '320px',
-                              border: '1px solid var(--border-subtle)',
-                              borderRadius: 'var(--radius-sm)',
-                              backgroundColor: '#ffffff',
-                            }}
-                          />
-                        )
+                          >
+                            {liveWebPreviewUrl ? (
+                              <iframe
+                                key={`live-web-${liveWebPreviewRev}`}
+                                title="HTML Live Preview"
+                                src={`${liveWebPreviewUrl}${
+                                  liveWebPreviewUrl.includes('?') ? '&' : '?'
+                                }v=${liveWebPreviewRev}`}
+                                style={{
+                                  width:
+                                    previewViewport === 'mobile'
+                                      ? '375px'
+                                      : previewViewport === 'tablet'
+                                      ? '768px'
+                                      : '100%',
+                                  maxWidth: '100%',
+                                  height: '100%',
+                                  minHeight: '260px',
+                                  border: '1px solid var(--border-subtle)',
+                                  borderRadius: 'var(--radius-sm)',
+                                  backgroundColor: '#ffffff',
+                                  boxShadow:
+                                    previewViewport === 'desktop'
+                                      ? 'none'
+                                      : '0 10px 28px rgba(0, 0, 0, 0.35)',
+                                }}
+                              />
+                            ) : (
+                              <iframe
+                                title="HTML Live Preview"
+                                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                                srcDoc={connectedWebPreview.doc}
+                                style={{
+                                  width:
+                                    previewViewport === 'mobile'
+                                      ? '375px'
+                                      : previewViewport === 'tablet'
+                                      ? '768px'
+                                      : '100%',
+                                  maxWidth: '100%',
+                                  height: '100%',
+                                  minHeight: '260px',
+                                  border: '1px solid var(--border-subtle)',
+                                  borderRadius: 'var(--radius-sm)',
+                                  backgroundColor: '#ffffff',
+                                  boxShadow:
+                                    previewViewport === 'desktop'
+                                      ? 'none'
+                                      : '0 10px 28px rgba(0, 0, 0, 0.35)',
+                                }}
+                              />
+                            )}
+                          </div>
+
+                          {previewConsoleOpen && (
+                            <div
+                              style={{
+                                height: '145px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: 'var(--radius-sm)',
+                                backgroundColor: 'var(--bg-app)',
+                                overflow: 'hidden',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '4px 8px',
+                                  backgroundColor: 'var(--bg-subtle)',
+                                  borderBottom: '1px solid var(--border-subtle)',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <span>Console da Prévia Web ({previewConsoleLogs.length})</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewConsoleLogs([])}
+                                    style={headerBtnStyle}
+                                    title="Limpar registros do console"
+                                  >
+                                    Limpar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewConsoleOpen(false)}
+                                    style={windowCtrlBtnStyle}
+                                    title="Ocultar console da prévia"
+                                  >
+                                    <X size={11} />
+                                  </button>
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  flex: 1,
+                                  overflowY: 'auto',
+                                  padding: '6px 8px',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: '11px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '3px',
+                                }}
+                              >
+                                {previewConsoleLogs.length === 0 ? (
+                                  <span style={{ color: 'var(--text-muted)' }}>
+                                    Nenhuma saída de console.log / warn / error capturada ainda.
+                                  </span>
+                                ) : (
+                                  previewConsoleLogs.map((log, lIdx) => {
+                                    const badgeColor =
+                                      log.level === 'error'
+                                        ? '#ef4444'
+                                        : log.level === 'warn'
+                                        ? '#f59e0b'
+                                        : log.level === 'info'
+                                        ? '#38bdf8'
+                                        : '#94a3b8';
+                                    return (
+                                      <div
+                                        key={`${log.ts}-${lIdx}`}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'flex-start',
+                                          gap: '6px',
+                                          borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+                                          paddingBottom: '2px',
+                                          whiteSpace: 'pre-wrap',
+                                          wordBreak: 'break-word',
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            fontSize: '9px',
+                                            fontWeight: 700,
+                                            textTransform: 'uppercase',
+                                            color: badgeColor,
+                                            flexShrink: 0,
+                                            minWidth: '38px',
+                                          }}
+                                        >
+                                          [{log.level}]
+                                        </span>
+                                        <span
+                                          style={{
+                                            flex: 1,
+                                            color:
+                                              log.level === 'error'
+                                                ? '#fca5a5'
+                                                : log.level === 'warn'
+                                                ? '#fde68a'
+                                                : 'var(--text-primary)',
+                                          }}
+                                        >
+                                          {log.message}
+                                        </span>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <pre
                           style={{
@@ -4311,12 +5113,37 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {gitStatus.isRepo && gitStatus.branch && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '1px 7px',
+                borderRadius: '999px',
+                backgroundColor: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-primary)',
+                fontWeight: 600,
+              }}
+              title="Branch Git ativa no repositório do projeto"
+            >
+              <span>🌿 {gitStatus.branch}</span>
+              {Object.keys(gitStatus.files || {}).length > 0 && (
+                <span style={{ color: '#f59e0b', fontWeight: 700 }}>
+                  • {Object.keys(gitStatus.files).length} mod.
+                </span>
+              )}
+            </span>
+          )}
           {activeTab ? (
             isActiveMediaPreview ? (
               <>
                 <span>
                   {activeTab.tabKind === 'pdf'
                     ? 'Documento PDF'
+                    : activeTab.tabKind === 'media'
+                    ? `Mídia ${(activeTab.name.split('.').pop() || 'MEDIA').toUpperCase()}`
                     : `Imagem ${(activeTab.name.split('.').pop() || 'IMG').toUpperCase()}`}
                 </span>
                 {activeTab.tabKind === 'pdf' && activeTab.pageCount && activeTab.pageCount > 0 ? (
@@ -4559,7 +5386,8 @@ export const CodeEditorModal: React.FC<CodeEditorModalProps> = ({ standalone = f
                     <span style={{ flex: 1, textAlign: 'left' }}>Abrir pasta</span>
                   </>
                 ) : isStudioPdfFile(projectCtxMenu.entry.name) ||
-                  isStudioImageFile(projectCtxMenu.entry.name) ? (
+                  isStudioImageFile(projectCtxMenu.entry.name) ||
+                  isStudioAudioVideoFile(projectCtxMenu.entry.name) ? (
                   <>
                     <Eye size={13} style={{ color: 'var(--accent)' }} />
                     <span style={{ flex: 1, textAlign: 'left' }}>Visualizar no Studio</span>
