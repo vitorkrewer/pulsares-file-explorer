@@ -21,7 +21,7 @@ import { useBrowserStore } from '../browser/store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { useProductivityStore } from '../productivity/store';
 import { useClipboardHistoryStore } from '../clipboard/store';
-import { saveSetting, expandPath, autocompletePath } from '../../lib/wails';
+import { saveSetting, expandPath, autocompletePath, writeNativeClipboardText } from '../../lib/wails';
 
 interface AddressBarProps {
   currentTheme: string;
@@ -56,11 +56,36 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState<number>(-1);
   const [copiedPath, setCopiedPath] = useState(false);
+  const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const overflowMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setInputValue(currentPath);
+    setOverflowMenuOpen(false);
   }, [currentPath]);
+
+  useEffect(() => {
+    if (!overflowMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
+        setOverflowMenuOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setOverflowMenuOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [overflowMenuOpen]);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -159,10 +184,33 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
       ? [smbMatch![2], ...(smbMatch![3] || '').split('/').filter(Boolean)]
       : normalized.split('/').filter(Boolean);
 
+  const buildCrumbTarget = (index: number) =>
+    isSFTP
+      ? `sftp://${sftpProfileId}/` + parts.slice(0, index + 1).join('/')
+      : isWindows
+        ? index === 0
+          ? `${parts[0]}\\`
+          : parts.slice(0, index + 1).join('\\')
+        : isUNC
+          ? '\\\\' + parts.slice(0, index + 1).join('\\')
+          : isSMBUrl
+            ? `${smbMatch![1].toLowerCase()}://` + parts.slice(0, index + 1).join('/')
+            : '/' + parts.slice(0, index + 1).join('/');
+
+  const shouldCollapseMiddle = parts.length > 4;
+  const hiddenCrumbIndices = shouldCollapseMiddle
+    ? Array.from({ length: parts.length - 4 }, (_, i) => i + 1)
+    : [];
+  const visibleCrumbIndices = shouldCollapseMiddle
+    ? [0, parts.length - 3, parts.length - 2, parts.length - 1]
+    : parts.map((_, i) => i);
+
   const handleCopyPath = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!currentPath) return;
-    void navigator.clipboard?.writeText(currentPath);
+    void writeNativeClipboardText(currentPath).catch(() => {
+      void navigator.clipboard?.writeText(currentPath);
+    });
     setCopiedPath(true);
     setTimeout(() => setCopiedPath(false), 1600);
   };
@@ -258,23 +306,20 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
               {(isUNC || isSMBUrl) && (
                 <Globe size={12} style={{ color: 'var(--accent)', marginRight: 2, flexShrink: 0 }} />
               )}
-              {parts.map((part, index) => {
-                const fullTillNow = isSFTP
-                  ? `sftp://${sftpProfileId}/` + parts.slice(0, index + 1).join('/')
-                  : isWindows
-                    ? index === 0
-                      ? `${part}\\`
-                      : parts.slice(0, index + 1).join('\\')
-                    : isUNC
-                      ? '\\\\' + parts.slice(0, index + 1).join('\\')
-                      : isSMBUrl
-                        ? `${smbMatch![1].toLowerCase()}://` + parts.slice(0, index + 1).join('/')
-                        : '/' + parts.slice(0, index + 1).join('/');
+              {visibleCrumbIndices.map((partIdx, renderPos) => {
+                const part = parts[partIdx];
+                const fullTillNow = buildCrumbTarget(partIdx);
+                const isLast = partIdx === parts.length - 1;
+                const isFirstCollapsed = shouldCollapseMiddle && renderPos === 0;
 
                 return (
                   <React.Fragment key={fullTillNow}>
                     <span
-                      style={styles.crumb}
+                      style={{
+                        ...styles.crumb,
+                        ...(isLast ? styles.crumbCurrent : styles.crumbIntermediate),
+                      }}
+                      title={part}
                       onClick={(e) => {
                         e.stopPropagation();
                         navigateTo(fullTillNow);
@@ -282,7 +327,28 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
                     >
                       {part}
                     </span>
-                    {index < parts.length - 1 && <span style={styles.separator}>›</span>}
+                    {isFirstCollapsed && (
+                      <>
+                        <span style={styles.separator}>›</span>
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.collapseBtn,
+                            ...(overflowMenuOpen ? styles.collapseBtnActive : {}),
+                          }}
+                          title={currentPath}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOverflowMenuOpen((prev) => !prev);
+                          }}
+                        >
+                          …
+                        </button>
+                      </>
+                    )}
+                    {renderPos < visibleCrumbIndices.length - 1 && (
+                      <span style={styles.separator}>›</span>
+                    )}
                   </React.Fragment>
                 );
               })}
@@ -304,6 +370,29 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
             {copiedPath ? <Check size={13} /> : <Copy size={13} />}
           </button>
         </div>
+
+        {!isEditing && overflowMenuOpen && hiddenCrumbIndices.length > 0 && (
+          <div ref={overflowMenuRef} style={styles.overflowPopup} role="menu">
+            {hiddenCrumbIndices.map((idx) => {
+              const target = buildCrumbTarget(idx);
+              return (
+                <button
+                  key={target}
+                  type="button"
+                  style={styles.overflowItem}
+                  title={target}
+                  onClick={() => {
+                    setOverflowMenuOpen(false);
+                    navigateTo(target);
+                  }}
+                >
+                  <Folder size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                  <span style={styles.suggestionText}>{parts[idx]}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {isEditing && suggestions.length > 0 && (
           <div style={styles.suggestionsPopup} role="listbox">
@@ -422,11 +511,15 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: 'var(--bg-surface)',
     borderBottom: '1px solid var(--border-subtle)',
     height: 44,
+    width: '100%',
+    minWidth: 0,
+    boxSizing: 'border-box',
   },
   navButtons: {
     display: 'flex',
     alignItems: 'center',
     gap: 4,
+    flexShrink: 0,
   },
   btn: {
     display: 'flex',
@@ -452,10 +545,12 @@ const styles: Record<string, React.CSSProperties> = {
   addressWrapper: {
     position: 'relative',
     flex: 1,
+    minWidth: 0,
     height: 30,
   },
   addressBox: {
     width: '100%',
+    minWidth: 0,
     height: '100%',
     backgroundColor: 'var(--bg-app)',
     border: '1px solid var(--border-subtle)',
@@ -472,8 +567,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 4,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    width: '100%',
+    flex: 1,
+    minWidth: 0,
     fontSize: 12,
   },
   crumb: {
@@ -481,13 +576,76 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 3,
     color: 'var(--text-primary)',
     cursor: 'default',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  crumbIntermediate: {
+    maxWidth: 160,
+    flexShrink: 1,
+    minWidth: 32,
+  },
+  crumbCurrent: {
+    maxWidth: 260,
+    fontWeight: 500,
+    flexShrink: 1,
+    minWidth: 56,
+  },
+  collapseBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '1px 6px',
+    borderRadius: 4,
+    fontSize: 12,
+    fontWeight: 700,
+    color: 'var(--text-secondary)',
+    backgroundColor: 'var(--bg-surface-hover)',
+    flexShrink: 0,
+    cursor: 'default',
+  },
+  collapseBtnActive: {
+    color: 'var(--accent)',
+    backgroundColor: 'var(--accent-subtle)',
+  },
+  overflowPopup: {
+    position: 'absolute',
+    top: 34,
+    left: 28,
+    zIndex: 1050,
+    minWidth: 200,
+    maxWidth: 340,
+    maxHeight: 240,
+    overflowY: 'auto',
+    backgroundColor: 'var(--bg-surface)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 6,
+    padding: 4,
+    boxShadow: '0 8px 22px rgba(0, 0, 0, 0.35)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+  },
+  overflowItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '5px 8px',
+    borderRadius: 4,
+    fontSize: 12,
+    color: 'var(--text-primary)',
+    textAlign: 'left',
+    width: '100%',
+    cursor: 'default',
   },
   separator: {
     color: 'var(--text-muted)',
     fontSize: 14,
+    flexShrink: 0,
   },
   addressInput: {
     flex: 1,
+    minWidth: 0,
     width: '100%',
     height: '100%',
     fontSize: 12,
@@ -545,6 +703,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 0,
   },
   langSelector: {
     display: 'flex',

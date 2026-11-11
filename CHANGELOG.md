@@ -6,6 +6,7 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Contenção Inteligente de Caminhos Longos na Barra de Endereço (`AddressBar.tsx`)**: corrigido o estouro horizontal (`minWidth: 0` + `flexShrink: 0` nos controles laterais) para que caminhos extensos nunca empurrem os botões de ocultos, idioma, clipboard e tema para fora da janela, agrupando diretórios intermediários em um menu suspenso clicável (`…`) quando há mais de 4 níveis e aplicando reticências responsivas por segmento.
 - **Ícones Oficiais em Cores Reais para Studio Editor e DB Studio (`SuiteAppIcon.tsx`, `OperationsToolbar.tsx` e `FileContextMenu.tsx`)**: botões de abertura do **Pulsares Studio Editor** (`</>`) e do **Pulsares DB Studio** (cilindro SQLite) na barra de ferramentas e no menu de contexto agora exibem o emblema oficial em cores reais (`#2563eb` → `#4f46e5`) para destaque imediato.
 - **Correção de Rolagem, Expansão e Menu de Contexto na Seção "Pastas" da Barra Lateral (`Sidebar.tsx`, `FolderTree.tsx` e `tokens.css`)**: corrigida a cadeia flexível (`minHeight: 0` + `height: 100%`) que impedia a exibição da barra de rolagem vertical/horizontal ao expandir subpastas na árvore, adicionado fechamento do menu de contexto por tecla `Esc` e clique fora da área, opção **Copiar caminho da pasta** para o clipboard nativo, cabeçalho recolhível em *Pastas* e expansão por duplo clique.
 - **Zoom Progressivo e Alternância Dinâmica de Visualização nas Pastas (`FolderZoomControl.tsx`, `StatusBar.tsx` e `preview/store.ts`)**:
