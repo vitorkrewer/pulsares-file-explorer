@@ -40,6 +40,7 @@ import { useDualPaneStore } from '../panes/store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { useTerminalStore } from '../terminal/store';
 import { usePreviewStore, GroupByOption, GridThumbSize } from '../preview/store';
+import { FolderZoomControl } from '../preview/FolderZoomControl';
 import { useSearchStore } from '../search/store';
 import { useProductivityStore } from '../productivity/store';
 import { useEditorStore } from '../editor/store';
@@ -392,6 +393,8 @@ export const OperationsToolbar: React.FC = () => {
 
         <span style={styles.divider} />
 
+        <FolderZoomControl />
+
         {/* Alternador da Barra de Visualização (desativada por padrão na inicialização) */}
         <button
           type="button"
@@ -450,6 +453,7 @@ export const OperationsToolbar: React.FC = () => {
                 <option value="small">{t('views.sizeSmall')}</option>
                 <option value="medium">{t('views.sizeMedium')}</option>
                 <option value="large">{t('views.sizeLarge')}</option>
+                <option value="xlarge">{t('views.sizeExtraLarge')}</option>
               </select>
             )}
 

@@ -29,6 +29,7 @@ import { useTerminalStore } from '../terminal/store';
 import { useSearchStore } from '../search/store';
 import { useClipboardHistoryStore } from '../clipboard/store';
 import { useFolderTreeStore } from '../sidebar/folder-tree/store';
+import { usePreviewStore } from '../preview/store';
 import { formatBytes } from '../../i18n/format';
 
 export const ProductivityModals: React.FC = () => {
@@ -129,6 +130,24 @@ export const ProductivityModals: React.FC = () => {
 
   const commands = useMemo(
     () => [
+      {
+        id: 'folder-zoom-in',
+        label: t('folderZoom.zoomInCommand'),
+        shortcut: 'Ctrl + +',
+        run: () => usePreviewStore.getState().zoomFolderIn(true),
+      },
+      {
+        id: 'folder-zoom-out',
+        label: t('folderZoom.zoomOutCommand'),
+        shortcut: 'Ctrl + -',
+        run: () => usePreviewStore.getState().zoomFolderOut(true),
+      },
+      {
+        id: 'folder-zoom-reset',
+        label: t('folderZoom.resetCommand'),
+        shortcut: 'Ctrl + 0',
+        run: () => usePreviewStore.getState().resetFolderZoom(true),
+      },
       {
         id: 'connect-network-drive',
         label: t('networkDrive.connectTitle'),

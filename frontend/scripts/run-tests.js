@@ -102,6 +102,12 @@ const requiredNetworkDriveKeys = [
   'passwordLabel', 'securityNote', 'saveShortcut', 'cancel', 'connectAction', 'connecting',
   'connectError', 'disconnect', 'removeShortcut'
 ];
+const requiredFolderZoomKeys = [
+  'popoverTitle', 'buttonTooltip', 'zoomInTooltip', 'zoomOutTooltip', 'resetTooltip',
+  'shortColumns', 'stepDetailsCompact', 'stepDetails', 'stepList', 'stepSmallIcons',
+  'stepMediumIcons', 'stepLargeIcons', 'stepExtraLargeIcons', 'shortcutHint',
+  'zoomInCommand', 'zoomOutCommand', 'resetCommand'
+];
 
 for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it', 'ja', 'zh-CN', 'sv', 'tr']) {
   const filePath = path.resolve(__dirname, `../src/i18n/locales/${lang}/common.json`);
@@ -154,6 +160,10 @@ for (const lang of ['pt-BR', 'en', 'es', 'de', 'fr', 'it', 'ja', 'zh-CN', 'sv', 
   for (const netKey of requiredNetworkDriveKeys) {
     assert.ok(typeof data.networkDrive?.[netKey] === 'string' && data.networkDrive[netKey].length > 0);
   }
+  for (const zoomKey of requiredFolderZoomKeys) {
+    assert.ok(typeof data.folderZoom?.[zoomKey] === 'string' && data.folderZoom[zoomKey].length > 0);
+  }
+  assert.ok(typeof data.views?.sizeExtraLarge === 'string' && data.views.sizeExtraLarge.length > 0);
 }
 
 // 4. Testar geometria e conexões de arestas Bézier do Mapa de Entidade-Relacionamento (ERD)
@@ -281,4 +291,28 @@ assert.equal(resolveNetworkParent('smb://192.168.10.195/Publico/Docs'), 'smb://1
 assert.equal(resolveNetworkParent('smb://192.168.10.195/Publico'), 'smb://192.168.10.195');
 assert.equal(resolveNetworkParent('smb://192.168.10.195'), null);
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + Studio Web Preview + Terminal Follow-up + Clipboard History + Network Drives) passaram com sucesso.');
+// 9. Testar escala progressiva de Zoom e Visualização de Pastas (v1.2.0)
+const ZOOM_STEPS_TEST = [
+  { index: 0, pct: 85, viewMode: 'details', density: 'compact', gridSize: 'small' },
+  { index: 1, pct: 100, viewMode: 'details', density: 'comfortable', gridSize: 'medium' },
+  { index: 2, pct: 115, viewMode: 'list', density: 'comfortable', gridSize: 'medium' },
+  { index: 3, pct: 130, viewMode: 'grid', density: 'comfortable', gridSize: 'small' },
+  { index: 4, pct: 150, viewMode: 'grid', density: 'comfortable', gridSize: 'medium' },
+  { index: 5, pct: 175, viewMode: 'grid', density: 'comfortable', gridSize: 'large' },
+  { index: 6, pct: 200, viewMode: 'grid', density: 'comfortable', gridSize: 'xlarge' },
+];
+function resolveZoomIdxTest(viewMode, density, gridSize) {
+  if (viewMode === 'details') return density === 'compact' ? 0 : 1;
+  if (viewMode === 'list' || viewMode === 'columns') return 2;
+  if (gridSize === 'small') return 3;
+  if (gridSize === 'medium') return 4;
+  if (gridSize === 'large') return 5;
+  return 6;
+}
+assert.equal(resolveZoomIdxTest('details', 'comfortable', 'medium'), 1);
+assert.equal(ZOOM_STEPS_TEST[resolveZoomIdxTest('details', 'comfortable', 'medium') + 1].viewMode, 'list');
+assert.equal(ZOOM_STEPS_TEST[resolveZoomIdxTest('list', 'comfortable', 'medium') + 1].viewMode, 'grid');
+assert.equal(ZOOM_STEPS_TEST[6].gridSize, 'xlarge');
+assert.equal(ZOOM_STEPS_TEST[0].density, 'compact');
+
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + Studio Web Preview + Terminal Follow-up + Clipboard History + Network Drives + Folder Zoom) passaram com sucesso.');

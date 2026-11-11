@@ -62,6 +62,7 @@
     "sizeSmall": "Petite",
     "sizeMedium": "Moyenne",
     "sizeLarge": "Grande",
+    "sizeExtraLarge": "Très grande",
     "groupBy": "Grouper par",
     "groupNone": "Aucun regroupement",
     "groupType": "Grouper par type",
@@ -319,6 +320,25 @@
     "connectError": "Impossible de se connecter au lecteur réseau.",
     "disconnect": "Déconnecter le lecteur réseau",
     "removeShortcut": "Supprimer le raccourci enregistré"
+  },
+  "folderZoom": {
+    "popoverTitle": "Zoom et Affichage",
+    "buttonTooltip": "Zoom et mode d'affichage du dossier (Ctrl + Molette)",
+    "zoomInTooltip": "Zoom avant / changer d'affichage (Ctrl + +)",
+    "zoomOutTooltip": "Zoom arrière / changer d'affichage (Ctrl + -)",
+    "resetTooltip": "Rétablir le zoom par défaut 100% (Ctrl + 0)",
+    "shortColumns": "Col.",
+    "stepDetailsCompact": "Détails compacts",
+    "stepDetails": "Détails",
+    "stepList": "Liste compacte",
+    "stepSmallIcons": "Petites icônes",
+    "stepMediumIcons": "Icônes moyennes",
+    "stepLargeIcons": "Grandes icônes",
+    "stepExtraLargeIcons": "Très grandes icônes",
+    "shortcutHint": "Ctrl + Molette · Ctrl + + · Ctrl + - · Ctrl + 0",
+    "zoomInCommand": "Zoom avant sur les dossiers",
+    "zoomOutCommand": "Zoom arrière sur les dossiers",
+    "resetCommand": "Réinitialiser le zoom des dossiers (100%)"
   },
   "errors": {
     "notFound": "Le chemin spécifié est introuvable.",

@@ -6,6 +6,9 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Zoom Progressivo e Alternância Dinâmica de Visualização nas Pastas (`FolderZoomControl.tsx`, `StatusBar.tsx` e `preview/store.ts`)**:
+  - **Botão de Zoom na Barra de Ferramentas e na Barra de Status**: controle segmentado (`−` · `100% ▾` · `+`) sempre visível na barra de ferramentas (`OperationsToolbar.tsx`) com popover interativo (slider contínuo + lista completa de modos) e controles rápidos de visualização/zoom no canto inferior direito da `StatusBar.tsx`.
+  - **Atalhos `Ctrl + +`, `Ctrl + -`, `Ctrl + 0` e `Ctrl + Roda do Mouse`**: dar zoom progressivo alterna automaticamente entre **Detalhes Compactos (85%) → Detalhes (100%) → Lista Compacta (115%) → Ícones Pequenos (130%) → Ícones Médios (150%) → Ícones Grandes (175%) → Ícones Extra Grandes (200%)**, com indicador flutuante instantâneo (HUD) no painel de pastas e bloqueio de zoom acidental da janela WebView2.
 - **Conexão de Unidades e Pastas de Rede Multiplataforma em "Unidades e Volumes" (`\\192.168.10.195\`, `smb://...`, `nfs://...`)**:
   - **Botão `+` ("Conectar Unidade de Rede") em Unidades e Volumes (`Sidebar.tsx` e `NetworkDriveModal.tsx`)**: disponível tanto no painel lateral fixo quanto no Flyout da Activity Bar e na Paleta de Comandos (`Ctrl + Shift + P`).
   - **Navegação direta pela Barra de Endereço (`AddressBar.tsx` + `internal/vfs/local/local.go`)**: suporte nativo a caminhos UNC (`\\192.168.10.195\`, `\\192.168.10.195\Publico`) e URLs `smb://`/`cifs://`/`nfs://`, incluindo enumeração automática das pastas compartilhadas na raiz do servidor (`NetShareEnum` no Windows, `smbclient`/GVFS no Linux e `smbutil` no macOS), autocompletar de compartilhamentos, breadcrumbs clicáveis e botão *Subir* (`goUp`).

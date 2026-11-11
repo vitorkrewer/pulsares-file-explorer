@@ -62,6 +62,7 @@
     "sizeSmall": "Piccola",
     "sizeMedium": "Media",
     "sizeLarge": "Grande",
+    "sizeExtraLarge": "Extra grande",
     "groupBy": "Raggruppa per",
     "groupNone": "Nessun raggruppamento",
     "groupType": "Raggruppa per tipo",
@@ -319,6 +320,25 @@
     "connectError": "Impossibile connettersi all'unità di rete.",
     "disconnect": "Disconnetti unità di rete",
     "removeShortcut": "Rimuovi collegamento salvato"
+  },
+  "folderZoom": {
+    "popoverTitle": "Zoom e Visualizzazione",
+    "buttonTooltip": "Zoom e modalità di visualizzazione (Ctrl + Rotellina)",
+    "zoomInTooltip": "Ingrandisci / cambia vista (Ctrl + +)",
+    "zoomOutTooltip": "Riduci / cambia vista (Ctrl + -)",
+    "resetTooltip": "Ripristina zoom predefinito 100% (Ctrl + 0)",
+    "shortColumns": "Col.",
+    "stepDetailsCompact": "Dettagli compatti",
+    "stepDetails": "Dettagli",
+    "stepList": "Elenco compatto",
+    "stepSmallIcons": "Icone piccole",
+    "stepMediumIcons": "Icone medie",
+    "stepLargeIcons": "Icone grandi",
+    "stepExtraLargeIcons": "Icone molto grandi",
+    "shortcutHint": "Ctrl + Rotellina · Ctrl + + · Ctrl + - · Ctrl + 0",
+    "zoomInCommand": "Ingrandisci zoom nelle cartelle",
+    "zoomOutCommand": "Riduci zoom nelle cartelle",
+    "resetCommand": "Ripristina zoom cartelle (100%)"
   },
   "errors": {
     "notFound": "Il percorso specificato non è stato trovato.",

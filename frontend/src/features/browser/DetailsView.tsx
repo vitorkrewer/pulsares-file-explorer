@@ -1,9 +1,10 @@
-import React, { useRef, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowUpDown, Loader2 } from 'lucide-react';
 import { useBrowserStore } from './store';
 import { useOperationsStore } from '../operations/store';
+import { usePreviewStore } from '../preview/store';
 import { Entry, openPath, enqueueOperation } from '../../lib/wails';
 import { formatBytes, formatDateTime, getCollator } from '../../i18n/format';
 import { FileTypeIcon, getFileTypeVisual } from '../../ui/FileTypeIcon';
@@ -28,6 +29,10 @@ export const DetailsView: React.FC = () => {
   } = useBrowserStore();
 
   const [dragTargetFolder, setDragTargetFolder] = useState<string | null>(null);
+  const { density } = usePreviewStore();
+  const rowHeight = density === 'compact' ? 23 : 29;
+  const iconSize = density === 'compact' ? 13 : 16;
+  const rowFontSize = density === 'compact' ? 11.5 : 12.5;
 
   const locale = i18n.language || 'pt-BR';
   const collator = useMemo(() => getCollator(locale), [locale]);
@@ -71,9 +76,13 @@ export const DetailsView: React.FC = () => {
   const rowVirtualizer = useVirtualizer({
     count: sortedEntries.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 28,
+    estimateSize: () => rowHeight,
     overscan: 20,
   });
+
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [rowHeight, rowVirtualizer]);
 
   const handleItemClick = (e: React.MouseEvent, entry: Entry) => {
     selectItem(entry.location.path, e.ctrlKey || e.metaKey, e.shiftKey);
@@ -90,7 +99,7 @@ export const DetailsView: React.FC = () => {
   };
 
   const getIcon = (entry: Entry) => {
-    return <FileTypeIcon name={entry.name} kind={entry.kind} size={15} />;
+    return <FileTypeIcon name={entry.name} kind={entry.kind} size={iconSize} />;
   };
 
   const getTypeName = (entry: Entry) => {
@@ -234,6 +243,7 @@ export const DetailsView: React.FC = () => {
                     ...styles.row,
                     top: `${virtualRow.start}px`,
                     height: `${virtualRow.size}px`,
+                    fontSize: rowFontSize,
                     backgroundColor: dragTargetFolder === item.location.path
                       ? 'var(--bg-selected, rgba(59, 130, 246, 0.25))'
                       : isSelected

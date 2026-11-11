@@ -62,6 +62,7 @@
     "sizeSmall": "Small",
     "sizeMedium": "Medium",
     "sizeLarge": "Large",
+    "sizeExtraLarge": "Extra large",
     "groupBy": "Group by",
     "groupNone": "No grouping",
     "groupType": "Group by type",
@@ -319,6 +320,25 @@
     "connectError": "Could not connect to the network drive.",
     "disconnect": "Disconnect network drive",
     "removeShortcut": "Remove saved shortcut"
+  },
+  "folderZoom": {
+    "popoverTitle": "Zoom & View Mode",
+    "buttonTooltip": "Folder zoom & view mode (Ctrl + Mouse Wheel)",
+    "zoomInTooltip": "Zoom in / switch view mode (Ctrl + +)",
+    "zoomOutTooltip": "Zoom out / switch view mode (Ctrl + -)",
+    "resetTooltip": "Reset default zoom 100% (Ctrl + 0)",
+    "shortColumns": "Col.",
+    "stepDetailsCompact": "Compact details",
+    "stepDetails": "Details",
+    "stepList": "Compact list",
+    "stepSmallIcons": "Small icons",
+    "stepMediumIcons": "Medium icons",
+    "stepLargeIcons": "Large icons",
+    "stepExtraLargeIcons": "Extra large icons",
+    "shortcutHint": "Ctrl + Mouse Wheel · Ctrl + + · Ctrl + - · Ctrl + 0",
+    "zoomInCommand": "Zoom in on folders",
+    "zoomOutCommand": "Zoom out on folders",
+    "resetCommand": "Reset folder zoom (100%)"
   },
   "errors": {
     "notFound": "The specified path was not found.",

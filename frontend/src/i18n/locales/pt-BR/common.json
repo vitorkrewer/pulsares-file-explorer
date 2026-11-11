@@ -62,6 +62,7 @@
     "sizeSmall": "Pequeno",
     "sizeMedium": "Médio",
     "sizeLarge": "Grande",
+    "sizeExtraLarge": "Extra grande",
     "groupBy": "Agrupar por",
     "groupNone": "Sem agrupamento",
     "groupType": "Agrupar por tipo",
@@ -319,6 +320,25 @@
     "connectError": "Não foi possível conectar à unidade de rede.",
     "disconnect": "Desconectar unidade de rede",
     "removeShortcut": "Remover atalho salvo"
+  },
+  "folderZoom": {
+    "popoverTitle": "Zoom e Visualização",
+    "buttonTooltip": "Zoom e modo de visualização da pasta (Ctrl + Roda do Mouse)",
+    "zoomInTooltip": "Aumentar zoom / alternar visualização (Ctrl + +)",
+    "zoomOutTooltip": "Diminuir zoom / alternar visualização (Ctrl + -)",
+    "resetTooltip": "Restaurar zoom padrão 100% (Ctrl + 0)",
+    "shortColumns": "Col.",
+    "stepDetailsCompact": "Detalhes compactos",
+    "stepDetails": "Detalhes",
+    "stepList": "Lista compacta",
+    "stepSmallIcons": "Ícones pequenos",
+    "stepMediumIcons": "Ícones médios",
+    "stepLargeIcons": "Ícones grandes",
+    "stepExtraLargeIcons": "Ícones extra grandes",
+    "shortcutHint": "Ctrl + Roda do Mouse · Ctrl + + · Ctrl + - · Ctrl + 0",
+    "zoomInCommand": "Aumentar zoom nas pastas",
+    "zoomOutCommand": "Diminuir zoom nas pastas",
+    "resetCommand": "Restaurar zoom das pastas (100%)"
   },
   "errors": {
     "notFound": "O caminho especificado não foi encontrado.",

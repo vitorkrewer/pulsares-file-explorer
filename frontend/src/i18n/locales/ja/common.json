@@ -62,6 +62,7 @@
     "sizeSmall": "小",
     "sizeMedium": "中",
     "sizeLarge": "大",
+    "sizeExtraLarge": "特大",
     "groupBy": "グループ化",
     "groupNone": "グループ化なし",
     "groupType": "種類でグループ化",
@@ -319,6 +320,25 @@
     "connectError": "ネットワークドライブに接続できませんでした。",
     "disconnect": "ネットワークドライブを切断",
     "removeShortcut": "保存したショートカットを削除"
+  },
+  "folderZoom": {
+    "popoverTitle": "ズームと表示モード",
+    "buttonTooltip": "フォルダーのズームと表示モード (Ctrl + マウスホイール)",
+    "zoomInTooltip": "拡大 / 表示切り替え (Ctrl + +)",
+    "zoomOutTooltip": "縮小 / 表示切り替え (Ctrl + -)",
+    "resetTooltip": "標準ズーム 100% に戻す (Ctrl + 0)",
+    "shortColumns": "カラム",
+    "stepDetailsCompact": "コンパクト詳細",
+    "stepDetails": "詳細",
+    "stepList": "コンパクト一覧",
+    "stepSmallIcons": "小アイコン",
+    "stepMediumIcons": "中アイコン",
+    "stepLargeIcons": "大アイコン",
+    "stepExtraLargeIcons": "特大アイコン",
+    "shortcutHint": "Ctrl + マウスホイール · Ctrl + + · Ctrl + - · Ctrl + 0",
+    "zoomInCommand": "フォルダー表示を拡大",
+    "zoomOutCommand": "フォルダー表示を縮小",
+    "resetCommand": "フォルダーのズームをリセット (100%)"
   },
   "errors": {
     "notFound": "指定されたパスが見つかりませんでした。",

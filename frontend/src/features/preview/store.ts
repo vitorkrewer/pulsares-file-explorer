@@ -2,9 +2,110 @@ import { create } from 'zustand';
 import { PreviewData, getPreview, getThumbnail } from '../../lib/wails';
 
 export type BrowserViewMode = 'details' | 'list' | 'grid' | 'columns';
-export type GridThumbSize = 'small' | 'medium' | 'large';
+export type GridThumbSize = 'small' | 'medium' | 'large' | 'xlarge';
 export type GroupByOption = 'none' | 'type' | 'date' | 'size';
 export type UIDensity = 'comfortable' | 'compact';
+
+export interface FolderZoomStep {
+  index: number;
+  id: string;
+  pct: number;
+  viewMode: BrowserViewMode;
+  density: UIDensity;
+  gridSize: GridThumbSize;
+  labelKey: string;
+}
+
+export const FOLDER_ZOOM_STEPS: FolderZoomStep[] = [
+  {
+    index: 0,
+    id: 'details-compact',
+    pct: 85,
+    viewMode: 'details',
+    density: 'compact',
+    gridSize: 'small',
+    labelKey: 'folderZoom.stepDetailsCompact',
+  },
+  {
+    index: 1,
+    id: 'details-normal',
+    pct: 100,
+    viewMode: 'details',
+    density: 'comfortable',
+    gridSize: 'medium',
+    labelKey: 'folderZoom.stepDetails',
+  },
+  {
+    index: 2,
+    id: 'list',
+    pct: 115,
+    viewMode: 'list',
+    density: 'comfortable',
+    gridSize: 'medium',
+    labelKey: 'folderZoom.stepList',
+  },
+  {
+    index: 3,
+    id: 'grid-small',
+    pct: 130,
+    viewMode: 'grid',
+    density: 'comfortable',
+    gridSize: 'small',
+    labelKey: 'folderZoom.stepSmallIcons',
+  },
+  {
+    index: 4,
+    id: 'grid-medium',
+    pct: 150,
+    viewMode: 'grid',
+    density: 'comfortable',
+    gridSize: 'medium',
+    labelKey: 'folderZoom.stepMediumIcons',
+  },
+  {
+    index: 5,
+    id: 'grid-large',
+    pct: 175,
+    viewMode: 'grid',
+    density: 'comfortable',
+    gridSize: 'large',
+    labelKey: 'folderZoom.stepLargeIcons',
+  },
+  {
+    index: 6,
+    id: 'grid-xlarge',
+    pct: 200,
+    viewMode: 'grid',
+    density: 'comfortable',
+    gridSize: 'xlarge',
+    labelKey: 'folderZoom.stepExtraLargeIcons',
+  },
+];
+
+export function resolveZoomStepIndex(
+  viewMode: BrowserViewMode,
+  density: UIDensity,
+  gridSize: GridThumbSize
+): number {
+  if (viewMode === 'details') {
+    return density === 'compact' ? 0 : 1;
+  }
+  if (viewMode === 'list' || viewMode === 'columns') {
+    return 2;
+  }
+  switch (gridSize) {
+    case 'small':
+      return 3;
+    case 'medium':
+      return 4;
+    case 'large':
+      return 5;
+    case 'xlarge':
+      return 6;
+    default:
+      return 4;
+  }
+}
 
 const STORAGE_KEY = 'pulsares.view.preferences.v1';
 
@@ -45,6 +146,7 @@ interface PreviewStoreState {
   previewData: PreviewData | null;
   previewLoading: boolean;
   imageZoom: number;
+  zoomHudStamp: number;
   thumbnails: Record<string, string>;
 
   setViewMode: (mode: BrowserViewMode) => void;
@@ -52,6 +154,10 @@ interface PreviewStoreState {
   setGroupBy: (groupBy: GroupByOption) => void;
   setDensity: (density: UIDensity) => void;
   toggleDensity: () => void;
+  applyFolderZoomStep: (stepIndex: number, showHud?: boolean) => void;
+  zoomFolderIn: (showHud?: boolean) => void;
+  zoomFolderOut: (showHud?: boolean) => void;
+  resetFolderZoom: (showHud?: boolean) => void;
   togglePreviewPanel: () => void;
   toggleQuickLook: () => void;
   closeQuickLook: () => void;
@@ -83,6 +189,7 @@ export const usePreviewStore = create<PreviewStoreState>((set, get) => {
     previewData: null,
     previewLoading: false,
     imageZoom: 1,
+    zoomHudStamp: 0,
     thumbnails: {},
 
     setViewMode: (viewMode) => {
@@ -111,6 +218,39 @@ export const usePreviewStore = create<PreviewStoreState>((set, get) => {
     toggleDensity: () => {
       const next: UIDensity = get().density === 'comfortable' ? 'compact' : 'comfortable';
       get().setDensity(next);
+    },
+
+    applyFolderZoomStep: (stepIndex, showHud = false) => {
+      const clamped = Math.max(0, Math.min(FOLDER_ZOOM_STEPS.length - 1, stepIndex));
+      const step = FOLDER_ZOOM_STEPS[clamped];
+      set((s) => ({
+        viewMode: step.viewMode,
+        density: step.density,
+        gridSize: step.gridSize,
+        zoomHudStamp: showHud ? Date.now() : s.zoomHudStamp,
+      }));
+      if (typeof document !== 'undefined') {
+        document.documentElement.setAttribute('data-density', step.density);
+      }
+      persist();
+    },
+
+    zoomFolderIn: (showHud = false) => {
+      const s = get();
+      const curr = resolveZoomStepIndex(s.viewMode, s.density, s.gridSize);
+      const next = Math.min(FOLDER_ZOOM_STEPS.length - 1, curr + 1);
+      get().applyFolderZoomStep(next, showHud);
+    },
+
+    zoomFolderOut: (showHud = false) => {
+      const s = get();
+      const curr = resolveZoomStepIndex(s.viewMode, s.density, s.gridSize);
+      const next = Math.max(0, curr - 1);
+      get().applyFolderZoomStep(next, showHud);
+    },
+
+    resetFolderZoom: (showHud = false) => {
+      get().applyFolderZoomStep(1, showHud);
     },
 
     togglePreviewPanel: () => {
@@ -164,4 +304,3 @@ export const usePreviewStore = create<PreviewStoreState>((set, get) => {
     },
   };
 });
-

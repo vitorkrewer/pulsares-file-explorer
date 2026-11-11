@@ -62,6 +62,7 @@
     "sizeSmall": "Klein",
     "sizeMedium": "Mittel",
     "sizeLarge": "Groß",
+    "sizeExtraLarge": "Extra groß",
     "groupBy": "Gruppieren nach",
     "groupNone": "Keine Gruppierung",
     "groupType": "Nach Typ gruppieren",
@@ -319,6 +320,25 @@
     "connectError": "Verbindung zum Netzlaufwerk fehlgeschlagen.",
     "disconnect": "Netzlaufwerk trennen",
     "removeShortcut": "Gespeicherte Verknüpfung entfernen"
+  },
+  "folderZoom": {
+    "popoverTitle": "Zoom & Ansicht",
+    "buttonTooltip": "Ordner-Zoom & Ansichtsmodus (Strg + Mausrad)",
+    "zoomInTooltip": "Vergrößern / Ansicht wechseln (Strg + +)",
+    "zoomOutTooltip": "Verkleinern / Ansicht wechseln (Strg + -)",
+    "resetTooltip": "Standardzoom 100% wiederherstellen (Strg + 0)",
+    "shortColumns": "Spalt.",
+    "stepDetailsCompact": "Kompakte Details",
+    "stepDetails": "Details",
+    "stepList": "Kompakte Liste",
+    "stepSmallIcons": "Kleine Symbole",
+    "stepMediumIcons": "Mittelgroße Symbole",
+    "stepLargeIcons": "Große Symbole",
+    "stepExtraLargeIcons": "Extra große Symbole",
+    "shortcutHint": "Strg + Mausrad · Strg + + · Strg + - · Strg + 0",
+    "zoomInCommand": "Ordneransicht vergrößern",
+    "zoomOutCommand": "Ordneransicht verkleinern",
+    "resetCommand": "Ordner-Zoom zurücksetzen (100%)"
   },
   "errors": {
     "notFound": "Der angegebene Pfad wurde nicht gefunden.",

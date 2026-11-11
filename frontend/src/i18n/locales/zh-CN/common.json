@@ -62,6 +62,7 @@
     "sizeSmall": "小",
     "sizeMedium": "中",
     "sizeLarge": "大",
+    "sizeExtraLarge": "超大",
     "groupBy": "分组依据",
     "groupNone": "无分组",
     "groupType": "按类型分组",
@@ -319,6 +320,25 @@
     "connectError": "无法连接到网络驱动器。",
     "disconnect": "断开网络驱动器",
     "removeShortcut": "移除已保存的快捷方式"
+  },
+  "folderZoom": {
+    "popoverTitle": "缩放与视图模式",
+    "buttonTooltip": "文件夹缩放与视图切换 (Ctrl + 鼠标滚轮)",
+    "zoomInTooltip": "放大 / 切换视图 (Ctrl + +)",
+    "zoomOutTooltip": "缩小 / 切换视图 (Ctrl + -)",
+    "resetTooltip": "重置默认缩放 100% (Ctrl + 0)",
+    "shortColumns": "分栏",
+    "stepDetailsCompact": "紧凑详细信息",
+    "stepDetails": "详细信息",
+    "stepList": "紧凑列表",
+    "stepSmallIcons": "小图标",
+    "stepMediumIcons": "中图标",
+    "stepLargeIcons": "大图标",
+    "stepExtraLargeIcons": "超大图标",
+    "shortcutHint": "Ctrl + 鼠标滚轮 · Ctrl + + · Ctrl + - · Ctrl + 0",
+    "zoomInCommand": "放大文件夹视图",
+    "zoomOutCommand": "缩小文件夹视图",
+    "resetCommand": "重置文件夹缩放 (100%)"
   },
   "errors": {
     "notFound": "未找到指定的路径。",

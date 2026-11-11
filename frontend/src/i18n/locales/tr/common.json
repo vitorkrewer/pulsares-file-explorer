@@ -62,6 +62,7 @@
     "sizeSmall": "Küçük",
     "sizeMedium": "Orta",
     "sizeLarge": "Büyük",
+    "sizeExtraLarge": "Çok büyük",
     "groupBy": "Gruplandırma ölçütü",
     "groupNone": "Gruplandırma yok",
     "groupType": "Türe göre gruplandır",
@@ -319,6 +320,25 @@
     "connectError": "Ağ sürücüsüne bağlanılamadı.",
     "disconnect": "Ağ sürücüsü bağlantısını kes",
     "removeShortcut": "Kayıtlı kısayolu kaldır"
+  },
+  "folderZoom": {
+    "popoverTitle": "Yakınlaştırma ve Görünüm",
+    "buttonTooltip": "Klasör yakınlaştırma ve görünüm modu (Ctrl + Fare Tekerleği)",
+    "zoomInTooltip": "Yakınlaştır / görünümü değiştir (Ctrl + +)",
+    "zoomOutTooltip": "Uzaklaştır / görünümü değiştir (Ctrl + -)",
+    "resetTooltip": "Varsayılan yakınlaştırmayı sıfırla %100 (Ctrl + 0)",
+    "shortColumns": "Sütun",
+    "stepDetailsCompact": "Sıkışık ayrıntılar",
+    "stepDetails": "Ayrıntılar",
+    "stepList": "Sıkışık liste",
+    "stepSmallIcons": "Küçük simgeler",
+    "stepMediumIcons": "Orta simgeler",
+    "stepLargeIcons": "Büyük simgeler",
+    "stepExtraLargeIcons": "Çok büyük simgeler",
+    "shortcutHint": "Ctrl + Fare Tekerleği · Ctrl + + · Ctrl + - · Ctrl + 0",
+    "zoomInCommand": "Klasör görünümünü yakınlaştır",
+    "zoomOutCommand": "Klasör görünümünü uzaklaştır",
+    "resetCommand": "Klasör yakınlaştırmasını sıfırla (%100)"
   },
   "errors": {
     "notFound": "Belirtilen yol bulunamadı.",

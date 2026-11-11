@@ -62,6 +62,7 @@
     "sizeSmall": "Pequeño",
     "sizeMedium": "Mediano",
     "sizeLarge": "Grande",
+    "sizeExtraLarge": "Extra grande",
     "groupBy": "Agrupar por",
     "groupNone": "Sin agrupar",
     "groupType": "Agrupar por tipo",
@@ -319,6 +320,25 @@
     "connectError": "No se pudo conectar a la unidad de red.",
     "disconnect": "Desconectar unidad de red",
     "removeShortcut": "Eliminar acceso directo guardado"
+  },
+  "folderZoom": {
+    "popoverTitle": "Zoom y Visualización",
+    "buttonTooltip": "Zoom y modo de vista de carpeta (Ctrl + Rueda del ratón)",
+    "zoomInTooltip": "Acercar / cambiar vista (Ctrl + +)",
+    "zoomOutTooltip": "Alejar / cambiar vista (Ctrl + -)",
+    "resetTooltip": "Restaurar zoom predeterminado 100% (Ctrl + 0)",
+    "shortColumns": "Col.",
+    "stepDetailsCompact": "Detalles compactos",
+    "stepDetails": "Detalles",
+    "stepList": "Lista compacta",
+    "stepSmallIcons": "Iconos pequeños",
+    "stepMediumIcons": "Iconos medianos",
+    "stepLargeIcons": "Iconos grandes",
+    "stepExtraLargeIcons": "Iconos extra grandes",
+    "shortcutHint": "Ctrl + Rueda del ratón · Ctrl + + · Ctrl + - · Ctrl + 0",
+    "zoomInCommand": "Acercar zoom en carpetas",
+    "zoomOutCommand": "Alejar zoom en carpetas",
+    "resetCommand": "Restaurar zoom de carpetas (100%)"
   },
   "errors": {
     "notFound": "No se encontró la ruta especificada.",

@@ -18,7 +18,11 @@ import { useFolderTreeStore } from '../features/sidebar/folder-tree/store';
 import { useOperationsStore } from '../features/operations/store';
 import { useDualPaneStore } from '../features/panes/store';
 import { useTerminalStore } from '../features/terminal/store';
-import { usePreviewStore } from '../features/preview/store';
+import {
+  usePreviewStore,
+  FOLDER_ZOOM_STEPS,
+  resolveZoomStepIndex,
+} from '../features/preview/store';
 import { useSearchStore } from '../features/search/store';
 import { useProductivityStore } from '../features/productivity/store';
 import { useEditorStore, isStandaloneStudioWindow } from '../features/editor/store';
@@ -42,7 +46,7 @@ import { Entry, getInitialState, enqueueOperation, openPath, writeNativeClipboar
 import { resolveLanguage } from '../i18n/config';
 
 export const App: React.FC = () => {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation('common');
   const {
     hydrateSession,
     initListener,
@@ -97,6 +101,8 @@ export const App: React.FC = () => {
   } = useTerminalStore();
   const {
     viewMode,
+    gridSize,
+    zoomHudStamp,
     quickLookOpen,
     toggleQuickLook,
     closeQuickLook,
@@ -108,7 +114,52 @@ export const App: React.FC = () => {
   const [isStudioMode, setIsStudioMode] = useState<boolean>(() => isStandaloneStudioWindow());
   const [isDBStudioMode, setIsDBStudioMode] = useState<boolean>(() => isStandaloneDBStudioWindow());
   const [contextMenuTarget, setContextMenuTarget] = useState<ContextMenuTarget | null>(null);
+  const [zoomHudVisible, setZoomHudVisible] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!zoomHudStamp) return;
+    setZoomHudVisible(true);
+    const timer = setTimeout(() => setZoomHudVisible(false), 1200);
+    return () => clearTimeout(timer);
+  }, [zoomHudStamp]);
+
+  // Zoom nas pastas com Ctrl + Roda do Mouse (estilo Explorer)
+  useEffect(() => {
+    if (isStudioMode || isDBStudioMode) return;
+    const el = workspaceRef.current;
+    if (!el) return;
+
+    let accDelta = 0;
+    let lastTs = 0;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const now = Date.now();
+      if (now - lastTs > 240) {
+        accDelta = 0;
+      }
+      lastTs = now;
+      accDelta += e.deltaY;
+
+      const THRESHOLD = 60;
+      if (accDelta <= -THRESHOLD) {
+        accDelta = 0;
+        usePreviewStore.getState().zoomFolderIn(true);
+      } else if (accDelta >= THRESHOLD) {
+        accDelta = 0;
+        usePreviewStore.getState().zoomFolderOut(true);
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, [isStudioMode, isDBStudioMode]);
 
   // Bloqueia o menu de contexto padrão do navegador/WebView2 globalmente
   useEffect(() => {
@@ -465,6 +516,35 @@ export const App: React.FC = () => {
       } else if (e.key === 'Tab') {
         e.preventDefault();
         nextTab(e.shiftKey);
+      } else if (
+        !e.altKey &&
+        !quickLookOpen &&
+        !isStudioMode &&
+        !isDBStudioMode &&
+        !document.querySelector('[role="dialog"]:not([data-folder-zoom-popover="true"])') &&
+        (e.key === '+' ||
+          e.key === '=' ||
+          e.code === 'Equal' ||
+          e.code === 'NumpadAdd' ||
+          e.key === '-' ||
+          e.key === '_' ||
+          e.code === 'Minus' ||
+          e.code === 'NumpadSubtract' ||
+          (!e.shiftKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')))
+      ) {
+        e.preventDefault();
+        if (e.key === '+' || e.key === '=' || e.code === 'Equal' || e.code === 'NumpadAdd') {
+          usePreviewStore.getState().zoomFolderIn(true);
+        } else if (
+          e.key === '-' ||
+          e.key === '_' ||
+          e.code === 'Minus' ||
+          e.code === 'NumpadSubtract'
+        ) {
+          usePreviewStore.getState().zoomFolderOut(true);
+        } else {
+          usePreviewStore.getState().resetFolderZoom(true);
+        }
       } else if (/^[1-9]$/.test(e.key)) {
         e.preventDefault();
         const num = parseInt(e.key, 10);
@@ -498,6 +578,8 @@ export const App: React.FC = () => {
     createTerminalSession,
     setTerminalSearchOpen,
     toggleSearchDrawer,
+    isStudioMode,
+    isDBStudioMode,
     quickLookOpen,
     toggleQuickLook,
     closeQuickLook,
@@ -749,6 +831,40 @@ export const App: React.FC = () => {
                 }}
               >
                 {viewMode === 'details' ? <DetailsView /> : <AlternativeViews />}
+
+                {/* Indicador visual rápido ao dar zoom nas pastas (Ctrl+Scroll / Ctrl++ / Ctrl+-) */}
+                {zoomHudVisible && (() => {
+                  const stepIdx = resolveZoomStepIndex(viewMode, density, gridSize);
+                  const step = FOLDER_ZOOM_STEPS[stepIdx] || FOLDER_ZOOM_STEPS[1];
+                  return (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '16px',
+                        bottom: '14px',
+                        zIndex: 80,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '7px',
+                        padding: '5px 12px',
+                        borderRadius: '999px',
+                        backgroundColor: 'var(--bg-surface)',
+                        border: '1px solid var(--accent)',
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+                        fontSize: '11.5px',
+                        fontWeight: 600,
+                        color: 'var(--text-primary)',
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
+                        {step.pct}%
+                      </span>
+                      <span style={{ color: 'var(--text-muted)' }}>•</span>
+                      <span>{t(step.labelKey)}</span>
+                    </div>
+                  );
+                })()}
 
                 {/* HUD flutuante de busca rápida nativa ao digitar na pasta */}
                 {filterQuery && (

@@ -62,6 +62,7 @@
     "sizeSmall": "Liten",
     "sizeMedium": "Mellan",
     "sizeLarge": "Stor",
+    "sizeExtraLarge": "Extra stor",
     "groupBy": "Gruppera efter",
     "groupNone": "Ingen gruppering",
     "groupType": "Gruppera efter typ",
@@ -319,6 +320,25 @@
     "connectError": "Kunde inte ansluta till nätverksenheten.",
     "disconnect": "Koppla från nätverksenhet",
     "removeShortcut": "Ta bort sparad genväg"
+  },
+  "folderZoom": {
+    "popoverTitle": "Zoom och Visningsläge",
+    "buttonTooltip": "Mappzoom och visningsläge (Ctrl + Mushjul)",
+    "zoomInTooltip": "Zooma in / byt vy (Ctrl + +)",
+    "zoomOutTooltip": "Zooma ut / byt vy (Ctrl + -)",
+    "resetTooltip": "Återställ standardzoom 100% (Ctrl + 0)",
+    "shortColumns": "Kol.",
+    "stepDetailsCompact": "Kompakta detaljer",
+    "stepDetails": "Detaljer",
+    "stepList": "Kompakt lista",
+    "stepSmallIcons": "Små ikoner",
+    "stepMediumIcons": "Medelstora ikoner",
+    "stepLargeIcons": "Stora ikoner",
+    "stepExtraLargeIcons": "Extra stora ikoner",
+    "shortcutHint": "Ctrl + Mushjul · Ctrl + + · Ctrl + - · Ctrl + 0",
+    "zoomInCommand": "Zooma in i mappar",
+    "zoomOutCommand": "Zooma ut i mappar",
+    "resetCommand": "Återställ mappzoom (100%)"
   },
   "errors": {
     "notFound": "Den angivna sökvägen hittades inte.",

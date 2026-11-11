@@ -1,10 +1,11 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowUp, RotateCw, ArrowLeftRight } from 'lucide-react';
 import { useDualPaneStore } from './store';
 import { useBrowserStore } from '../browser/store';
 import { useOperationsStore } from '../operations/store';
+import { usePreviewStore } from '../preview/store';
 import { formatBytes, formatDateTime, getCollator } from '../../i18n/format';
 import { openPath, enqueueOperation } from '../../lib/wails';
 import { FileTypeIcon } from '../../ui/FileTypeIcon';
@@ -24,6 +25,8 @@ export const SecondaryPane: React.FC = () => {
   } = useDualPaneStore();
   const { showHidden, navigateTo, currentPath } = useBrowserStore();
   const [dragOver, setDragOver] = useState(false);
+  const { density } = usePreviewStore();
+  const rowHeight = density === 'compact' ? 23 : 28;
 
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -42,9 +45,13 @@ export const SecondaryPane: React.FC = () => {
   const rowVirtualizer = useVirtualizer({
     count: sortedEntries.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 28,
+    estimateSize: () => rowHeight,
     overscan: 10,
   });
+
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [rowHeight, rowVirtualizer]);
 
   const handleGoUp = () => {
     if (!secondaryPath) return;

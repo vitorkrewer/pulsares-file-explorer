@@ -168,7 +168,7 @@ export const AlternativeViews: React.FC = () => {
   // Solicitar miniaturas das primeiras imagens visíveis no modo grade
   useEffect(() => {
     if (viewMode !== 'grid') return;
-    const dim = gridSize === 'small' ? 96 : gridSize === 'large' ? 180 : 136;
+    const dim = gridSize === 'small' ? 96 : gridSize === 'xlarge' ? 248 : gridSize === 'large' ? 188 : 140;
     const images = sortedEntries
       .filter((e) => e.kind === 'file' && isImageEntry(e.name))
       .slice(0, 60);
@@ -304,9 +304,9 @@ export const AlternativeViews: React.FC = () => {
       );
     }
 
-    const cardWidth = gridSize === 'small' ? 104 : gridSize === 'large' ? 184 : 140;
-    const thumbHeight = gridSize === 'small' ? 68 : gridSize === 'large' ? 128 : 94;
-    const dim = gridSize === 'small' ? 96 : gridSize === 'large' ? 180 : 136;
+    const cardWidth = gridSize === 'small' ? 104 : gridSize === 'xlarge' ? 252 : gridSize === 'large' ? 192 : 144;
+    const thumbHeight = gridSize === 'small' ? 68 : gridSize === 'xlarge' ? 180 : gridSize === 'large' ? 132 : 96;
+    const dim = gridSize === 'small' ? 96 : gridSize === 'xlarge' ? 248 : gridSize === 'large' ? 188 : 140;
 
     return (
       <div style={styles.scrollContainer}>
@@ -382,7 +382,10 @@ export const AlternativeViews: React.FC = () => {
                           }}
                         />
                       ) : (
-                        renderEntryIcon(entry, gridSize === 'small' ? 28 : 40)
+                        renderEntryIcon(
+                          entry,
+                          gridSize === 'small' ? 28 : gridSize === 'xlarge' ? 68 : gridSize === 'large' ? 52 : 40
+                        )
                       )}
                     </div>
                     <span style={styles.gridCardTitle}>{entry.name}</span>
