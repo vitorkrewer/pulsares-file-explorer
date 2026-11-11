@@ -395,4 +395,13 @@ assert.equal(isStudioMediaTest('C:\\curso\\aula01.mp4'), true);
 assert.equal(isStudioMediaTest('/assets/podcast.mp3'), true);
 assert.equal(isStudioMediaTest('index.html'), false);
 
-console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + DB Studio CRUD/Creator + Studio Web/PDF/Image/Media/Git/Search + Terminal Follow-up + Clipboard History + Network Drives + Folder Zoom) passaram com sucesso.');
+// 13. Testar presença da ponte e submenu "Abrir com" listando programas do sistema (v1.2.0)
+const wailsSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'wails.ts'), 'utf8');
+const ctxMenuSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'features', 'context-menu', 'FileContextMenu.tsx'), 'utf8');
+assert.ok(wailsSrc.includes('export async function listOpenWithApps('));
+assert.ok(wailsSrc.includes('export async function openFileWithApp('));
+assert.ok(ctxMenuSrc.includes('listOpenWithApps('));
+assert.ok(ctxMenuSrc.includes('openFileWithApp('));
+assert.ok(ctxMenuSrc.includes('Programas do Sistema'));
+
+console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + DB Studio CRUD/Creator + Studio Web/PDF/Image/Media/Git/Search + Open With Submenu + Terminal Follow-up + Clipboard History + Network Drives + Folder Zoom) passaram com sucesso.');

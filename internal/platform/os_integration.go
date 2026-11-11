@@ -30,6 +30,15 @@ type ItemProperties struct {
 	SHA256        string `json:"sha256,omitempty"`
 }
 
+// OpenWithApp representa um programa instalado no sistema capaz de abrir determinado arquivo.
+type OpenWithApp struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	ExePath   string `json:"exePath"`
+	Command   string `json:"command,omitempty"`
+	IsDefault bool   `json:"isDefault,omitempty"`
+}
+
 // GetItemProperties retorna metadados detalhados de um arquivo ou pasta (incluindo cálculo recursivo de tamanho de pastas e SHA-256 de arquivos até 64 MB).
 func GetItemProperties(targetPath string) (ItemProperties, error) {
 	clean := filepath.Clean(targetPath)

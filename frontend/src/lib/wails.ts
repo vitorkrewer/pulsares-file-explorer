@@ -693,6 +693,8 @@ declare global {
             saveShortcut: boolean
           ) => Promise<NetworkMountResult>;
           DisconnectNetworkDrive?: (target: string) => Promise<void>;
+          ListOpenWithApps?: (targetPath: string) => Promise<OpenWithApp[]>;
+          OpenFileWithApp?: (targetPath: string, appExeOrCommand: string) => Promise<void>;
         };
       };
     };
@@ -2074,6 +2076,39 @@ export async function studioGetGitStatus(rootDir: string): Promise<StudioGitStat
   }
   return { isRepo: false, branch: '', files: {} };
 }
+
+export interface OpenWithApp {
+  id: string;
+  name: string;
+  exePath: string;
+  command?: string;
+  isDefault?: boolean;
+}
+
+export async function listOpenWithApps(targetPath: string): Promise<OpenWithApp[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ListOpenWithApps === 'function') {
+    const res = await window.go.app.App.ListOpenWithApps(targetPath);
+    return res || [];
+  }
+  return [
+    {
+      id: 'notepad.exe',
+      name: 'Bloco de Notas (Notepad)',
+      exePath: 'C:\\Windows\\System32\\notepad.exe',
+      command: '"C:\\Windows\\System32\\notepad.exe" "%1"',
+      isDefault: true,
+    },
+  ];
+}
+
+export async function openFileWithApp(targetPath: string, appExeOrCommand: string): Promise<boolean> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.OpenFileWithApp === 'function') {
+    await window.go.app.App.OpenFileWithApp(targetPath, appExeOrCommand);
+    return true;
+  }
+  return false;
+}
+
 
 
 

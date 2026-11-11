@@ -51,3 +51,22 @@ func TestGetItemPropertiesFileAndFolder(t *testing.T) {
 	}
 }
 
+func TestListOpenWithApps(t *testing.T) {
+	samples := []string{"sample.txt", "README.md", "index.html", "photo.png", "report.pdf"}
+	for _, sample := range samples {
+		apps, err := ListOpenWithApps(sample)
+		if err != nil {
+			t.Fatalf("ListOpenWithApps(%q) returned error: %v", sample, err)
+		}
+		if len(apps) == 0 {
+			t.Fatalf("expected at least 1 OpenWithApp for %q, got 0", sample)
+		}
+		for _, app := range apps {
+			if app.Name == "" || app.ExePath == "" {
+				t.Fatalf("expected non-empty Name and ExePath for %q, got %+v", sample, app)
+			}
+		}
+	}
+}
+
+

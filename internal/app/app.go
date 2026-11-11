@@ -2363,3 +2363,12 @@ func (a *App) StudioGetGitStatus(rootDir string) StudioGitStatus {
 	}
 	return res
 }
+
+func (a *App) ListOpenWithApps(targetPath string) ([]platform.OpenWithApp, error) {
+	return platform.ListOpenWithApps(targetPath)
+}
+
+func (a *App) OpenFileWithApp(targetPath string, appExeOrCommand string) error {
+	return platform.OpenFileWithApp(targetPath, appExeOrCommand)
+}
+
