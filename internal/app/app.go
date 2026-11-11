@@ -2372,3 +2372,16 @@ func (a *App) OpenFileWithApp(targetPath string, appExeOrCommand string) error {
 	return platform.OpenFileWithApp(targetPath, appExeOrCommand)
 }
 
+func (a *App) ListConnectedClouds() []platform.CloudProviderInfo {
+	return platform.ListConnectedClouds()
+}
+
+func (a *App) GetCloudItemStatus(targetPath string) platform.CloudItemStatus {
+	return platform.GetCloudItemStatus(targetPath)
+}
+
+func (a *App) ExecuteCloudAction(targetPath string, action string) error {
+	return platform.ExecuteCloudAction(targetPath, action)
+}
+
+

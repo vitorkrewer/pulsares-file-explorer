@@ -400,8 +400,14 @@ const wailsSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'wails
 const ctxMenuSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'features', 'context-menu', 'FileContextMenu.tsx'), 'utf8');
 assert.ok(wailsSrc.includes('export async function listOpenWithApps('));
 assert.ok(wailsSrc.includes('export async function openFileWithApp('));
+assert.ok(wailsSrc.includes('export async function getCloudItemStatus('));
+assert.ok(wailsSrc.includes('export async function executeCloudAction('));
 assert.ok(ctxMenuSrc.includes('listOpenWithApps('));
 assert.ok(ctxMenuSrc.includes('openFileWithApp('));
+assert.ok(ctxMenuSrc.includes('getCloudItemStatus('));
+assert.ok(ctxMenuSrc.includes('executeCloudAction('));
+assert.ok(ctxMenuSrc.includes('Sempre manter neste dispositivo'));
+assert.ok(ctxMenuSrc.includes('Liberar espaço (Apenas online)'));
 assert.ok(ctxMenuSrc.includes('Programas do Sistema'));
 
 console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + DB Studio CRUD/Creator + Studio Web/PDF/Image/Media/Git/Search + Open With Submenu + Terminal Follow-up + Clipboard History + Network Drives + Folder Zoom) passaram com sucesso.');

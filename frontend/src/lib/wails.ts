@@ -695,6 +695,9 @@ declare global {
           DisconnectNetworkDrive?: (target: string) => Promise<void>;
           ListOpenWithApps?: (targetPath: string) => Promise<OpenWithApp[]>;
           OpenFileWithApp?: (targetPath: string, appExeOrCommand: string) => Promise<void>;
+          ListConnectedClouds?: () => Promise<CloudProviderInfo[]>;
+          GetCloudItemStatus?: (targetPath: string) => Promise<CloudItemStatus>;
+          ExecuteCloudAction?: (targetPath: string, action: string) => Promise<void>;
         };
       };
     };
@@ -2108,6 +2111,66 @@ export async function openFileWithApp(targetPath: string, appExeOrCommand: strin
   }
   return false;
 }
+
+export interface CloudProviderInfo {
+  id: string;
+  name: string;
+  provider: string;
+  accountName: string;
+  rootPath: string;
+  webUrl: string;
+}
+
+export interface CloudItemStatus {
+  isInCloud: boolean;
+  providerId: string;
+  provider: string;
+  displayName: string;
+  rootPath: string;
+  relativePath: string;
+  pinState: 'pinned' | 'online_only' | 'available' | '';
+  pinLabel: string;
+  webUrl: string;
+  canPin: boolean;
+}
+
+export async function listConnectedClouds(): Promise<CloudProviderInfo[]> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ListConnectedClouds === 'function') {
+    return (await window.go.app.App.ListConnectedClouds()) || [];
+  }
+  return [];
+}
+
+export async function getCloudItemStatus(targetPath: string): Promise<CloudItemStatus> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.GetCloudItemStatus === 'function') {
+    const res = await window.go.app.App.GetCloudItemStatus(targetPath);
+    if (res) return res;
+  }
+  return {
+    isInCloud: false,
+    providerId: '',
+    provider: '',
+    displayName: '',
+    rootPath: '',
+    relativePath: '',
+    pinState: '',
+    pinLabel: '',
+    webUrl: '',
+    canPin: false,
+  };
+}
+
+export async function executeCloudAction(
+  targetPath: string,
+  action: 'pin' | 'unpin' | 'hydrate' | 'view_online' | 'share' | 'version_history'
+): Promise<boolean> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ExecuteCloudAction === 'function') {
+    await window.go.app.App.ExecuteCloudAction(targetPath, action);
+    return true;
+  }
+  return false;
+}
+
 
 
 

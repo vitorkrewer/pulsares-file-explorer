@@ -27,14 +27,23 @@ import {
   Play,
   Table,
   AppWindow,
+  Cloud,
+  CloudDownload,
+  CloudOff,
+  CheckCircle2,
+  Share2,
+  History,
 } from 'lucide-react';
 import {
   Entry,
   OpenWithApp,
+  CloudItemStatus,
   openPath,
   openWithDialog,
   listOpenWithApps,
   openFileWithApp,
+  getCloudItemStatus,
+  executeCloudAction,
   showOpenFileDialog,
   openExternalTerminal,
   revealInSystemExplorer,
@@ -114,12 +123,32 @@ function getSystemAppIcon(appIdOrExe: string): React.ReactNode {
   return <AppWindow size={14} style={{ color: 'var(--text-secondary)' }} />;
 }
 
+function getCloudProviderColor(providerId: string): string {
+  switch ((providerId || '').toLowerCase()) {
+    case 'onedrive':
+      return '#0078d4';
+    case 'gdrive':
+      return '#1a73e8';
+    case 'dropbox':
+      return '#0061fe';
+    case 'icloud':
+      return '#0284c7';
+    case 'mega':
+      return '#d9272e';
+    default:
+      return 'var(--accent)';
+  }
+}
+
 export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [openWithApps, setOpenWithApps] = useState<OpenWithApp[]>([]);
   const [loadingOpenWith, setLoadingOpenWith] = useState(false);
   const [openWithSubmenuOpen, setOpenWithSubmenuOpen] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState<CloudItemStatus | null>(null);
+  const [cloudSubmenuOpen, setCloudSubmenuOpen] = useState(false);
   const closeSubmenuTimerRef = useRef<number | null>(null);
+  const closeCloudTimerRef = useRef<number | null>(null);
 
   const {
     currentPath,
@@ -156,14 +185,34 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
   useEffect(() => {
     if (!target) {
       setOpenWithSubmenuOpen(false);
+      setCloudSubmenuOpen(false);
       setOpenWithApps([]);
+      setCloudStatus(null);
       return;
     }
     setOpenWithSubmenuOpen(false);
+    setCloudSubmenuOpen(false);
     void useOperationsStore.getState().syncClipboardFromOS();
 
+    let cancelled = false;
+    const inspectedPath = target.entry ? target.entry.location.path : currentPath;
+    if (inspectedPath) {
+      void getCloudItemStatus(inspectedPath)
+        .then((st) => {
+          if (!cancelled) {
+            setCloudStatus(st && st.isInCloud ? st : null);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setCloudStatus(null);
+          }
+        });
+    } else {
+      setCloudStatus(null);
+    }
+
     if (target.entry && target.entry.kind !== 'dir') {
-      let cancelled = false;
       setLoadingOpenWith(true);
       void listOpenWithApps(target.entry.location.path)
         .then((apps) => {
@@ -181,14 +230,15 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
             setLoadingOpenWith(false);
           }
         });
-      return () => {
-        cancelled = true;
-      };
     } else {
       setOpenWithApps([]);
       setLoadingOpenWith(false);
     }
-  }, [target]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [target, currentPath]);
 
   useEffect(() => {
     if (!target) return;
@@ -216,7 +266,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
 
   const { entry } = target;
   const menuWidth = 276;
-  const menuHeight = entry ? 460 : 310;
+  const menuHeight = entry ? 480 : 340;
   const clampedX =
     typeof window !== 'undefined'
       ? Math.max(8, Math.min(target.x, window.innerWidth - menuWidth - 10))
@@ -227,7 +277,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
       : target.y;
 
   const submenuOpensLeft =
-    typeof window !== 'undefined' && clampedX + menuWidth + 296 > window.innerWidth;
+    typeof window !== 'undefined' && clampedX + menuWidth + 305 > window.innerWidth;
 
   const isDir = entry?.kind === 'dir';
   const entryExt =
@@ -294,6 +344,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
       window.clearTimeout(closeSubmenuTimerRef.current);
       closeSubmenuTimerRef.current = null;
     }
+    setCloudSubmenuOpen(false);
     setOpenWithSubmenuOpen(true);
   };
 
@@ -304,6 +355,270 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
     closeSubmenuTimerRef.current = window.setTimeout(() => {
       setOpenWithSubmenuOpen(false);
     }, 150);
+  };
+
+  const handleEnterCloudSubmenu = () => {
+    if (closeCloudTimerRef.current) {
+      window.clearTimeout(closeCloudTimerRef.current);
+      closeCloudTimerRef.current = null;
+    }
+    setOpenWithSubmenuOpen(false);
+    setCloudSubmenuOpen(true);
+  };
+
+  const handleLeaveCloudSubmenu = () => {
+    if (closeCloudTimerRef.current) {
+      window.clearTimeout(closeCloudTimerRef.current);
+    }
+    closeCloudTimerRef.current = window.setTimeout(() => {
+      setCloudSubmenuOpen(false);
+    }, 150);
+  };
+
+  const renderCloudMenuRow = (cloudTargetPath: string) => {
+    if (!cloudStatus || !cloudStatus.isInCloud) return null;
+    const providerColor = getCloudProviderColor(cloudStatus.providerId);
+    const pinBadgeLabel =
+      cloudStatus.pinState === 'pinned'
+        ? 'Fixado no PC'
+        : cloudStatus.pinState === 'online_only'
+          ? 'Na Nuvem'
+          : 'No PC';
+
+    return (
+      <div
+        style={{ position: 'relative' }}
+        onMouseEnter={handleEnterCloudSubmenu}
+        onMouseLeave={handleLeaveCloudSubmenu}
+      >
+        <button
+          type="button"
+          role="menuitem"
+          aria-haspopup="menu"
+          aria-expanded={cloudSubmenuOpen}
+          className="pulsares-dropdown-item"
+          onClick={() => setCloudSubmenuOpen((prev) => !prev)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            padding: '6px 9px',
+            border: 'none',
+            backgroundColor: cloudSubmenuOpen ? 'var(--bg-surface-hover)' : 'transparent',
+            color: 'var(--text-primary)',
+            cursor: 'default',
+            textAlign: 'left',
+            fontSize: '12px',
+            borderRadius: '6px',
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <span style={{ color: providerColor, display: 'flex', alignItems: 'center' }}>
+              <Cloud size={14} />
+            </span>
+            <span
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontWeight: 500,
+              }}
+            >
+              {cloudStatus.provider}
+            </span>
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+            <span
+              style={{
+                fontSize: '10px',
+                padding: '1px 6px',
+                borderRadius: '999px',
+                backgroundColor:
+                  cloudStatus.pinState === 'pinned'
+                    ? 'rgba(22, 163, 74, 0.14)'
+                    : cloudStatus.pinState === 'online_only'
+                      ? 'rgba(2, 132, 199, 0.14)'
+                      : 'var(--accent-subtle)',
+                color:
+                  cloudStatus.pinState === 'pinned'
+                    ? '#16a34a'
+                    : cloudStatus.pinState === 'online_only'
+                      ? '#0284c7'
+                      : 'var(--accent-text)',
+                fontWeight: 600,
+              }}
+            >
+              {pinBadgeLabel}
+            </span>
+            <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />
+          </span>
+        </button>
+
+        {cloudSubmenuOpen && (
+          <div
+            role="menu"
+            aria-label={`Opções de nuvem (${cloudStatus.displayName})`}
+            className="pulsares-dropdown-menu"
+            style={{
+              position: 'absolute',
+              top: '-6px',
+              left: submenuOpensLeft ? undefined : 'calc(100% + 2px)',
+              right: submenuOpensLeft ? 'calc(100% + 2px)' : undefined,
+              width: '302px',
+              zIndex: 9860,
+              backgroundColor: 'var(--bg-surface)',
+              padding: '6px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-default)',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            {/* Cabeçalho do Provedor de Nuvem */}
+            <div
+              style={{
+                padding: '5px 8px 6px',
+                borderBottom: '1px solid var(--border-subtle)',
+                marginBottom: '4px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '6px',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: providerColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                  }}
+                >
+                  <Cloud size={13} />
+                  <span>{cloudStatus.displayName}</span>
+                </span>
+              </div>
+              <span
+                style={{
+                  fontSize: '10.5px',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                Status: {cloudStatus.pinLabel}
+              </span>
+            </div>
+
+            {cloudStatus.canPin && (
+              <>
+                <MenuItem
+                  icon={
+                    <CheckCircle2
+                      size={14}
+                      style={{
+                        color:
+                          cloudStatus.pinState === 'pinned'
+                            ? '#16a34a'
+                            : 'var(--text-secondary)',
+                      }}
+                    />
+                  }
+                  label="Sempre manter neste dispositivo"
+                  badge={cloudStatus.pinState === 'pinned' ? 'Ativo' : undefined}
+                  onClick={() =>
+                    runAndClose(() => {
+                      void executeCloudAction(cloudTargetPath, 'pin').then(() => refresh());
+                    })
+                  }
+                />
+
+                <MenuItem
+                  icon={<CloudOff size={14} style={{ color: '#0284c7' }} />}
+                  label="Liberar espaço (Apenas online)"
+                  badge={cloudStatus.pinState === 'online_only' ? 'Ativo' : undefined}
+                  onClick={() =>
+                    runAndClose(() => {
+                      void executeCloudAction(cloudTargetPath, 'unpin').then(() => refresh());
+                    })
+                  }
+                />
+
+                {cloudStatus.pinState === 'online_only' && (
+                  <MenuItem
+                    icon={<CloudDownload size={14} style={{ color: providerColor }} />}
+                    label="Baixar / Sincronizar agora"
+                    onClick={() =>
+                      runAndClose(() => {
+                        void executeCloudAction(cloudTargetPath, 'hydrate').then(() => refresh());
+                      })
+                    }
+                  />
+                )}
+
+                <Divider />
+              </>
+            )}
+
+            <MenuItem
+              icon={<Share2 size={14} />}
+              label={`Compartilhar no ${cloudStatus.provider}…`}
+              onClick={() =>
+                runAndClose(() => {
+                  void executeCloudAction(cloudTargetPath, 'share');
+                })
+              }
+            />
+
+            <MenuItem
+              icon={<History size={14} />}
+              label="Histórico de versões na nuvem…"
+              onClick={() =>
+                runAndClose(() => {
+                  void executeCloudAction(cloudTargetPath, 'version_history');
+                })
+              }
+            />
+
+            {cloudStatus.webUrl && (
+              <MenuItem
+                icon={<Globe size={14} style={{ color: providerColor }} />}
+                label={`Ver online no ${cloudStatus.provider} Web`}
+                onClick={() =>
+                  runAndClose(() => {
+                    void executeCloudAction(cloudTargetPath, 'view_online');
+                  })
+                }
+              />
+            )}
+
+            {cloudStatus.rootPath &&
+              cloudStatus.rootPath.toLowerCase() !== currentPath.toLowerCase() && (
+                <>
+                  <Divider />
+                  <MenuItem
+                    icon={<FolderOpen size={14} />}
+                    label={`Ir para raiz (${cloudStatus.displayName})`}
+                    onClick={() =>
+                      runAndClose(() => {
+                        navigateTo(cloudStatus.rootPath);
+                      })
+                    }
+                  />
+                </>
+              )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -659,6 +974,8 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
             </div>
           )}
 
+          {renderCloudMenuRow(entry.location.path)}
+
           <MenuItem
             icon={<Eye size={14} />}
             label="Prévia rápida (Quick Look)"
@@ -850,6 +1167,8 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
             badge="Dev"
             onClick={() => runAndClose(() => void openFolderInEditor(currentPath))}
           />
+
+          {renderCloudMenuRow(currentPath)}
 
           {clipboard && clipboard.paths.length > 0 && (
             <MenuItem

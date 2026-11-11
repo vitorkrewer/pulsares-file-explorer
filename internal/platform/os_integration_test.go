@@ -69,4 +69,24 @@ func TestListOpenWithApps(t *testing.T) {
 	}
 }
 
+func TestCloudStorageDetectionAndStatus(t *testing.T) {
+	clouds := ListConnectedClouds()
+	for _, c := range clouds {
+		if c.ID == "" || c.Provider == "" || c.RootPath == "" {
+			t.Fatalf("invalid CloudProviderInfo entry: %+v", c)
+		}
+		st := GetCloudItemStatus(c.RootPath)
+		if !st.IsInCloud || st.ProviderID != c.ID {
+			t.Fatalf("expected root %q to be detected as in cloud (%q), got %+v", c.RootPath, c.ID, st)
+		}
+	}
+
+	tmp := t.TempDir()
+	nonCloud := GetCloudItemStatus(tmp)
+	if nonCloud.IsInCloud {
+		t.Fatalf("expected temp dir %q not to be in cloud, got %+v", tmp, nonCloud)
+	}
+}
+
+
 
