@@ -335,7 +335,11 @@ export const TabBar: React.FC = () => {
 
         {/* Popover Dropdown: Todas as Abas Abertas */}
         {allTabsOpen && (
-          <div style={styles.allTabsPopover} onClick={(e) => e.stopPropagation()}>
+          <div
+            className="pulsares-dropdown-menu"
+            style={styles.allTabsPopover}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div style={styles.allTabsHeader}>
               <span style={{ fontWeight: 700, fontSize: 11 }}>
                 Abas Abertas ({tabs.length}/{MAX_OPEN_TABS})
@@ -376,13 +380,14 @@ export const TabBar: React.FC = () => {
                 return (
                   <div
                     key={tab.id}
+                    className="pulsares-dropdown-item"
                     onClick={() => {
                       switchTab(tab.id);
                       setAllTabsOpen(false);
                     }}
                     style={{
                       ...styles.allTabsItem,
-                      backgroundColor: isAct ? 'var(--bg-selected)' : 'transparent',
+                      ...(isAct ? { backgroundColor: 'var(--bg-selected)' } : {}),
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
@@ -508,6 +513,7 @@ export const TabBar: React.FC = () => {
 
       {contextMenu && (
         <div
+          className="pulsares-dropdown-menu"
           style={{
             ...styles.contextMenu,
             left: contextMenu.x,
@@ -518,6 +524,7 @@ export const TabBar: React.FC = () => {
         >
           <button
             type="button"
+            className="pulsares-dropdown-item"
             disabled={reachedTabLimit}
             style={{
               ...styles.menuItem,
@@ -533,6 +540,7 @@ export const TabBar: React.FC = () => {
           </button>
           <button
             type="button"
+            className="pulsares-dropdown-item"
             style={styles.menuItem}
             onClick={() => {
               togglePinTab(contextMenu.tabId);
@@ -548,6 +556,7 @@ export const TabBar: React.FC = () => {
           </button>
           <button
             type="button"
+            className="pulsares-dropdown-item"
             style={styles.menuItem}
             onClick={() => {
               closeOtherTabs(contextMenu.tabId);
@@ -558,6 +567,7 @@ export const TabBar: React.FC = () => {
           </button>
           <button
             type="button"
+            className="pulsares-dropdown-item"
             style={styles.menuItem}
             onClick={() => {
               closeTabsToRight(contextMenu.tabId);
@@ -569,6 +579,7 @@ export const TabBar: React.FC = () => {
           {tabs.length > 1 && (
             <button
               type="button"
+              className="pulsares-dropdown-item"
               style={styles.menuItem}
               onClick={() => {
                 closeTab(contextMenu.tabId);

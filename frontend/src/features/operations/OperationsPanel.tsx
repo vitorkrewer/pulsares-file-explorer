@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pause, Play, X, AlertTriangle, Info, ExternalLink, Terminal, FolderOpen } from 'lucide-react';
 import { useOperationsStore } from './store';
 import { formatBytes, formatDateTime } from '../../i18n/format';
+import { SoftSelect } from '../../ui/SoftSelect';
 import {
   ConflictPolicy,
   openWithDialog,
@@ -155,20 +156,23 @@ export const OperationsPanel: React.FC = () => {
                     }}
                   />
                   {promptKind === 'newFile' && (
-                    <select
+                    <SoftSelect
+                      size="md"
+                      align="right"
+                      minMenuWidth={190}
                       value={selectedExt}
-                      onChange={(e) => handleSelectExtension(e.target.value)}
-                      style={styles.extSelect}
-                      aria-label={t('ops.fileExtensionLabel')}
+                      onChange={handleSelectExtension}
+                      ariaLabel={t('ops.fileExtensionLabel')}
                       title={t('ops.fileExtensionLabel')}
-                    >
-                      {FILE_EXTENSION_OPTIONS.map((opt) => (
-                        <option key={opt.ext} value={opt.ext}>
-                          {opt.label}
-                        </option>
-                      ))}
-                      <option value="">{t('ops.fileExtCustom')}</option>
-                    </select>
+                      style={{ height: 32, maxWidth: 155, backgroundColor: 'var(--bg-app)' }}
+                      options={[
+                        ...FILE_EXTENSION_OPTIONS.map((opt) => ({
+                          value: opt.ext,
+                          label: opt.label,
+                        })),
+                        { value: '', label: t('ops.fileExtCustom') },
+                      ]}
+                    />
                   )}
                 </div>
 

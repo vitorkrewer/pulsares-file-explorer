@@ -170,6 +170,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
     <div
       ref={menuRef}
       role="menu"
+      className="pulsares-dropdown-menu"
       aria-label="Menu de contexto do Pulsares Explorer"
       onContextMenu={(e) => {
         e.preventDefault();
@@ -182,10 +183,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
         width: `${menuWidth}px`,
         zIndex: 9800,
         backgroundColor: 'var(--bg-surface)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: 'var(--radius-md)',
-        boxShadow: '0 14px 36px rgba(0, 0, 0, 0.42)',
-        padding: '5px',
+        padding: '6px',
         userSelect: 'none',
         fontSize: '12px',
         color: 'var(--text-primary)',
@@ -609,6 +607,7 @@ const MenuItem: React.FC<{
     <button
       type="button"
       role="menuitem"
+      className="pulsares-dropdown-item"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onClick}
@@ -618,8 +617,7 @@ const MenuItem: React.FC<{
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: '8px',
-        padding: '6px 8px',
-        borderRadius: 'var(--radius-sm)',
+        padding: '6px 9px',
         border: 'none',
         backgroundColor: hovered ? 'var(--bg-surface-hover)' : 'transparent',
         color: danger ? 'var(--status-danger)' : 'var(--text-primary)',

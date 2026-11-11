@@ -3,7 +3,8 @@ package platform
 // SystemClipboardSnapshot representa o conteúdo atual da área de transferência do SO.
 type SystemClipboardSnapshot struct {
 	Sequence uint64   `json:"sequence"`
-	Kind     string   `json:"kind"`     // "files" | "image" | "text" | ""
+	Busy     bool     `json:"busy,omitempty"`
+	Kind     string   `json:"kind"` // "files" | "image" | "text" | ""
 	Text     string   `json:"text,omitempty"`
 	Paths    []string `json:"paths,omitempty"`
 	Cut      bool     `json:"cut,omitempty"`

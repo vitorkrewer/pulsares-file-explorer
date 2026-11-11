@@ -45,6 +45,7 @@ import { useEditorStore } from '../editor/store';
 import { useDBStudioStore, isDatabaseFile } from '../db-studio/store';
 import { openPath } from '../../lib/wails';
 import { SuiteAppIcon } from '../../ui/SuiteAppIcon';
+import { SoftSelect } from '../../ui/SoftSelect';
 
 export const OperationsToolbar: React.FC = () => {
   const { t } = useTranslation('common');
@@ -444,32 +445,38 @@ export const OperationsToolbar: React.FC = () => {
             </button>
 
             {viewMode === 'grid' && (
-              <select
+              <SoftSelect
+                size="sm"
+                align="right"
+                minMenuWidth={145}
                 value={gridSize}
-                onChange={(e) => setGridSize(e.target.value as GridThumbSize)}
-                aria-label={t('views.gridSize')}
+                onChange={(val) => setGridSize(val as GridThumbSize)}
+                ariaLabel={t('views.gridSize')}
                 title={t('views.gridSize')}
-                style={styles.select}
-              >
-                <option value="small">{t('views.sizeSmall')}</option>
-                <option value="medium">{t('views.sizeMedium')}</option>
-                <option value="large">{t('views.sizeLarge')}</option>
-                <option value="xlarge">{t('views.sizeExtraLarge')}</option>
-              </select>
+                options={[
+                  { value: 'small', label: t('views.sizeSmall') },
+                  { value: 'medium', label: t('views.sizeMedium') },
+                  { value: 'large', label: t('views.sizeLarge') },
+                  { value: 'xlarge', label: t('views.sizeExtraLarge') },
+                ]}
+              />
             )}
 
-            <select
+            <SoftSelect
+              size="sm"
+              align="right"
+              minMenuWidth={155}
               value={groupBy}
-              onChange={(e) => setGroupBy(e.target.value as GroupByOption)}
-              aria-label={t('views.groupBy')}
+              onChange={(val) => setGroupBy(val as GroupByOption)}
+              ariaLabel={t('views.groupBy')}
               title={t('views.groupBy')}
-              style={styles.select}
-            >
-              <option value="none">{t('views.groupNone')}</option>
-              <option value="type">{t('views.groupType')}</option>
-              <option value="date">{t('views.groupDate')}</option>
-              <option value="size">{t('views.groupSize')}</option>
-            </select>
+              options={[
+                { value: 'none', label: t('views.groupNone') },
+                { value: 'type', label: t('views.groupType') },
+                { value: 'date', label: t('views.groupDate') },
+                { value: 'size', label: t('views.groupSize') },
+              ]}
+            />
 
             <button
               type="button"

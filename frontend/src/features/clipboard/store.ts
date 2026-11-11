@@ -446,13 +446,16 @@ export const useClipboardHistoryStore = create<ClipboardHistoryState>((set, get)
           if (seq > 0 && seq === get().lastSequenceNumber) {
             return;
           }
-          if (seq > 0) {
-            set({ lastSequenceNumber: seq });
-          }
+          // Pequeno atraso de estabilização para permitir que ferramentas de captura (Lightshot, Snipping Tool, ShareX)
+          // concluam todas as escritas no clipboard e fechem seu overlay sem contenção.
+          await new Promise((resolve) => setTimeout(resolve, 220));
         }
 
         const snap = await readSystemClipboardSnapshot();
-        if (!snap) return;
+        if (!snap || snap.busy) {
+          // Se outra aplicação detém o clipboard ou o usuário está capturando a tela, não avança lastSequenceNumber!
+          return;
+        }
         if (snap.sequence > 0) {
           set({ lastSequenceNumber: snap.sequence });
         }
@@ -616,26 +619,46 @@ export const useClipboardHistoryStore = create<ClipboardHistoryState>((set, get)
       }
     };
 
+    let focusSyncTimer: number | null = null;
+    const clearFocusSyncTimer = () => {
+      if (focusSyncTimer !== null) {
+        window.clearTimeout(focusSyncTimer);
+        focusSyncTimer = null;
+      }
+    };
+
     const handleFocus = () => {
-      void get().syncFromSystemClipboard(true);
+      clearFocusSyncTimer();
+      // Atraso suave ao retomar foco (ex.: fechamento do overlay do Lightshot) evitando corrida com SetClipboardData externo
+      focusSyncTimer = window.setTimeout(() => {
+        focusSyncTimer = null;
+        void get().syncFromSystemClipboard(false);
+      }, 380);
+    };
+
+    const handleBlur = () => {
+      clearFocusSyncTimer();
     };
 
     document.addEventListener('copy', handleCopyOrCut);
     document.addEventListener('cut', handleCopyOrCut);
     document.addEventListener('paste', handlePaste);
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
 
     // Monitoramento leve por SequenceNumber (custo zero no Win32 mesmo em segundo plano!)
     const intervalId = window.setInterval(() => {
       void get().syncFromSystemClipboard(false);
-    }, 1200);
+    }, 1500);
 
     return () => {
       unsubOps();
+      clearFocusSyncTimer();
       document.removeEventListener('copy', handleCopyOrCut);
       document.removeEventListener('cut', handleCopyOrCut);
       document.removeEventListener('paste', handlePaste);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
       window.clearInterval(intervalId);
     };
   },

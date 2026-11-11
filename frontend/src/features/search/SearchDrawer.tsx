@@ -15,6 +15,7 @@ import {
   CheckSquare,
 } from 'lucide-react';
 import { FileTypeIcon } from '../../ui/FileTypeIcon';
+import { SoftSelect } from '../../ui/SoftSelect';
 import { useSearchStore } from './store';
 import { useBrowserStore } from '../browser/store';
 import { useOperationsStore } from '../operations/store';
@@ -221,16 +222,19 @@ export const SearchDrawer: React.FC = () => {
               style={{ ...styles.input, flex: 1 }}
             />
 
-            <select
+            <SoftSelect
+              size="sm"
+              minMenuWidth={150}
               value={kindFilter}
-              onChange={(e) => setKindFilter(e.target.value)}
-              aria-label={t('search.kindAll')}
-              style={styles.select}
-            >
-              <option value="">{t('search.kindAll')}</option>
-              <option value="file">{t('search.kindFiles')}</option>
-              <option value="dir">{t('search.kindFolders')}</option>
-            </select>
+              onChange={setKindFilter}
+              ariaLabel={t('search.kindAll')}
+              style={{ height: 28, fontSize: 12, backgroundColor: 'var(--bg-surface)' }}
+              options={[
+                { value: '', label: t('search.kindAll') },
+                { value: 'file', label: t('search.kindFiles') },
+                { value: 'dir', label: t('search.kindFolders') },
+              ]}
+            />
 
             <input
               type="number"

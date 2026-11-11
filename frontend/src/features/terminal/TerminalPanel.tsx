@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useTerminalStore, TerminalTabSession } from './store';
 import { useBrowserStore } from '../browser/store';
+import { SoftSelect } from '../../ui/SoftSelect';
 import {
   subscribeEvent,
   TerminalDataEvent,
@@ -616,28 +617,20 @@ export const TerminalPanel: React.FC = () => {
             <Plus size={13} />
           </button>
 
-          <select
+          <SoftSelect
+            size="sm"
+            align="right"
+            minMenuWidth={155}
             value={defaultProfileId}
-            onChange={(e) => setDefaultProfile(e.target.value)}
-            aria-label={t('terminal.selectProfile')}
+            onChange={setDefaultProfile}
+            ariaLabel={t('terminal.selectProfile')}
             title={t('terminal.selectProfile')}
-            style={{
-              height: '24px',
-              fontSize: '11px',
-              padding: '0 6px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              backgroundColor: 'var(--bg-surface)',
-              color: 'var(--text-secondary)',
-              cursor: 'default',
-            }}
-          >
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            style={{ height: 24, fontSize: 11, backgroundColor: 'var(--bg-surface)' }}
+            options={profiles.map((p) => ({
+              value: p.id,
+              label: p.name,
+            }))}
+          />
 
           <div
             style={{

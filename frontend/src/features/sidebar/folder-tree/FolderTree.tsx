@@ -430,6 +430,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
         <div
           ref={contextMenuRef}
           role="menu"
+          className="pulsares-dropdown-menu"
           style={{
             ...styles.contextMenu,
             left:
@@ -449,6 +450,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
         >
           <button
             type="button"
+            className="pulsares-dropdown-item"
             style={styles.menuItem}
             onClick={() => {
               newTab(contextMenu.path);
@@ -460,6 +462,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
           </button>
           <button
             type="button"
+            className="pulsares-dropdown-item"
             style={styles.menuItem}
             onClick={() => {
               toggleFavorite(contextMenu.path, contextMenu.name);
@@ -475,6 +478,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
           </button>
           <button
             type="button"
+            className="pulsares-dropdown-item"
             style={styles.menuItem}
             onClick={() => {
               const pathToCopy = contextMenu.path;
@@ -489,6 +493,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
           </button>
           <button
             type="button"
+            className="pulsares-dropdown-item"
             style={styles.menuItem}
             onClick={() => {
               navigateTo(contextMenu.path);
@@ -501,6 +506,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({ onNavigate }) => {
           </button>
           <button
             type="button"
+            className="pulsares-dropdown-item"
             style={styles.menuItem}
             onClick={() => {
               openPrompt('rename', contextMenu.path, contextMenu.name);

@@ -4,6 +4,7 @@ import { Globe, X, Lock, HardDrive, Loader2, AlertCircle, Info } from 'lucide-re
 import { useFolderTreeStore } from './folder-tree/store';
 import { useBrowserStore } from '../browser/store';
 import { connectNetworkDrive } from '../../lib/wails';
+import { SoftSelect } from '../../ui/SoftSelect';
 
 type NetworkProtocolChoice = 'auto' | 'smb' | 'nfs' | 'afp';
 
@@ -256,19 +257,21 @@ export const NetworkDriveModal: React.FC = () => {
                   <HardDrive size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />
                   {t('networkDrive.driveLetterLabel')}
                 </label>
-                <select
-                  style={styles.input}
+                <SoftSelect
+                  size="md"
+                  fullWidth
                   value={driveLetter}
-                  onChange={(e) => setDriveLetter(e.target.value)}
+                  onChange={setDriveLetter}
                   disabled={connecting}
-                >
-                  <option value="">{t('networkDrive.noDriveLetter')}</option>
-                  {availableDriveLetters.map((letter) => (
-                    <option key={letter} value={letter}>
-                      {letter}\
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel={t('networkDrive.driveLetterLabel')}
+                  options={[
+                    { value: '', label: t('networkDrive.noDriveLetter') },
+                    ...availableDriveLetters.map((letter) => ({
+                      value: letter,
+                      label: `${letter}\\`,
+                    })),
+                  ]}
+                />
               </div>
               {driveLetter && (
                 <label style={{ ...styles.checkboxRow, alignSelf: 'flex-end', paddingBottom: 8 }}>

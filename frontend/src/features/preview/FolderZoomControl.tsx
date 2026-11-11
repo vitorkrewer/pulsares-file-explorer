@@ -99,7 +99,14 @@ export const FolderZoomControl: React.FC = () => {
           <span style={styles.pctText}>
             {isColumnsMode ? t('folderZoom.shortColumns') : `${currentStep.pct}%`}
           </span>
-          <ChevronDown size={10} style={{ opacity: 0.7 }} />
+          <ChevronDown
+            size={10}
+            style={{
+              opacity: 0.75,
+              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          />
         </button>
 
         <button
@@ -118,6 +125,7 @@ export const FolderZoomControl: React.FC = () => {
 
       {open && (
         <div
+          className="pulsares-dropdown-menu"
           style={styles.popover}
           role="dialog"
           data-folder-zoom-popover="true"
@@ -176,6 +184,7 @@ export const FolderZoomControl: React.FC = () => {
                 <button
                   key={step.id}
                   type="button"
+                  className="pulsares-dropdown-item"
                   style={{
                     ...styles.stepRow,
                     ...(active ? styles.stepRowActive : {}),
@@ -199,6 +208,7 @@ export const FolderZoomControl: React.FC = () => {
 
             <button
               type="button"
+              className="pulsares-dropdown-item"
               style={{
                 ...styles.stepRow,
                 ...(isColumnsMode ? styles.stepRowActive : {}),
@@ -235,11 +245,12 @@ const styles: Record<string, React.CSSProperties> = {
   segmented: {
     display: 'inline-flex',
     alignItems: 'center',
-    height: 24,
-    borderRadius: 5,
+    height: 26,
+    borderRadius: 7,
     border: '1px solid var(--border-subtle)',
     backgroundColor: 'var(--bg-app)',
     overflow: 'hidden',
+    transition: 'border-color 0.18s ease, box-shadow 0.18s ease',
   },
   segBtn: {
     display: 'inline-flex',

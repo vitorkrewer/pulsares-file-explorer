@@ -22,6 +22,7 @@ import { useFolderTreeStore } from '../sidebar/folder-tree/store';
 import { useProductivityStore } from '../productivity/store';
 import { useClipboardHistoryStore } from '../clipboard/store';
 import { saveSetting, expandPath, autocompletePath, writeNativeClipboardText } from '../../lib/wails';
+import { SoftSelect } from '../../ui/SoftSelect';
 
 interface AddressBarProps {
   currentTheme: string;
@@ -372,13 +373,19 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
         </div>
 
         {!isEditing && overflowMenuOpen && hiddenCrumbIndices.length > 0 && (
-          <div ref={overflowMenuRef} style={styles.overflowPopup} role="menu">
+          <div
+            ref={overflowMenuRef}
+            className="pulsares-dropdown-menu"
+            style={styles.overflowPopup}
+            role="menu"
+          >
             {hiddenCrumbIndices.map((idx) => {
               const target = buildCrumbTarget(idx);
               return (
                 <button
                   key={target}
                   type="button"
+                  className="pulsares-dropdown-item"
                   style={styles.overflowItem}
                   title={target}
                   onClick={() => {
@@ -395,12 +402,13 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
         )}
 
         {isEditing && suggestions.length > 0 && (
-          <div style={styles.suggestionsPopup} role="listbox">
+          <div className="pulsares-dropdown-menu" style={styles.suggestionsPopup} role="listbox">
             {suggestions.map((item, idx) => (
               <div
                 key={item}
                 role="option"
                 aria-selected={idx === selectedSuggestionIdx}
+                className="pulsares-dropdown-item"
                 style={{
                   ...styles.suggestionItem,
                   ...(idx === selectedSuggestionIdx ? styles.suggestionItemActive : {}),
@@ -429,26 +437,28 @@ export const AddressBar: React.FC<AddressBarProps> = ({ currentTheme, onThemeCha
         </button>
 
         {/* Seletor de Idioma */}
-        <div style={styles.langSelector}>
-          <Globe size={15} style={{ marginRight: 4, color: 'var(--text-secondary)' }} />
-          <select
-            style={styles.select}
-            value={i18n.language}
-            onChange={(e) => handleLanguageChange(e.target.value)}
-            aria-label={t('settings.language')}
-          >
-            <option value="pt-BR">Português (BR)</option>
-            <option value="en">English</option>
-            <option value="es">Español</option>
-            <option value="de">Deutsch</option>
-            <option value="fr">Français</option>
-            <option value="it">Italiano</option>
-            <option value="ja">日本語</option>
-            <option value="zh-CN">简体中文</option>
-            <option value="sv">Svenska</option>
-            <option value="tr">Türkçe</option>
-          </select>
-        </div>
+        <SoftSelect
+          size="sm"
+          align="right"
+          minMenuWidth={160}
+          icon={<Globe size={13} />}
+          value={i18n.language}
+          onChange={handleLanguageChange}
+          ariaLabel={t('settings.language')}
+          title={t('settings.language')}
+          options={[
+            { value: 'pt-BR', label: 'Português (BR)' },
+            { value: 'en', label: 'English' },
+            { value: 'es', label: 'Español' },
+            { value: 'de', label: 'Deutsch' },
+            { value: 'fr', label: 'Français' },
+            { value: 'it', label: 'Italiano' },
+            { value: 'ja', label: '日本語' },
+            { value: 'zh-CN', label: '简体中文' },
+            { value: 'sv', label: 'Svenska' },
+            { value: 'tr', label: 'Türkçe' },
+          ]}
+        />
 
         {/* Histórico da Área de Transferência (Win + V / Ctrl + Shift + V) */}
         <button

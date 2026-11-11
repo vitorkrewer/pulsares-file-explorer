@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"time"
 
@@ -133,7 +134,11 @@ func (a *App) ReadSystemClipboardSnapshot() (*platform.SystemClipboardSnapshot, 
 	if err != nil {
 		return nil, err
 	}
-	if snap.Kind == "" && a.ctx != nil {
+	if snap.Busy {
+		return snap, nil
+	}
+	// No Windows, CF_UNICODETEXT já é lido diretamente sem precisar despachar na UI thread do WebView2.
+	if goruntime.GOOS != "windows" && snap.Kind == "" && a.ctx != nil {
 		if txt, errTxt := runtime.ClipboardGetText(a.ctx); errTxt == nil && strings.TrimSpace(txt) != "" {
 			snap.Kind = "text"
 			snap.Text = txt

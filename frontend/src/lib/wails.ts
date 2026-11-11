@@ -1778,6 +1778,7 @@ export interface NativeClipboardFiles {
 
 export interface SystemClipboardSnapshot {
   sequence: number;
+  busy?: boolean;
   kind: 'files' | 'image' | 'text' | '';
   text?: string;
   paths?: string[];

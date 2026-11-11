@@ -246,6 +246,11 @@ export const App: React.FC = () => {
   // Atalhos globais de teclado e botões laterais do mouse (0.1.0 a 0.7.0)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Nunca interceptar teclas globais de captura de tela do sistema / Lightshot / Snipping Tool
+      if (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.key === 'Snapshot') {
+        return;
+      }
+
       const targetEl = e.target as HTMLElement | null;
       const isInputFocused =
         targetEl?.tagName === 'INPUT' ||
