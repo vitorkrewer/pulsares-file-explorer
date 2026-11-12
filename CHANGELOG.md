@@ -2,6 +2,17 @@
 
 Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versão *minor*) em andamento. Ver [docs/roadmap.md](docs/roadmap.md).
 
+## [1.2.0] - 2026-11-12
+
+### Adicionado
+
+- **Pipeline de Release Multiformato para Windows, Linux e macOS (`.github/workflows/release.yml` e `packaging/`)**:
+  - **Windows**: instalador **Setup `.exe` (NSIS via `wails build -nsis`)**, instalador **`.msi` (WiX Toolset v5)** com atalhos no Menu Iniciar para *Pulsares Explorer*, *Pulsares Studio Editor* (`--studio`) e *Pulsares DB Studio* (`--dbstudio`), atalho na Área de Trabalho, tela de licença e atualização automática (`MajorUpgrade`), além de executável standalone e `.zip` portátil.
+  - **Linux**: pacotes **`.deb`** (Debian/Ubuntu/Mint), **`.rpm`** (Fedora/RHEL/openSUSE), **`.flatpak`** (runtime GNOME 47, pronto para Flathub/GNOME Software/KDE Discover), **`.snap`** (core22 + extensão GNOME, com publicação automática na Snap Store quando `SNAPCRAFT_STORE_CREDENTIALS` estiver configurado), **`.AppImage`**, **`.tar.gz`** e **`PKGBUILD`** para o AUR (`pulsares-explorer-bin`), todos com AppStream metainfo, arquivo `.desktop` com ações rápidas (Studio Editor / DB Studio) e ícones `hicolor` sob o ID `io.github.vitorkrewer.PulsaresExplorer`. Compilação em `ubuntu-22.04` para máxima compatibilidade de glibc.
+  - **macOS**: imagem de disco **`.dmg`** universal com atalho para `/Applications`, além do `.zip` do bundle `.app`.
+  - Disparo por tag `v*` ou manual, versão resolvida a partir do `CHANGELOG.md`, tabela de downloads nas notas do release e `SHA256SUMS.txt` cobrindo todos os artefatos.
+
+
 ## [1.2.0] - 2026-11-11
 
 ### Adicionado
@@ -75,8 +86,6 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
     - Internacionalização completa nos **10 idiomas** suportados (`pt-BR`, `en`, `es`, `de`, `fr`, `it`, `ja`, `zh-CN`, `tr`, `sv`).
 
 ## [1.1.1] - 2026-11-09
-
-### Adicionado
 
 - **Botão "Follow-up" no Terminal Integrado (Sincronização de Navegação com a Aba Ativa)**:
   - Novo botão **Follow-up** na barra de ferramentas do Terminal Integrado (`TerminalPanel.tsx`), **desativado por padrão**.
@@ -247,6 +256,7 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 ## [0.8.0] - 2026-11-05
 
 ### Adicionado
+
 
 - Serviço `internal/watch` com monitoramento de diretórios e debounce configurável (`watch:changed`), atualizando automaticamente a pasta visível quando arquivos ou pastas são criados, modificados ou removidos externamente.
 - Integração nativa com o sistema operacional em `internal/platform`: cálculo completo de propriedades de arquivos e pastas (`GetItemProperties` com contagem recursiva de arquivos/subpastas, tamanho total, permissões, atributos e checksum SHA-256), seletor nativo **Abrir com…** (`OpenWithDialog`), abertura de **Terminal externo do sistema** (`OpenExternalTerminal`), **Mostrar no explorador nativo** (`RevealInSystemExplorer`) e **Ejeção segura de unidades removíveis** (`EjectDrive`).

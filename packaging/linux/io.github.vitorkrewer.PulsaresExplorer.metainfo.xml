@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.vitorkrewer.PulsaresExplorer</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Pulsares Explorer</name>
+  <summary>Fast file explorer with tabs, terminal, Studio Editor and DB Studio</summary>
+  <summary xml:lang="pt-BR">Explorador de arquivos rápido com abas, terminal, Studio Editor e DB Studio</summary>
+  <developer id="io.github.vitorkrewer">
+    <name>Vitor Krewer</name>
+  </developer>
+  <description>
+    <p>
+      Pulsares Explorer is a fast, lightweight and cross-platform desktop file explorer
+      with tabs, dual pane, integrated terminal, a built-in code editor (Pulsares Studio)
+      and a SQLite manager (Pulsares DB Studio).
+    </p>
+    <p xml:lang="pt-BR">
+      O Pulsares Explorer é um explorador de arquivos desktop rápido, leve e multiplataforma,
+      com abas, painel duplo, terminal integrado, editor de código (Pulsares Studio) e
+      gerenciador SQLite (Pulsares DB Studio).
+    </p>
+    <ul>
+      <li>Tabs, dual pane, breadcrumbs and progressive folder zoom</li>
+      <li>Integrated terminal, clipboard history and network drives (SMB, NFS, AFP, SFTP)</li>
+      <li>Connected cloud integration (OneDrive, Google Drive, Dropbox, Nextcloud, Rclone and more)</li>
+      <li>Pulsares Studio Editor with live HTML/Markdown preview, PDF and media viewers</li>
+      <li>Pulsares DB Studio to create, browse and edit SQLite databases</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.vitorkrewer.PulsaresExplorer.desktop</launchable>
+  <url type="homepage">https://github.com/vitorkrewer/pulsares-file-explorer</url>
+  <url type="bugtracker">https://github.com/vitorkrewer/pulsares-file-explorer/issues</url>
+  <url type="vcs-browser">https://github.com/vitorkrewer/pulsares-file-explorer</url>
+  <categories>
+    <category>System</category>
+    <category>FileTools</category>
+    <category>FileManager</category>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>files</keyword>
+    <keyword>explorer</keyword>
+    <keyword>terminal</keyword>
+    <keyword>sqlite</keyword>
+    <keyword>editor</keyword>
+  </keywords>
+  <provides>
+    <binary>pulsares-explorer</binary>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="@VERSION@" date="@DATE@" />
+  </releases>
+</component>
+

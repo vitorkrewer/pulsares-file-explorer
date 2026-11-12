@@ -1,0 +1,36 @@
+# Flatpak / Flathub — empacota o binário pré-compilado sobre o runtime GNOME (inclui WebKitGTK 4.1).
+# O workflow de release copia o payload Linux para packaging/flatpak/payload antes do flatpak-builder.
+id: io.github.vitorkrewer.PulsaresExplorer
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: pulsares-explorer
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  # Gerenciador de arquivos: acesso ao sistema de arquivos do host e montagens GVFS
+  - --filesystem=host
+  - --filesystem=xdg-run/gvfs
+  - --filesystem=xdg-run/gvfsd
+  - --talk-name=org.gtk.vfs.*
+  - --talk-name=org.freedesktop.FileManager1
+  # Necessário para abrir terminal externo / programas do host ("Abrir com")
+  - --talk-name=org.freedesktop.Flatpak
+modules:
+  - name: pulsares-explorer
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 usr/bin/pulsares-explorer /app/bin/pulsares-explorer
+      - install -Dm644 usr/share/applications/io.github.vitorkrewer.PulsaresExplorer.desktop /app/share/applications/io.github.vitorkrewer.PulsaresExplorer.desktop
+      - install -Dm644 usr/share/metainfo/io.github.vitorkrewer.PulsaresExplorer.metainfo.xml /app/share/metainfo/io.github.vitorkrewer.PulsaresExplorer.metainfo.xml
+      - install -Dm644 usr/share/icons/hicolor/512x512/apps/io.github.vitorkrewer.PulsaresExplorer.png /app/share/icons/hicolor/512x512/apps/io.github.vitorkrewer.PulsaresExplorer.png
+      - install -Dm644 usr/share/icons/hicolor/512x512/apps/io.github.vitorkrewer.PulsaresExplorer.Studio.png /app/share/icons/hicolor/512x512/apps/io.github.vitorkrewer.PulsaresExplorer.Studio.png
+      - install -Dm644 usr/share/icons/hicolor/512x512/apps/io.github.vitorkrewer.PulsaresExplorer.DBStudio.png /app/share/icons/hicolor/512x512/apps/io.github.vitorkrewer.PulsaresExplorer.DBStudio.png
+    sources:
+      - type: dir
+        path: payload
+

@@ -1,10 +1,22 @@
 name: Release Pulsares Explorer
 
+# Gera e publica todos os formatos de distribuição:
+#   Windows : Setup .exe (NSIS), .msi (WiX), .exe portátil e .zip portátil
+#   Linux   : .deb, .rpm, .AppImage, .snap, .flatpak, .tar.gz e PKGBUILD (AUR -bin)
+#   macOS   : .dmg e .zip (universal)
+#   Extra   : pacote Multiverse Portable (pendrive) + SHA256SUMS
+#
+# Segredos opcionais:
+#   SNAPCRAFT_STORE_CREDENTIALS -> publica automaticamente o .snap na Snap Store (canal definido em "snap_channel")
+
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Versão a publicar (ex: v1.1.1). Deixe em branco para auto-detectar do CHANGELOG.md"
+        description: "Versão a publicar (ex: v1.2.0). Deixe em branco para auto-detectar do CHANGELOG.md"
         required: false
         default: ""
         type: string
@@ -13,225 +25,524 @@ on:
         required: false
         default: false
         type: boolean
+      snap_channel:
+        description: "Canal da Snap Store (usado apenas se SNAPCRAFT_STORE_CREDENTIALS estiver configurado)"
+        required: false
+        default: "edge"
+        type: choice
+        options:
+          - edge
+          - beta
+          - candidate
+          - stable
 
 permissions:
   contents: write
 
-jobs:
-  build:
-    name: Build ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Windows x64
-            os: windows-latest
-            platform: windows/amd64
-            artifact: pulsares-windows-x64
-          - name: Linux x64
-            os: ubuntu-latest
-            platform: linux/amd64
-            artifact: pulsares-linux-x64
-          - name: macOS universal
-            os: macos-latest
-            platform: darwin/universal
-            artifact: pulsares-macos-universal
+env:
+  APP_ID: io.github.vitorkrewer.PulsaresExplorer
+  BIN_NAME: pulsares-explorer
+  GO_VERSION: "1.25.x"
+  NODE_VERSION: "22.x"
+  WAILS_VERSION: "v2.16.0"
 
+jobs:
+  # ---------------------------------------------------------------------------
+  # 0. Metadados de versão (tag, versão limpa, versão MSI e versão RPM)
+  # ---------------------------------------------------------------------------
+  meta:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+      version: ${{ steps.ver.outputs.version }}
+      msi_version: ${{ steps.ver.outputs.msi_version }}
+      rpm_version: ${{ steps.ver.outputs.rpm_version }}
+      date: ${{ steps.ver.outputs.date }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.ref }}
+
+      - name: Compute version
+        id: ver
+        shell: python
+        run: |
+          import os, re, datetime
+
+          event_name = "${{ github.event_name }}"
+          ref_name = "${{ github.ref_name }}"
+          input_version = "${{ inputs.version }}"
+
+          changelog = ""
+          if os.path.exists("CHANGELOG.md"):
+              with open("CHANGELOG.md", "r", encoding="utf-8") as f:
+                  changelog = f.read()
+
+          tag = ""
+          if event_name == "workflow_dispatch" and input_version.strip():
+              tag = input_version.strip()
+          elif event_name == "push" and ref_name.startswith("v"):
+              tag = ref_name
+          if not tag:
+              m = re.search(r'##\s*\[?(v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?)\]?', changelog)
+              tag = m.group(1) if m else "v1.2.0"
+          if not tag.startswith("v"):
+              tag = f"v{tag}"
+
+          version = tag[1:]
+          core = re.match(r'(\d+)\.(\d+)\.(\d+)', version)
+          msi_version = ".".join(core.groups()) if core else "1.2.0"
+          rpm_version = version.replace("-", "~")
+
+          print(f"tag={tag} version={version} msi={msi_version} rpm={rpm_version}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"tag={tag}\n")
+              f.write(f"version={version}\n")
+              f.write(f"msi_version={msi_version}\n")
+              f.write(f"rpm_version={rpm_version}\n")
+              f.write(f"date={datetime.date.today().isoformat()}\n")
+
+  # ---------------------------------------------------------------------------
+  # 1. Windows: Setup NSIS (.exe), MSI (WiX), executável e zip portáteis
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Build Windows x64 (.exe / .msi)
+    needs: meta
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.x"
-
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Ensure NSIS is available
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci --no-audit --no-fund
 
-      - name: Build Windows desktop
-        if: runner.os == 'Windows'
-        run: wails build -skipbindings -clean -trimpath -platform ${{ matrix.platform }} -webview2 download
+      - name: Build desktop + NSIS installer
+        run: wails build -skipbindings -clean -trimpath -platform windows/amd64 -webview2 download -nsis
 
-      - name: Build Linux desktop
-        if: runner.os == 'Linux'
-        run: wails build -skipbindings -clean -trimpath -platform ${{ matrix.platform }} -tags webkit2_41
-
-      - name: Build macOS desktop
-        if: runner.os == 'macOS'
-        run: wails build -skipbindings -clean -trimpath -platform ${{ matrix.platform }}
-
-      - name: Prepare Windows artifact
-        if: runner.os == 'Windows'
+      - name: Install WiX Toolset
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path release-assets
-          $binary = Get-ChildItem "build/bin" -Filter *.exe | Select-Object -First 1
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2
+
+      - name: Build MSI installer
+        shell: pwsh
+        env:
+          MSI_VERSION: ${{ needs.meta.outputs.msi_version }}
+        run: |
+          New-Item -ItemType Directory -Force -Path release-assets, build-msi | Out-Null
+          $binary = Get-ChildItem "build/bin" -Filter *.exe | Where-Object { $_.Name -notmatch 'installer' } | Select-Object -First 1
+          if (-not $binary) { throw "Executável principal não encontrado em build/bin" }
+
+          # LICENSE -> TXT + RTF (exigido pela tela de licença do WixUI)
+          $licenseText = Get-Content LICENSE -Raw
+          Set-Content -Path build-msi/LICENSE.txt -Value $licenseText -Encoding utf8
+          $escaped = $licenseText.Replace('\', '\\').Replace('{', '\{').Replace('}', '\}') -replace "`r?`n", "\par`n"
+          Set-Content -Path build-msi/LICENSE.rtf -Value "{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}}\fs18 $escaped}" -Encoding ascii
+
+          wix build packaging/windows/pulsares-explorer.wxs `
+            -arch x64 `
+            -culture pt-BR `
+            -ext WixToolset.UI.wixext `
+            -d Version=$env:MSI_VERSION `
+            -d BinaryPath="$($binary.FullName)" `
+            -d IconPath="$PWD/build/windows/icon.ico" `
+            -d StudioIconPath="$PWD/build/windows/icon-studio.ico" `
+            -d DBStudioIconPath="$PWD/build/windows/icon-dbstudio.ico" `
+            -d LicenseRtf="$PWD/build-msi/LICENSE.rtf" `
+            -d LicenseTxt="$PWD/build-msi/LICENSE.txt" `
+            -o release-assets/Pulsares-Explorer-Windows-x64.msi
+
+      - name: Prepare Windows artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          $binary = Get-ChildItem "build/bin" -Filter *.exe | Where-Object { $_.Name -notmatch 'installer' } | Select-Object -First 1
+          $installer = Get-ChildItem "build/bin" -Filter *installer*.exe | Select-Object -First 1
+          if (-not $installer) { throw "Instalador NSIS não encontrado em build/bin" }
+
+          # 1. Instalador NSIS (Setup .exe)
+          Copy-Item $installer.FullName "release-assets/Pulsares-Explorer-Windows-x64-Setup.exe"
+
+          # 2. Executável standalone
           Copy-Item $binary.FullName "release-assets/Pulsares-Explorer-Windows-x64.exe"
 
-          # 2. Gerar versão Portátil (Zip com pasta data/ e marcador portable.dat)
+          # 3. Versão portátil (zip com pasta data/ e marcador portable.dat)
           $portableDir = "release-assets/Pulsares-Explorer-Windows-Portable"
-          New-Item -ItemType Directory -Force -Path "$portableDir/data"
+          New-Item -ItemType Directory -Force -Path "$portableDir/data" | Out-Null
           Set-Content -Path "$portableDir/portable.dat" -Value "# Modo Portatil Ativado - Dados e banco salvos nesta pasta"
           Copy-Item $binary.FullName "$portableDir/Pulsares-Explorer.exe"
           Compress-Archive -Path "$portableDir/*" -DestinationPath "release-assets/Pulsares-Explorer-Windows-x64-Portable.zip" -Force
           Remove-Item -Recurse -Force $portableDir
 
-      - name: Prepare Linux artifact
-        if: runner.os == 'Linux'
+          Get-ChildItem release-assets
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsares-windows-x64
+          path: release-assets/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 2. Linux: binário + payload FHS, .deb, .rpm, .AppImage e .tar.gz
+  #    (compilado em ubuntu-22.04 para máxima compatibilidade de glibc e base core22 do Snap)
+  # ---------------------------------------------------------------------------
+  linux:
+    name: Build Linux x64 (.deb / .rpm / .AppImage)
+    needs: meta
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      RPM_VERSION: ${{ needs.meta.outputs.rpm_version }}
+      RELEASE_DATE: ${{ needs.meta.outputs.date }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev rpm libfuse2 file
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Build desktop
+        run: wails build -skipbindings -clean -trimpath -platform linux/amd64 -tags webkit2_41
+
+      - name: Stage FHS payload
         shell: bash
         run: |
+          set -euo pipefail
+          BIN_PATH="build/bin/${BIN_NAME}"
+          if [ ! -f "$BIN_PATH" ]; then
+            BIN_PATH=$(find build/bin -maxdepth 1 -type f -perm /111 -print -quit)
+          fi
+          test -n "$BIN_PATH"
+          echo "Binário Linux: $BIN_PATH"
+
+          P=linux-payload
+          rm -rf "$P"
+          install -Dm755 "$BIN_PATH" "$P/usr/bin/${BIN_NAME}"
+          install -Dm644 "packaging/linux/${APP_ID}.desktop" "$P/usr/share/applications/${APP_ID}.desktop"
+          install -Dm644 "packaging/linux/${APP_ID}.metainfo.xml" "$P/usr/share/metainfo/${APP_ID}.metainfo.xml"
+          sed -i "s/@VERSION@/${VERSION}/; s/@DATE@/${RELEASE_DATE}/" "$P/usr/share/metainfo/${APP_ID}.metainfo.xml"
+          ICONS="$P/usr/share/icons/hicolor/512x512/apps"
+          install -Dm644 build/appicon.png "$ICONS/${APP_ID}.png"
+          install -Dm644 build/appicon-studio.png "$ICONS/${APP_ID}.Studio.png"
+          install -Dm644 build/appicon-dbstudio.png "$ICONS/${APP_ID}.DBStudio.png"
+          install -Dm644 build/appicon.png "$P/usr/share/pixmaps/${BIN_NAME}.png"
+          install -Dm644 LICENSE "$P/usr/share/licenses/${BIN_NAME}/LICENSE"
+
+          desktop-file-validate "$P/usr/share/applications/${APP_ID}.desktop" || true
+          find "$P" -type f
+
+      - name: Build .tar.gz
+        run: |
           mkdir -p release-assets
+          tar -C linux-payload -czf release-assets/Pulsares-Explorer-Linux-x64.tar.gz .
 
-          # 1. Archive tar.gz
-          tar -C build/bin -czf release-assets/Pulsares-Explorer-Linux-x64.tar.gz .
-
-          # Localizar o binário gerado pelo Wails
-          BIN_PATH=$(find build/bin -maxdepth 1 -type f -perm /111 ! -name "*.exe" ! -name "*.zip" ! -name "*.tar.gz" -print -quit)
-          if [ -z "$BIN_PATH" ]; then
-            BIN_PATH=$(find build/bin -maxdepth 1 -type f ! -name "*.exe" ! -name "*.zip" ! -name "*.tar.gz" -print -quit)
-          fi
-          echo "Binário Linux encontrado em: $BIN_PATH"
-
-          # Determinar versão para os pacotes
-          VERSION="${GITHUB_REF_NAME}"
-          if [[ -z "$VERSION" || "$VERSION" != v* ]]; then
-            VERSION=$(grep -oE '^##\s*\[?v?[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | head -n 1 | sed -E 's/##\s*\[?v?//')
-          fi
-          CLEAN_VER="${VERSION#v}"
-          [ -z "$CLEAN_VER" ] && CLEAN_VER="1.1.1"
-          echo "Versão do pacote Linux: $CLEAN_VER"
-
-          # 2. Gerar pacote Debian (.deb)
-          DEB_ROOT="build-deb/pulsares-explorer"
+      - name: Build .deb (Debian / Ubuntu / Mint / Pop!_OS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEB_ROOT=build-deb/${BIN_NAME}
           rm -rf build-deb
           mkdir -p "$DEB_ROOT/DEBIAN"
-          mkdir -p "$DEB_ROOT/usr/bin"
-          mkdir -p "$DEB_ROOT/usr/share/applications"
-          mkdir -p "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps"
-          mkdir -p "$DEB_ROOT/usr/share/pixmaps"
-
-          cp "$BIN_PATH" "$DEB_ROOT/usr/bin/pulsares-explorer"
-          chmod 755 "$DEB_ROOT/usr/bin/pulsares-explorer"
-          cp build/appicon.png "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps/pulsares-explorer.png"
-          cp build/appicon.png "$DEB_ROOT/usr/share/pixmaps/pulsares-explorer.png"
-
+          cp -a linux-payload/. "$DEB_ROOT/"
+          INSTALLED_KB=$(du -sk "$DEB_ROOT" | cut -f1)
           printf "%s\n" \
-            "Package: pulsares-explorer" \
-            "Version: ${CLEAN_VER}" \
+            "Package: ${BIN_NAME}" \
+            "Version: ${VERSION}" \
             "Section: utils" \
             "Priority: optional" \
             "Architecture: amd64" \
+            "Installed-Size: ${INSTALLED_KB}" \
             "Maintainer: Vitor Krewer <vitormkrewer@gmail.com>" \
-            "Depends: libgtk-3-0, libwebkit2gtk-4.1-0" \
+            "Homepage: https://github.com/vitorkrewer/pulsares-file-explorer" \
+            "Depends: libgtk-3-0 | libgtk-3-0t64, libwebkit2gtk-4.1-0" \
             "Description: Pulsares Explorer" \
-            " Explorador de arquivos multiplataforma, rapido, com abas, painel duplo, terminal e DB Studio." \
+            " Explorador de arquivos multiplataforma, rapido, com abas, painel duplo," \
+            " terminal, Pulsares Studio Editor e Pulsares DB Studio." \
             > "$DEB_ROOT/DEBIAN/control"
-
-          printf "%s\n" \
-            "[Desktop Entry]" \
-            "Name=Pulsares Explorer" \
-            "Comment=Explorador de arquivos rápido, com abas, painel duplo, terminal e DB Studio." \
-            "Exec=pulsares-explorer %U" \
-            "Icon=pulsares-explorer" \
-            "Terminal=false" \
-            "Type=Application" \
-            "Categories=System;FileTools;FileManager;Utility;" \
-            "MimeType=inode/directory;" \
-            "StartupWMClass=Pulsares Explorer" \
-            > "$DEB_ROOT/usr/share/applications/pulsares-explorer.desktop"
-          chmod 644 "$DEB_ROOT/usr/share/applications/pulsares-explorer.desktop"
-
+          printf "%s\n" "#!/bin/sh" "set -e" \
+            "command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true" \
+            "command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true" \
+            > "$DEB_ROOT/DEBIAN/postinst"
+          chmod 755 "$DEB_ROOT/DEBIAN/postinst"
           dpkg-deb --build --root-owner-group "$DEB_ROOT" release-assets/Pulsares-Explorer-Linux-x64.deb
 
-          # 3. Gerar AppImage (.AppImage)
-          APPDIR="build-appimage/PulsaresExplorer.AppDir"
+      - name: Build .rpm (Fedora / RHEL / openSUSE)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rpmbuild -bb packaging/linux/pulsares-explorer.spec \
+            --define "_topdir $PWD/build-rpm" \
+            --define "pkg_version ${RPM_VERSION}" \
+            --define "payload_dir $PWD/linux-payload"
+          RPM_FILE=$(find build-rpm/RPMS -name '*.rpm' -print -quit)
+          test -n "$RPM_FILE"
+          cp "$RPM_FILE" release-assets/Pulsares-Explorer-Linux-x64.rpm
+
+      - name: Build .AppImage (universal)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APPDIR=build-appimage/PulsaresExplorer.AppDir
           rm -rf build-appimage
-          mkdir -p "$APPDIR/usr/bin"
-          mkdir -p "$APPDIR/usr/share/icons/hicolor/512x512/apps"
-
-          cp "$BIN_PATH" "$APPDIR/usr/bin/pulsares-explorer"
-          chmod 755 "$APPDIR/usr/bin/pulsares-explorer"
-          cp build/appicon.png "$APPDIR/usr/share/icons/hicolor/512x512/apps/pulsares-explorer.png"
-          cp build/appicon.png "$APPDIR/pulsares-explorer.png"
+          mkdir -p "$APPDIR"
+          cp -a linux-payload/. "$APPDIR/"
+          cp "linux-payload/usr/share/applications/${APP_ID}.desktop" "$APPDIR/${APP_ID}.desktop"
+          cp build/appicon.png "$APPDIR/${APP_ID}.png"
           cp build/appicon.png "$APPDIR/.DirIcon"
-
-          printf "%s\n" \
-            "[Desktop Entry]" \
-            "Name=Pulsares Explorer" \
-            "Comment=Explorador de arquivos rápido, com abas, painel duplo, terminal e DB Studio." \
-            "Exec=pulsares-explorer %U" \
-            "Icon=pulsares-explorer" \
-            "Terminal=false" \
-            "Type=Application" \
-            "Categories=System;FileTools;FileManager;Utility;" \
-            "MimeType=inode/directory;" \
-            "StartupWMClass=Pulsares Explorer" \
-            > "$APPDIR/pulsares-explorer.desktop"
-
           printf "%s\n" \
             "#!/bin/sh" \
             'SELF=$(readlink -f "$0")' \
             'HERE=${SELF%/*}' \
             'export PATH="${HERE}/usr/bin:${PATH}"' \
-            'export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"' \
-            'exec "${HERE}/usr/bin/pulsares-explorer" "$@"' \
+            'export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"' \
+            "exec \"\${HERE}/usr/bin/${BIN_NAME}\" \"\$@\"" \
             > "$APPDIR/AppRun"
           chmod +x "$APPDIR/AppRun"
 
-          curl -sL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool.AppImage
+          curl -sSL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool.AppImage
           chmod +x appimagetool.AppImage
-          ./appimagetool.AppImage --appimage-extract
-          ARCH=x86_64 ./squashfs-root/AppRun "$APPDIR" release-assets/Pulsares-Explorer-Linux-x64.AppImage
+          ./appimagetool.AppImage --appimage-extract >/dev/null
+          ARCH=x86_64 ./squashfs-root/AppRun --no-appstream "$APPDIR" release-assets/Pulsares-Explorer-Linux-x64.AppImage
 
-      - name: Prepare macOS artifact
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          mkdir -p release-assets
-          APP_PATH=$(find build/bin -maxdepth 1 -name '*.app' -print -quit)
-          test -n "$APP_PATH"
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" release-assets/Pulsares-Explorer-macOS-universal.zip
-
-      - name: Upload build artifact
+      - name: Upload Linux release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: pulsares-linux-x64
           path: release-assets/*
           if-no-files-found: error
 
+      - name: Upload Linux payload (Snap / Flatpak)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsares-linux-payload
+          path: linux-payload
+          if-no-files-found: error
+          retention-days: 3
+
+  # ---------------------------------------------------------------------------
+  # 3. Snap (Snap Store / Ubuntu App Center)
+  # ---------------------------------------------------------------------------
+  snap:
+    name: Build Snap
+    needs: [meta, linux]
+    runs-on: ubuntu-latest
+    env:
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Linux payload
+        uses: actions/download-artifact@v4
+        with:
+          name: pulsares-linux-payload
+          path: snap-build/payload
+
+      - name: Prepare snapcraft project
+        shell: bash
+        run: |
+          mkdir -p snap-build/snap
+          sed "s/@VERSION@/${{ needs.meta.outputs.version }}/" packaging/snap/snapcraft.yaml > snap-build/snap/snapcraft.yaml
+          chmod 755 snap-build/payload/usr/bin/${BIN_NAME}
+          cat snap-build/snap/snapcraft.yaml
+
+      - name: Build snap
+        id: snapcraft
+        uses: snapcore/action-build@v1
+        with:
+          path: snap-build
+
+      - name: Rename snap
+        run: |
+          mkdir -p release-assets
+          cp "${{ steps.snapcraft.outputs.snap }}" release-assets/Pulsares-Explorer-Linux-x64.snap
+
+      - name: Publish to Snap Store
+        if: env.SNAPCRAFT_STORE_CREDENTIALS != ''
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.snapcraft.outputs.snap }}
+          release: ${{ inputs.snap_channel || 'edge' }}
+
+      - name: Upload snap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsares-linux-snap
+          path: release-assets/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 4. Flatpak (Flathub / GNOME Software / KDE Discover)
+  # ---------------------------------------------------------------------------
+  flatpak:
+    name: Build Flatpak
+    needs: [meta, linux]
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-47
+      options: --privileged
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Linux payload
+        uses: actions/download-artifact@v4
+        with:
+          name: pulsares-linux-payload
+          path: packaging/flatpak/payload
+
+      - name: Fix permissions
+        run: chmod 755 packaging/flatpak/payload/usr/bin/${BIN_NAME}
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: Pulsares-Explorer-Linux-x64.flatpak
+          manifest-path: packaging/flatpak/${{ env.APP_ID }}.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+          upload-artifact: false
+
+      - name: Collect bundle
+        run: |
+          mkdir -p release-assets
+          cp Pulsares-Explorer-Linux-x64.flatpak release-assets/
+
+      - name: Upload flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsares-linux-flatpak
+          path: release-assets/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 5. macOS universal: .dmg e .zip
+  # ---------------------------------------------------------------------------
+  macos:
+    name: Build macOS universal (.dmg)
+    needs: meta
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Build desktop
+        run: wails build -skipbindings -clean -trimpath -platform darwin/universal
+
+      - name: Prepare macOS artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          APP_PATH=$(find build/bin -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$APP_PATH"
+
+          # 1. Zip do bundle .app
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" release-assets/Pulsares-Explorer-macOS-universal.zip
+
+          # 2. Imagem de disco .dmg com atalho para /Applications
+          DMG_DIR=build-dmg
+          rm -rf "$DMG_DIR"
+          mkdir -p "$DMG_DIR"
+          cp -R "$APP_PATH" "$DMG_DIR/"
+          ln -s /Applications "$DMG_DIR/Applications"
+          hdiutil create -volname "Pulsares Explorer" -srcfolder "$DMG_DIR" -ov -format UDZO \
+            release-assets/Pulsares-Explorer-macOS-universal.dmg
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsares-macos-universal
+          path: release-assets/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 6. Publicação do GitHub Release
+  # ---------------------------------------------------------------------------
   publish:
     name: Publish GitHub Release
-    needs: build
+    needs: [meta, windows, linux, snap, flatpak, macos]
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.meta.outputs.tag }}
+      VERSION: ${{ needs.meta.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download all platform artifacts
+      - name: Download platform artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          pattern: pulsares-*
           merge-multiple: true
+
+      - name: Remove internal payload files
+        run: |
+          # O payload FHS é usado apenas pelos jobs de Snap/Flatpak
+          rm -rf release-assets/usr
+          ls -la release-assets
 
       - name: Build Multiverse Portable Package (Cross-Platform Pendrive)
         shell: bash
@@ -241,27 +552,16 @@ jobs:
           mkdir -p "$MULTIVERSE_DIR/data"
           touch "$MULTIVERSE_DIR/data/.gitkeep"
 
-          # 1. Marcador de modo portátil
           echo "# Pulsares Explorer - Multiverse Portable" > "$MULTIVERSE_DIR/portable.dat"
           echo "# Todos os dados locais, sessoes, favoritos e banco SQLite sao salvos dentro da pasta ./data" >> "$MULTIVERSE_DIR/portable.dat"
 
-          # 2. Copiar binário Windows
-          if [ -f "release-assets/Pulsares-Explorer-Windows-x64.exe" ]; then
+          [ -f "release-assets/Pulsares-Explorer-Windows-x64.exe" ] && \
             cp "release-assets/Pulsares-Explorer-Windows-x64.exe" "$MULTIVERSE_DIR/Pulsares-Explorer.exe"
-          fi
-
-          # 3. Copiar binário Linux (AppImage)
-          if [ -f "release-assets/Pulsares-Explorer-Linux-x64.AppImage" ]; then
+          [ -f "release-assets/Pulsares-Explorer-Linux-x64.AppImage" ] && \
             cp "release-assets/Pulsares-Explorer-Linux-x64.AppImage" "$MULTIVERSE_DIR/Pulsares-Explorer-Linux.AppImage"
-            chmod +x "$MULTIVERSE_DIR/Pulsares-Explorer-Linux.AppImage"
-          fi
-
-          # 4. Descompactar e incluir o bundle macOS
-          if [ -f "release-assets/Pulsares-Explorer-macOS-universal.zip" ]; then
+          [ -f "release-assets/Pulsares-Explorer-macOS-universal.zip" ] && \
             unzip -q "release-assets/Pulsares-Explorer-macOS-universal.zip" -d "$MULTIVERSE_DIR/"
-          fi
 
-          # 5. Criar LEIA-ME explicativo
           printf "%s\n" \
             "=====================================================" \
             " PULSARES EXPLORER - VERSAO PORTABLE MULTIVERSE" \
@@ -273,35 +573,48 @@ jobs:
             "" \
             "COMO USAR NO SEU PENDRIVE:" \
             "-----------------------------------------------------" \
-            "1. Windows:" \
-            "   - De duplo clique em 'Pulsares-Explorer.exe'." \
-            "" \
-            "2. Linux:" \
-            "   - Execute 'Pulsares-Explorer-Linux.AppImage'" \
-            "   - Se necessario, conceda permissao de execucao:" \
-            "     chmod +x Pulsares-Explorer-Linux.AppImage" \
-            "" \
-            "3. macOS:" \
-            "   - Execute 'Pulsares Explorer.app'." \
-            "   - Na primeira execucao, se o macOS avisar sobre desenvolvedor nao identificado:" \
-            "     Clique com botao direito no aplicativo -> selecione 'Abrir' -> confirme." \
+            "1. Windows: de duplo clique em 'Pulsares-Explorer.exe'." \
+            "2. Linux:   chmod +x Pulsares-Explorer-Linux.AppImage && ./Pulsares-Explorer-Linux.AppImage" \
+            "3. macOS:   execute 'Pulsares Explorer.app' (botao direito -> Abrir na primeira execucao)." \
             "" \
             "ONDE FICAM SEUS DADOS?" \
             "-----------------------------------------------------" \
-            "Todas as sessoes, favoritos, etiquetas e configuracoes sao armazenados em:" \
             "./data/explorer.db" \
-            "" \
             "=====================================================" \
             > "$MULTIVERSE_DIR/LEIA-ME-MULTIVERSE.txt"
 
-          # 6. Garantir permissões de execução nos binários Linux e macOS
           chmod +x "$MULTIVERSE_DIR"/*.AppImage 2>/dev/null || true
           find "$MULTIVERSE_DIR" -type f -path "*/Contents/MacOS/*" -exec chmod +x {} + 2>/dev/null || true
-
-          # 7. Gerar arquivo compactado final para o release
           zip -r -q "release-assets/Pulsares-Explorer-Multiverse-Portable.zip" "$MULTIVERSE_DIR"
           rm -rf "$MULTIVERSE_DIR"
-          echo "Pacote Multiverse Portable gerado com sucesso: release-assets/Pulsares-Explorer-Multiverse-Portable.zip"
+
+      - name: Generate AUR PKGBUILD (pulsares-explorer-bin)
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEB_SHA=$(sha256sum release-assets/Pulsares-Explorer-Linux-x64.deb | cut -d' ' -f1)
+          PKGVER="${VERSION//-/_}"
+          cat > release-assets/PKGBUILD-pulsares-explorer-bin <<EOF
+          # Maintainer: Vitor Krewer <vitormkrewer@gmail.com>
+          pkgname=pulsares-explorer-bin
+          pkgver=${PKGVER}
+          pkgrel=1
+          pkgdesc="Fast file explorer with tabs, terminal, Studio Editor and DB Studio"
+          arch=('x86_64')
+          url="https://github.com/vitorkrewer/pulsares-file-explorer"
+          license=('MIT')
+          depends=('gtk3' 'webkit2gtk-4.1')
+          provides=('pulsares-explorer')
+          conflicts=('pulsares-explorer')
+          source=("pulsares-explorer-\${pkgver}.deb::https://github.com/vitorkrewer/pulsares-file-explorer/releases/download/${TAG}/Pulsares-Explorer-Linux-x64.deb")
+          sha256sums=('${DEB_SHA}')
+
+          package() {
+            bsdtar -xf data.tar.* -C "\${pkgdir}"
+          }
+          EOF
+          sed -i 's/^          //' release-assets/PKGBUILD-pulsares-explorer-bin
+          cat release-assets/PKGBUILD-pulsares-explorer-bin
 
       - name: Generate SHA256SUMS
         shell: bash
@@ -310,84 +623,65 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Extract tag and release notes from CHANGELOG
-        id: release_info
+      - name: Extract release notes from CHANGELOG
+        id: notes
         shell: python
         run: |
           import os, re
-
-          event_name = "${{ github.event_name }}"
-          ref_name = "${{ github.ref_name }}"
-          input_version = "${{ inputs.version }}"
-
-          changelog_path = "CHANGELOG.md"
-          changelog_content = ""
-          if os.path.exists(changelog_path):
-              with open(changelog_path, "r", encoding="utf-8") as f:
-                  changelog_content = f.read()
-
-          # 1. Determine tag name
-          tag = ""
-          if event_name == "workflow_dispatch" and input_version.strip():
-              tag = input_version.strip()
-              if not tag.startswith("v"):
-                  tag = f"v{tag}"
-          elif event_name == "push" and ref_name and ref_name.startswith("v"):
-              tag = ref_name
-
-          if not tag:
-              match = re.search(r'##\s*\[?(v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?)\]?', changelog_content)
-              if match:
-                  tag = match.group(1)
-                  if not tag.startswith("v"):
-                      tag = f"v{tag}"
-              else:
-                  tag = "v1.1.1"
-
-          print(f"Calculated RELEASE_TAG: {tag}")
-
-          # 2. Extract release notes for this tag
+          tag = os.environ["TAG"]
           clean_ver = tag.lstrip("v")
+          content = open("CHANGELOG.md", encoding="utf-8").read() if os.path.exists("CHANGELOG.md") else ""
+          lines = content.splitlines()
           pattern = rf'^##\s*\[?v?{re.escape(clean_ver)}\]?.*$'
-          lines = changelog_content.splitlines()
-
-          start_idx = None
-          end_idx = None
+          start = end = None
           for i, line in enumerate(lines):
-              if start_idx is None:
+              if start is None:
                   if re.match(pattern, line.strip(), re.IGNORECASE):
-                      start_idx = i + 1
-              else:
-                  if re.match(r'^##\s+', line.strip()):
-                      end_idx = i
-                      break
+                      start = i + 1
+              elif re.match(r'^##\s+', line.strip()):
+                  end = i
+                  break
+          notes = "\n".join(lines[start:end or len(lines)]).strip() if start is not None else ""
 
-          notes = ""
-          if start_idx is not None:
-              if end_idx is None:
-                  end_idx = len(lines)
-              notes = "\n".join(lines[start_idx:end_idx]).strip()
+          install = """
 
-          notes_file = "extracted-release-notes.md"
-          if notes:
-              with open(notes_file, "w", encoding="utf-8") as f:
-                  f.write(notes + "\n")
-              print("Extracted release notes successfully.")
-          else:
-              with open(notes_file, "w", encoding="utf-8") as f:
-                  f.write(f"Release {tag}\n")
-              print("No specific section found in CHANGELOG.md, created fallback release notes.")
+          ---
 
+          ### Downloads
+
+          | Plataforma | Formato | Arquivo |
+          | :--- | :--- | :--- |
+          | Windows | Instalador (recomendado) | `Pulsares-Explorer-Windows-x64-Setup.exe` |
+          | Windows | MSI (empresas / GPO / Intune) | `Pulsares-Explorer-Windows-x64.msi` |
+          | Windows | Portátil | `Pulsares-Explorer-Windows-x64-Portable.zip` |
+          | Linux | Debian / Ubuntu | `Pulsares-Explorer-Linux-x64.deb` |
+          | Linux | Fedora / RHEL / openSUSE | `Pulsares-Explorer-Linux-x64.rpm` |
+          | Linux | Flatpak | `Pulsares-Explorer-Linux-x64.flatpak` |
+          | Linux | Snap | `Pulsares-Explorer-Linux-x64.snap` |
+          | Linux | AppImage (universal) | `Pulsares-Explorer-Linux-x64.AppImage` |
+          | Linux | Arch (AUR) | `PKGBUILD-pulsares-explorer-bin` |
+          | macOS | DMG (universal) | `Pulsares-Explorer-macOS-universal.dmg` |
+          | Todos | Pendrive multiplataforma | `Pulsares-Explorer-Multiverse-Portable.zip` |
+
+          ```bash
+          # Flatpak
+          flatpak install --user ./Pulsares-Explorer-Linux-x64.flatpak
+          # Snap (pacote local, sem assinatura da loja)
+          sudo snap install --dangerous ./Pulsares-Explorer-Linux-x64.snap
+          ```
+          """.replace("\n          ", "\n")
+
+          with open("extracted-release-notes.md", "w", encoding="utf-8") as f:
+              f.write((notes or f"Release {tag}") + install)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-              f.write(f"tag_name={tag}\n")
-              f.write(f"body_path={notes_file}\n")
+              f.write("body_path=extracted-release-notes.md\n")
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          tag_name: ${{ env.TAG }}
           target_commitish: ${{ github.sha }}
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
           generate_release_notes: false
-          body_path: ${{ steps.release_info.outputs.body_path }}
+          body_path: ${{ steps.notes.outputs.body_path }}
           files: release-assets/*

@@ -1,0 +1,50 @@
+# Snap Store — empacota o binário pré-compilado (gerado em ubuntu-22.04) sobre core22 + extensão GNOME (WebKitGTK 4.1).
+# O workflow de release copia este arquivo para snap-build/snap/snapcraft.yaml e substitui @VERSION@.
+name: pulsares-explorer
+title: Pulsares Explorer
+base: core22
+version: '@VERSION@'
+summary: Fast file explorer with tabs, terminal, Studio Editor and DB Studio
+description: |
+  Pulsares Explorer is a fast, lightweight and cross-platform desktop file explorer
+  with tabs, dual pane, integrated terminal, Pulsares Studio Editor (code editor with
+  live HTML/Markdown preview) and Pulsares DB Studio (SQLite manager).
+license: MIT
+website: https://github.com/vitorkrewer/pulsares-file-explorer
+issues: https://github.com/vitorkrewer/pulsares-file-explorer/issues
+icon: payload/usr/share/icons/hicolor/512x512/apps/io.github.vitorkrewer.PulsaresExplorer.png
+grade: stable
+confinement: strict
+
+architectures:
+  - build-on: amd64
+
+apps:
+  pulsares-explorer:
+    command: usr/bin/pulsares-explorer
+    desktop: usr/share/applications/io.github.vitorkrewer.PulsaresExplorer.desktop
+    common-id: io.github.vitorkrewer.PulsaresExplorer
+    extensions: [gnome]
+    plugs:
+      - home
+      - removable-media
+      - network
+      - network-bind
+      - mount-observe
+      - system-observe
+      - hardware-observe
+      - opengl
+      - audio-playback
+      - gsettings
+    environment:
+      WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+
+parts:
+  pulsares-explorer:
+    plugin: dump
+    source: payload
+    override-prime: |
+      craftctl default
+      sed -i 's|^Icon=io.github.vitorkrewer.PulsaresExplorer$|Icon=${SNAP}/usr/share/icons/hicolor/512x512/apps/io.github.vitorkrewer.PulsaresExplorer.png|' \
+        usr/share/applications/io.github.vitorkrewer.PulsaresExplorer.desktop
+

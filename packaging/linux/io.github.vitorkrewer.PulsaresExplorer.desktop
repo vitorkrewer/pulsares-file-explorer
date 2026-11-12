@@ -1,0 +1,28 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Pulsares Explorer
+GenericName=File Manager
+GenericName[pt_BR]=Gerenciador de Arquivos
+Comment=Fast file explorer with tabs, dual pane, terminal, Studio Editor and DB Studio
+Comment[pt_BR]=Explorador de arquivos rápido com abas, painel duplo, terminal, Studio Editor e DB Studio
+Exec=pulsares-explorer %U
+Icon=io.github.vitorkrewer.PulsaresExplorer
+Terminal=false
+Categories=System;FileTools;FileManager;Utility;
+MimeType=inode/directory;
+Keywords=files;explorer;folder;terminal;sqlite;editor;cloud;arquivos;pastas;
+StartupWMClass=Pulsares Explorer
+StartupNotify=true
+Actions=studio;dbstudio;
+
+[Desktop Action studio]
+Name=Pulsares Studio Editor
+Exec=pulsares-explorer --studio
+Icon=io.github.vitorkrewer.PulsaresExplorer.Studio
+
+[Desktop Action dbstudio]
+Name=Pulsares DB Studio
+Exec=pulsares-explorer --dbstudio
+Icon=io.github.vitorkrewer.PulsaresExplorer.DBStudio
+
