@@ -1021,6 +1021,26 @@ func (a *App) ExtractArchive(archivePath string, destDir string) (int, error) {
 	return archive.ExtractArchive(archivePath, destDir)
 }
 
+// ExtractArchiveTo extrai para parentDir (vazio = pasta do compactado), opcionalmente criando uma subpasta com o nome do arquivo.
+func (a *App) ExtractArchiveTo(archivePath string, parentDir string, createSubfolder bool) (archive.ExtractResult, error) {
+	return archive.ExtractArchiveTo(archivePath, parentDir, createSubfolder)
+}
+
+// ShowFolderDialog abre o seletor nativo de pastas do sistema operacional.
+func (a *App) ShowFolderDialog(title string, defaultDir string) (string, error) {
+	if a.ctx == nil {
+		return "", errors.New("app context not initialized")
+	}
+	opts := runtime.OpenDialogOptions{
+		Title:                title,
+		CanCreateDirectories: true,
+	}
+	if info, err := os.Stat(strings.TrimSpace(defaultDir)); err == nil && info.IsDir() {
+		opts.DefaultDirectory = defaultDir
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, opts)
+}
+
 func (a *App) SaveRemoteProfile(profile storage.RemoteProfile) (int64, error) {
 	if a.storage == nil {
 		return 0, nil

@@ -6,6 +6,11 @@ Todas as mudanças visíveis são registradas aqui, agrupadas pela etapa (versã
 
 ### Adicionado
 
+- **Extração de Compactados com Escolha de Destino e Pasta com o Nome do Arquivo (`extract_to.go`, `app.go`, `wails.ts`, `productivity/store.ts`, `ProductivityModals.tsx` e `FileContextMenu.tsx`)**:
+  - **Novas opções no menu de contexto de `.zip`, `.tar`, `.tar.gz` e `.tgz`**: *Extrair para "nome/"* (cria uma pasta com o nome do compactado), *Extrair aqui* e *Extrair para…* (seletor nativo de pastas).
+  - **Modal de compactados com seção "Extrair para"**: campo de destino editável com botão *Procurar…*, atalho para voltar à pasta do compactado, opção *Criar pasta com o nome do arquivo* e *Abrir a pasta de destino ao concluir* (preferências lembradas entre sessões) e prévia do caminho final.
+  - **Sem sobrescrever e sem pastas duplicadas**: se a pasta já existir, cria `nome (2)/`, `nome (3)/`...; quando o compactado já contém uma única pasta raiz com o mesmo nome, a estrutura é achatada para evitar `nome/nome/`.
+  - Extração padrão agora usa a pasta onde está o compactado (antes usava a pasta aberta no explorador), com mensagens de erro exibidas no próprio modal.
 - **Pipeline de Release Multiformato para Windows, Linux e macOS (`.github/workflows/release.yml` e `packaging/`)**:
   - **Windows**: instalador **Setup `.exe` (NSIS via `wails build -nsis`)**, instalador **`.msi` (WiX Toolset v5)** com atalhos no Menu Iniciar para *Pulsares Explorer*, *Pulsares Studio Editor* (`--studio`) e *Pulsares DB Studio* (`--dbstudio`), atalho na Área de Trabalho, tela de licença e atualização automática (`MajorUpgrade`), além de executável standalone e `.zip` portátil.
   - **Linux**: pacotes **`.deb`** (Debian/Ubuntu/Mint), **`.rpm`** (Fedora/RHEL/openSUSE), **`.flatpak`** (runtime GNOME 47, pronto para Flathub/GNOME Software/KDE Discover), **`.snap`** (core22 + extensão GNOME, com publicação automática na Snap Store quando `SNAPCRAFT_STORE_CREDENTIALS` estiver configurado), **`.AppImage`**, **`.tar.gz`** e **`PKGBUILD`** para o AUR (`pulsares-explorer-bin`), todos com AppStream metainfo, arquivo `.desktop` com ações rápidas (Studio Editor / DB Studio) e ícones `hicolor` sob o ID `io.github.vitorkrewer.PulsaresExplorer`. Compilação em `ubuntu-22.04` para máxima compatibilidade de glibc.

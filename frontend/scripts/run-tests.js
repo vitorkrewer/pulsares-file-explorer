@@ -410,4 +410,17 @@ assert.ok(ctxMenuSrc.includes('Sempre manter neste dispositivo'));
 assert.ok(ctxMenuSrc.includes('Liberar espaço (Apenas online)'));
 assert.ok(ctxMenuSrc.includes('Programas do Sistema'));
 
+// 14. Testar destino de extração de compactados (pasta com o nome do arquivo / escolher destino)
+function archiveFolderNameTest(p) {
+  const base = p.split(/[/\\]/).pop() || p;
+  return base.replace(/\.(tar\.gz|tgz|zip|tar)$/i, '').replace(/[. ]+$/, '') || 'extraido';
+}
+assert.equal(archiveFolderNameTest('C:\\Downloads\\projeto.zip'), 'projeto');
+assert.equal(archiveFolderNameTest('/home/u/backup.tar.gz'), 'backup');
+assert.equal(archiveFolderNameTest('relatorio.final.TGZ'), 'relatorio.final');
+assert.ok(wailsSrc.includes('export async function extractArchiveTo('));
+assert.ok(wailsSrc.includes('export async function showFolderDialog('));
+assert.ok(ctxMenuSrc.includes('Extrair para…'));
+assert.ok(ctxMenuSrc.includes('quickExtractArchive('));
+
 console.log('[frontend:test] Todos os testes unitários (0.1.0 a 1.2.0 + ERD + DB Studio CRUD/Creator + Studio Web/PDF/Image/Media/Git/Search + Open With Submenu + Terminal Follow-up + Clipboard History + Network Drives + Folder Zoom) passaram com sucesso.');

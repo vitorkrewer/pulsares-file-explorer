@@ -21,7 +21,8 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from 'lucide-react';
-import { useProductivityStore } from './store';
+import { useProductivityStore, parentDirOf } from './store';
+import { archiveFolderName } from '../../lib/wails';
 import { useBrowserStore } from '../browser/store';
 import { useOperationsStore } from '../operations/store';
 import { useDualPaneStore } from '../panes/store';
@@ -73,6 +74,13 @@ export const ProductivityModals: React.FC = () => {
     archivePath,
     archiveEntries,
     archiveLoading,
+    archiveDestDir,
+    archiveCreateSubfolder,
+    archiveOpenAfter,
+    archiveExtracting,
+    archiveError,
+    setArchiveExtractOptions,
+    chooseArchiveDestination,
     openArchiveModal,
     closeArchiveModal,
     compressSelection,
@@ -97,6 +105,13 @@ export const ProductivityModals: React.FC = () => {
 
   const [archiveNameInput, setArchiveNameInput] = useState('arquivo');
   const [archiveFormat, setArchiveFormat] = useState<'zip' | 'tar.gz'>('zip');
+  const archiveParentDir = archivePath ? parentDirOf(archivePath) : '';
+  const archiveSubfolderName = archivePath ? archiveFolderName(archivePath) : '';
+  const archiveBaseDest = archiveDestDir.trim() || archiveParentDir;
+  const archiveDestSep = archiveBaseDest.includes('\\') ? '\\' : '/';
+  const archiveFinalPreview = archiveCreateSubfolder
+    ? `${archiveBaseDest.replace(/[\\/]+$/, '')}${archiveDestSep}${archiveSubfolderName}`
+    : archiveBaseDest;
   const [remoteName, setRemoteName] = useState('');
   const [remoteProtocol, setRemoteProtocol] = useState<'sftp' | 'webdav'>('sftp');
   const [remoteHost, setRemoteHost] = useState('');
@@ -735,17 +750,88 @@ export const ProductivityModals: React.FC = () => {
 
             {archivePath && (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-                  <span>
-                    <strong>{t('archive.inspecting')}:</strong> {archivePath}
+                <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={archivePath}>
+                  <strong>{t('archive.inspecting')}:</strong> {archivePath}
+                </div>
+
+                {/* Destino da extração */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid var(--border-subtle)',
+                    backgroundColor: 'var(--bg-subtle)',
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                    Extrair para
                   </span>
-                  <button
-                    type="button"
-                    style={styles.secondaryBtn}
-                    onClick={() => void extractCurrentArchive()}
-                  >
-                    {t('archive.extractHere')}
-                  </button>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      aria-label="Pasta de destino da extração"
+                      value={archiveDestDir}
+                      onChange={(e) => setArchiveExtractOptions({ archiveDestDir: e.target.value })}
+                      placeholder={archiveParentDir}
+                      style={{ ...styles.input, flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      style={{ ...styles.secondaryBtn, display: 'flex', alignItems: 'center', gap: 5 }}
+                      onClick={() => void chooseArchiveDestination()}
+                    >
+                      <FolderOpen size={13} /> Procurar…
+                    </button>
+                    {archiveDestDir !== archiveParentDir && (
+                      <button
+                        type="button"
+                        style={styles.secondaryBtn}
+                        title="Usar a pasta onde está o compactado"
+                        onClick={() => setArchiveExtractOptions({ archiveDestDir: archiveParentDir })}
+                      >
+                        Pasta atual
+                      </button>
+                    )}
+                  </div>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={archiveCreateSubfolder}
+                      onChange={(e) => setArchiveExtractOptions({ archiveCreateSubfolder: e.target.checked })}
+                    />
+                    Criar pasta com o nome do arquivo (<code>{archiveSubfolderName}/</code>)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={archiveOpenAfter}
+                      onChange={(e) => setArchiveExtractOptions({ archiveOpenAfter: e.target.checked })}
+                    />
+                    Abrir a pasta de destino ao concluir
+                  </label>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <span
+                      style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      title={archiveFinalPreview}
+                    >
+                      Destino final: <code>{archiveFinalPreview}</code>
+                    </span>
+                    <button
+                      type="button"
+                      style={styles.primaryBtn}
+                      disabled={archiveExtracting}
+                      onClick={() => void extractCurrentArchive()}
+                    >
+                      {archiveExtracting ? 'Extraindo…' : 'Extrair'}
+                    </button>
+                  </div>
+
+                  {archiveError && <div style={styles.errorBanner}>{archiveError}</div>}
                 </div>
 
                 <div style={styles.tableBox}>

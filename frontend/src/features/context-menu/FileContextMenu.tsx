@@ -33,11 +33,15 @@ import {
   CheckCircle2,
   Share2,
   History,
+  PackageOpen,
+  FolderInput,
 } from 'lucide-react';
 import {
   Entry,
   OpenWithApp,
   CloudItemStatus,
+  archiveFolderName,
+  isExtractableArchive,
   openPath,
   openWithDialog,
   listOpenWithApps,
@@ -197,7 +201,8 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
     changeDirectoryInSession,
   } = useTerminalStore();
   const { toggleQuickLook } = usePreviewStore();
-  const { openBatchRename, openArchiveModal, openHashModal } = useProductivityStore();
+  const { openBatchRename, openArchiveModal, openHashModal, quickExtractArchive, extractArchiveToChosenFolder } =
+    useProductivityStore();
   const { openFileInEditor, openFolderInEditor } = useEditorStore();
 
   useEffect(() => {
@@ -284,7 +289,11 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
 
   const { entry } = target;
   const menuWidth = 276;
-  const menuHeight = entry ? 480 : 340;
+  const menuHeight = entry
+    ? entry.kind !== 'dir' && isExtractableArchive(entry.name)
+      ? 570
+      : 480
+    : 340;
   const clampedX =
     typeof window !== 'undefined'
       ? Math.max(8, Math.min(target.x, window.innerWidth - menuWidth - 10))
@@ -318,6 +327,7 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
     entry && entry.kind !== 'dir'
       ? isConvertibleToDB(entry.name)
       : false;
+  const isArchiveFile = !!entry && entry.kind !== 'dir' && isExtractableArchive(entry.name);
   const isFavorite = entry ? favorites.some((f) => f.path === entry.location.path) : false;
   const targetDir = entry
     ? isDir
@@ -1094,13 +1104,46 @@ export const FileContextMenu: React.FC<Props> = ({ target, onClose }) => {
 
           <MenuItem
             icon={<Archive size={14} />}
-            label="Compactar / Extrair arquivo…"
+            label={isArchiveFile ? 'Compactar / Extrair (opções)…' : 'Compactar / Extrair arquivo…'}
             onClick={() =>
               runAndClose(() => {
                 void openArchiveModal(entry.location.path);
               })
             }
           />
+
+          {isArchiveFile && (
+            <>
+              <MenuItem
+                icon={<PackageOpen size={14} style={{ color: 'var(--accent)' }} />}
+                label={`Extrair para "${archiveFolderName(entry.name)}/"`}
+                badge="Pasta"
+                onClick={() =>
+                  runAndClose(() => {
+                    void quickExtractArchive(entry.location.path, { createSubfolder: true });
+                  })
+                }
+              />
+              <MenuItem
+                icon={<FolderInput size={14} />}
+                label="Extrair aqui"
+                onClick={() =>
+                  runAndClose(() => {
+                    void quickExtractArchive(entry.location.path, { createSubfolder: false });
+                  })
+                }
+              />
+              <MenuItem
+                icon={<FolderSearch size={14} />}
+                label="Extrair para…"
+                onClick={() =>
+                  runAndClose(() => {
+                    void extractArchiveToChosenFolder(entry.location.path);
+                  })
+                }
+              />
+            </>
+          )}
 
           {!isDir && (
             <MenuItem

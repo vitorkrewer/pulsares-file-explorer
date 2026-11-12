@@ -695,6 +695,12 @@ declare global {
           DisconnectNetworkDrive?: (target: string) => Promise<void>;
           ListOpenWithApps?: (targetPath: string) => Promise<OpenWithApp[]>;
           OpenFileWithApp?: (targetPath: string, appExeOrCommand: string) => Promise<void>;
+          ExtractArchiveTo?: (
+            archivePath: string,
+            parentDir: string,
+            createSubfolder: boolean
+          ) => Promise<ExtractResult>;
+          ShowFolderDialog?: (title: string, defaultDir: string) => Promise<string>;
           ListConnectedClouds?: () => Promise<CloudProviderInfo[]>;
           GetCloudItemStatus?: (targetPath: string) => Promise<CloudItemStatus>;
           ExecuteCloudAction?: (targetPath: string, action: string) => Promise<void>;
@@ -1586,6 +1592,49 @@ export async function extractArchive(archivePath: string, destDir: string): Prom
     return window.go!.app.App.ExtractArchive(archivePath, destDir);
   }
   return 0;
+}
+
+export interface ExtractResult {
+  destDir: string;
+  extractedFiles: number;
+  createdFolder: boolean;
+  flattened: boolean;
+}
+
+/** Remove a extensão de compactado (.zip, .tar, .tar.gz, .tgz) do nome do arquivo. */
+export function archiveFolderName(archivePath: string): string {
+  const base = archivePath.split(/[/\\]/).pop() || archivePath;
+  const stripped = base.replace(/\.(tar\.gz|tgz|zip|tar)$/i, '').replace(/[. ]+$/, '');
+  return stripped || 'extraido';
+}
+
+export const isExtractableArchive = (nameOrPath: string): boolean =>
+  /\.(zip|tar\.gz|tgz|tar)$/i.test(nameOrPath || '');
+
+/**
+ * Extrai para parentDir (vazio = pasta do próprio compactado).
+ * createSubfolder cria uma pasta com o nome do arquivo (sem sobrescrever pastas existentes).
+ */
+export async function extractArchiveTo(
+  archivePath: string,
+  parentDir: string,
+  createSubfolder: boolean
+): Promise<ExtractResult> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ExtractArchiveTo === 'function') {
+    return window.go.app.App.ExtractArchiveTo(archivePath, parentDir, createSubfolder);
+  }
+  const sep = archivePath.includes('\\') ? '\\' : '/';
+  const parent = parentDir || archivePath.slice(0, archivePath.lastIndexOf(sep));
+  const destDir = createSubfolder ? `${parent}${sep}${archiveFolderName(archivePath)}` : parent;
+  const extractedFiles = await extractArchive(archivePath, destDir);
+  return { destDir, extractedFiles, createdFolder: createSubfolder, flattened: false };
+}
+
+export async function showFolderDialog(title: string, defaultDir = ''): Promise<string> {
+  if (isWailsAvailable() && typeof window.go?.app?.App?.ShowFolderDialog === 'function') {
+    return (await window.go.app.App.ShowFolderDialog(title, defaultDir)) || '';
+  }
+  return '';
 }
 
 export async function saveRemoteProfile(profile: RemoteProfile): Promise<number> {

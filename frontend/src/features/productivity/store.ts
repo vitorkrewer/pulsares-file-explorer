@@ -19,7 +19,10 @@ import {
   removeItemTag,
   listArchive,
   createArchive,
-  extractArchive,
+  extractArchiveTo,
+  showFolderDialog,
+  isExtractableArchive,
+  ExtractResult,
   listRemoteProfiles,
   saveRemoteProfile,
   deleteRemoteProfile,
@@ -65,6 +68,40 @@ const DEFAULT_BATCH_OPTIONS: BatchRenameOptions = {
   numberDigits: 0,
 };
 
+function readArchivePref(key: string, fallback: boolean): boolean {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    return raw === null ? fallback : raw === '1';
+  } catch {
+    return fallback;
+  }
+}
+
+function writeArchivePref(key: string, value: boolean): void {
+  try {
+    localStorage.setItem(key, value ? '1' : '0');
+  } catch {
+    // armazenamento indisponível: ignora
+  }
+}
+
+/** Pasta que contém o arquivo informado (aceita separadores Windows e POSIX). */
+export function parentDirOf(filePath: string): string {
+  const idx = Math.max(filePath.lastIndexOf('\\'), filePath.lastIndexOf('/'));
+  if (idx <= 0) return filePath;
+  const parent = filePath.slice(0, idx);
+  return /^[a-zA-Z]:$/.test(parent) ? `${parent}\\` : parent;
+}
+
+function finishExtraction(result: ExtractResult, openAfter: boolean): void {
+  const browser = useBrowserStore.getState();
+  if (openAfter && result.destDir) {
+    browser.navigateTo(result.destDir);
+  } else {
+    browser.refresh();
+  }
+}
+
 interface ProductivityState {
   paletteOpen: boolean;
   batchRenameOpen: boolean;
@@ -93,6 +130,15 @@ interface ProductivityState {
   archivePath: string;
   archiveEntries: ArchiveEntry[];
   archiveLoading: boolean;
+  /** Pasta onde o conteúdo será extraído (padrão: pasta do próprio compactado). */
+  archiveDestDir: string;
+  /** Cria uma subpasta com o nome do compactado dentro de archiveDestDir. */
+  archiveCreateSubfolder: boolean;
+  /** Navega até a pasta extraída ao concluir. */
+  archiveOpenAfter: boolean;
+  archiveExtracting: boolean;
+  archiveError: string | null;
+  archiveLastResult: ExtractResult | null;
 
   remoteOpen: boolean;
   remoteProfiles: RemoteProfile[];
@@ -133,6 +179,17 @@ interface ProductivityState {
   closeArchiveModal: () => void;
   compressSelection: (archiveName: string, format: 'zip' | 'tar.gz') => Promise<void>;
   extractCurrentArchive: (destDir?: string) => Promise<void>;
+  setArchiveExtractOptions: (
+    partial: Partial<Pick<ProductivityState, 'archiveDestDir' | 'archiveCreateSubfolder' | 'archiveOpenAfter'>>
+  ) => void;
+  chooseArchiveDestination: () => Promise<void>;
+  /** Extração rápida (menu de contexto). parentDir vazio = pasta do compactado. */
+  quickExtractArchive: (
+    archivePath: string,
+    opts: { parentDir?: string; createSubfolder: boolean; openAfter?: boolean }
+  ) => Promise<ExtractResult | null>;
+  /** Abre o seletor de pasta e extrai o compactado no destino escolhido. */
+  extractArchiveToChosenFolder: (archivePath: string) => Promise<void>;
 
   openRemoteModal: () => Promise<void>;
   closeRemoteModal: () => void;
@@ -174,6 +231,12 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
   archivePath: '',
   archiveEntries: [],
   archiveLoading: false,
+  archiveDestDir: '',
+  archiveCreateSubfolder: readArchivePref('pulsares.archive.createSubfolder', true),
+  archiveOpenAfter: readArchivePref('pulsares.archive.openAfter', false),
+  archiveExtracting: false,
+  archiveError: null,
+  archiveLastResult: null,
 
   remoteOpen: false,
   remoteProfiles: [],
@@ -326,13 +389,17 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
   openArchiveModal: async (targetArchivePath) => {
     const selected = Array.from(useBrowserStore.getState().selectedPaths);
     const candidate = targetArchivePath || selected[0] || '';
-    const isArchive = /\.(zip|tar\.gz|tgz|tar)$/i.test(candidate);
+    const isArchive = isExtractableArchive(candidate);
 
     set({
       archiveOpen: true,
       archivePath: isArchive ? candidate : '',
       archiveEntries: [],
       archiveLoading: isArchive,
+      archiveDestDir: isArchive ? parentDirOf(candidate) : '',
+      archiveExtracting: false,
+      archiveError: null,
+      archiveLastResult: null,
     });
 
     if (isArchive) {
@@ -345,7 +412,8 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
     }
   },
 
-  closeArchiveModal: () => set({ archiveOpen: false, archiveEntries: [], archivePath: '' }),
+  closeArchiveModal: () =>
+    set({ archiveOpen: false, archiveEntries: [], archivePath: '', archiveError: null }),
 
   compressSelection: async (archiveName, format) => {
     const browser = useBrowserStore.getState();
@@ -366,15 +434,68 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
   },
 
   extractCurrentArchive: async (destDir) => {
-    const { archivePath } = get();
-    const browser = useBrowserStore.getState();
+    const { archivePath, archiveDestDir, archiveCreateSubfolder, archiveOpenAfter } = get();
     if (!archivePath) return;
-    const targetDir = destDir?.trim() || browser.currentPath;
-    if (!targetDir) return;
+    const parentDir = (destDir ?? archiveDestDir).trim() || parentDirOf(archivePath);
 
-    await extractArchive(archivePath, targetDir);
-    set({ archiveOpen: false });
-    browser.refresh();
+    set({ archiveExtracting: true, archiveError: null });
+    try {
+      const result = await extractArchiveTo(archivePath, parentDir, archiveCreateSubfolder);
+      set({ archiveExtracting: false, archiveLastResult: result, archiveOpen: false });
+      finishExtraction(result, archiveOpenAfter);
+    } catch (err) {
+      set({ archiveExtracting: false, archiveError: String((err as Error)?.message || err) });
+    }
+  },
+
+  setArchiveExtractOptions: (partial) => {
+    if (partial.archiveCreateSubfolder !== undefined) {
+      writeArchivePref('pulsares.archive.createSubfolder', partial.archiveCreateSubfolder);
+    }
+    if (partial.archiveOpenAfter !== undefined) {
+      writeArchivePref('pulsares.archive.openAfter', partial.archiveOpenAfter);
+    }
+    set(partial);
+  },
+
+  chooseArchiveDestination: async () => {
+    const { archiveDestDir, archivePath } = get();
+    const chosen = await showFolderDialog(
+      'Escolher pasta de destino da extração',
+      archiveDestDir || parentDirOf(archivePath)
+    );
+    if (chosen) set({ archiveDestDir: chosen });
+  },
+
+  quickExtractArchive: async (archivePath, opts) => {
+    if (!isExtractableArchive(archivePath)) return null;
+    try {
+      const result = await extractArchiveTo(
+        archivePath,
+        opts.parentDir?.trim() || parentDirOf(archivePath),
+        opts.createSubfolder
+      );
+      set({ archiveLastResult: result });
+      finishExtraction(result, opts.openAfter ?? get().archiveOpenAfter);
+      return result;
+    } catch (err) {
+      // Em caso de falha, abre o modal com o erro para o usuário ajustar o destino
+      await get().openArchiveModal(archivePath);
+      set({ archiveError: String((err as Error)?.message || err) });
+      return null;
+    }
+  },
+
+  extractArchiveToChosenFolder: async (archivePath) => {
+    const chosen = await showFolderDialog(
+      'Extrair para… (escolha a pasta de destino)',
+      parentDirOf(archivePath)
+    );
+    if (!chosen) return;
+    await get().quickExtractArchive(archivePath, {
+      parentDir: chosen,
+      createSubfolder: get().archiveCreateSubfolder,
+    });
   },
 
   openRemoteModal: async () => {
