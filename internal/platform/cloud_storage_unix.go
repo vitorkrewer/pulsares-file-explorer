@@ -309,7 +309,7 @@ func ExecuteCloudAction(targetPath string, action string) error {
 				if out, err := exec.Command(bin, "link", remoteTarget).Output(); err == nil {
 					link := strings.TrimSpace(string(out))
 					if strings.HasPrefix(link, "http") {
-						_ = WriteNativeClipboardText(link)
+						_ = copyLinkToClipboard(link)
 						return OpenPath(link)
 					}
 				}
@@ -322,7 +322,7 @@ func ExecuteCloudAction(targetPath string, action string) error {
 				if out, err := exec.Command(bin, "sharelink", clean).Output(); err == nil {
 					link := strings.TrimSpace(string(out))
 					if strings.HasPrefix(link, "http") {
-						_ = WriteNativeClipboardText(link)
+						_ = copyLinkToClipboard(link)
 						return OpenPath(link)
 					}
 				}
@@ -364,6 +364,31 @@ func ExecuteCloudAction(targetPath string, action string) error {
 	}
 
 	return nil
+}
+
+// copyLinkToClipboard copia um link de compartilhamento para a área de transferência do sistema
+// (pbcopy no macOS; wl-copy, xclip ou xsel no Linux). Falhas são ignoradas: o link ainda é aberto no navegador.
+func copyLinkToClipboard(text string) error {
+	candidates := [][]string{{"pbcopy"}}
+	if runtime.GOOS != "darwin" {
+		candidates = [][]string{
+			{"wl-copy"},
+			{"xclip", "-selection", "clipboard"},
+			{"xsel", "--clipboard", "--input"},
+		}
+	}
+	for _, c := range candidates {
+		bin, err := exec.LookPath(c[0])
+		if err != nil || bin == "" {
+			continue
+		}
+		cmd := exec.Command(bin, c[1:]...)
+		cmd.Stdin = strings.NewReader(text)
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("no clipboard tool available")
 }
 
 func sendNextcloudSocketCommand(cmdLine string) bool {
