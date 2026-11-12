@@ -389,16 +389,49 @@ jobs:
           chmod 755 snap-build/payload/usr/bin/${BIN_NAME}
           cat snap-build/snap/snapcraft.yaml
 
+      # A Snap Store ocasionalmente responde 408/5xx. Pré-instalar LXD e Snapcraft com novas tentativas
+      # evita que a action falhe na primeira instabilidade (ela reaproveita os snaps já instalados).
+      - name: Pre-install LXD and Snapcraft (with retries)
+        shell: bash
+        run: |
+          install_snap() {
+            for attempt in 1 2 3 4 5 6; do
+              if sudo snap install "$@"; then
+                return 0
+              fi
+              echo "Tentativa ${attempt} falhou para: $*. Aguardando $((attempt * 20))s..."
+              sleep $((attempt * 20))
+            done
+            return 1
+          }
+          install_snap lxd
+          install_snap snapcraft --classic
+          sudo groupadd --force --system lxd
+          sudo usermod --append --groups lxd "$USER"
+          sudo lxd waitready --timeout=120
+          sudo lxd init --auto || true
+
       - name: Build snap
         id: snapcraft
+        continue-on-error: true
+        uses: snapcore/action-build@v1
+        with:
+          path: snap-build
+
+      - name: Build snap (retry)
+        id: snapcraft_retry
+        if: steps.snapcraft.outcome == 'failure'
         uses: snapcore/action-build@v1
         with:
           path: snap-build
 
       - name: Rename snap
+        env:
+          SNAP_FILE: ${{ steps.snapcraft.outputs.snap || steps.snapcraft_retry.outputs.snap }}
         run: |
+          test -n "$SNAP_FILE"
           mkdir -p release-assets
-          cp "${{ steps.snapcraft.outputs.snap }}" release-assets/Pulsares-Explorer-Linux-x64.snap
+          cp "$SNAP_FILE" release-assets/Pulsares-Explorer-Linux-x64.snap
 
       - name: Publish to Snap Store
         if: env.SNAPCRAFT_STORE_CREDENTIALS != ''
@@ -406,7 +439,7 @@ jobs:
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          snap: ${{ steps.snapcraft.outputs.snap }}
+          snap: ${{ steps.snapcraft.outputs.snap || steps.snapcraft_retry.outputs.snap }}
           release: ${{ inputs.snap_channel || 'edge' }}
 
       - name: Upload snap artifact
@@ -523,6 +556,13 @@ jobs:
   publish:
     name: Publish GitHub Release
     needs: [meta, windows, linux, snap, flatpak, macos]
+    # Snap e Flatpak dependem de serviços externos (Snap Store / Flathub); se falharem por instabilidade,
+    # o release ainda é publicado com os demais formatos. Windows, Linux e macOS continuam obrigatórios.
+    if: >-
+      ${{ !cancelled()
+      && needs.windows.result == 'success'
+      && needs.linux.result == 'success'
+      && needs.macos.result == 'success' }}
     runs-on: ubuntu-latest
     env:
       TAG: ${{ needs.meta.outputs.tag }}
