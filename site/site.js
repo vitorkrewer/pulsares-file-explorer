@@ -26,6 +26,7 @@
   const PT_EXTRA = {
     'dl.for': 'Baixar para {os}',
     'dl.detected': 'Seu sistema detectado',
+    'dl.pending': 'Em breve',
   };
 
   window.PULSARES_I18N = window.PULSARES_I18N || {};
@@ -192,9 +193,17 @@
     return code === BASE_LANG ? null : window.PULSARES_I18N[code] || null;
   }
 
+  // Para idiomas além de pt-BR/en, textos ainda não traduzidos caem para o inglês (e não para o português).
+  function lookup(code, key) {
+    const dict = dictFor(code);
+    if (!dict) return undefined;
+    if (dict[key] !== undefined) return dict[key];
+    const en = code !== FALLBACK_LANG ? window.PULSARES_I18N[FALLBACK_LANG] : null;
+    return en ? en[key] : undefined;
+  }
+
   function t(key, vars) {
-    const dict = dictFor(currentLang);
-    let text = (dict && dict[key]) || PT_EXTRA[key] || key;
+    let text = lookup(currentLang, key) || PT_EXTRA[key] || key;
     if (vars) {
       Object.keys(vars).forEach((k) => {
         text = text.replace(`{${k}}`, vars[k]);
@@ -205,17 +214,16 @@
 
   function apply(code) {
     currentLang = code;
-    const dict = dictFor(code);
 
     document.querySelectorAll('[data-i18n]').forEach((el) => {
       if (el.dataset.pt === undefined) el.dataset.pt = el.innerHTML;
-      const value = dict ? dict[el.dataset.i18n] : undefined;
+      const value = lookup(code, el.dataset.i18n);
       el.innerHTML = value !== undefined ? value : el.dataset.pt;
     });
 
     document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
       if (el.dataset.ptAria === undefined) el.dataset.ptAria = el.getAttribute('aria-label') || '';
-      const value = dict ? dict[el.dataset.i18nAria] : undefined;
+      const value = lookup(code, el.dataset.i18nAria);
       el.setAttribute('aria-label', value !== undefined ? value : el.dataset.ptAria);
     });
 
@@ -240,15 +248,25 @@
         /* ignora */
       }
     }
-    if (code === BASE_LANG || window.PULSARES_I18N[code]) {
+    if (code === BASE_LANG) {
       apply(code);
       return;
     }
-    const script = document.createElement('script');
-    script.src = `i18n/${code}.js`;
-    script.onload = () => apply(code);
-    script.onerror = () => apply(BASE_LANG);
-    document.head.appendChild(script);
+    const loadScript = (lang, done) => {
+      if (window.PULSARES_I18N[lang]) {
+        done(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = `i18n/${lang}.js`;
+      script.onload = () => done(true);
+      script.onerror = () => done(false);
+      document.head.appendChild(script);
+    };
+    // Carrega o inglês primeiro (fallback dos textos ainda não traduzidos) e depois o idioma escolhido
+    loadScript(FALLBACK_LANG, () => {
+      loadScript(code, (ok) => apply(ok ? code : BASE_LANG));
+    });
   }
 
   function setupMenu() {

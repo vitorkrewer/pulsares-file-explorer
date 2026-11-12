@@ -2591,3 +2591,187 @@ kbd {
   width: 100%;
   height: auto;
 }
+
+
+/* ==========================================================================
+   v1.2.0 — Destaques, selo "novo", grupos de download e comandos de instalação
+   ========================================================================== */
+.feature-card {
+  position: relative;
+}
+
+.feature-new-tag {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: var(--accent-gradient);
+  color: #fff;
+}
+
+.highlights-section {
+  padding: 70px 0 40px;
+}
+
+.highlights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 20px;
+}
+
+.highlight-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.highlight-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+
+.highlight-emoji {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.highlight-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.highlight-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.os-group-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.os-group-label:first-child {
+  margin-top: 0;
+}
+
+.download-file-btn {
+  gap: 10px;
+}
+
+.download-file-btn .file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.download-file-btn .file-badge {
+  flex-shrink: 0;
+}
+
+.download-file-recommended {
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.download-file-recommended .file-badge {
+  background: var(--accent-gradient);
+  color: #fff;
+}
+
+/* Arquivo ainda não publicado na release mais recente */
+.download-file-btn.is-pending {
+  opacity: 0.55;
+}
+
+.download-file-btn.is-pending .file-badge {
+  display: none;
+}
+
+.download-file-btn.is-pending::after {
+  content: attr(data-pending-label);
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px dashed var(--text-muted);
+  color: var(--text-muted);
+}
+
+.install-commands {
+  margin: 10px 0 30px;
+  padding: 24px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.install-commands-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.install-commands-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.install-command {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.install-command-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.install-command pre {
+  margin: 0;
+  padding: 10px 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.install-command code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--accent);
+  white-space: pre;
+}
+
+@media (max-width: 520px) {
+  .install-commands-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .install-commands {
+    padding: 18px;
+  }
+}

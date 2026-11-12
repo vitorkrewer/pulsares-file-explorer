@@ -19,10 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
     copy: `<svg class="svg-icon copy-icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
   };
 
+  // file: formato preferido; fallback: usado enquanto a release mais recente ainda não contém o formato preferido
   const DOWNLOADS = {
-    windows: { name: 'Windows (x64)', icon: ICONS.windows, file: 'Pulsares-Explorer-Windows-x64.exe', sub: '.exe • x64', cardId: 'cardWindows' },
-    linux: { name: 'Linux (AppImage)', icon: ICONS.linux, file: 'Pulsares-Explorer-Linux-x64.AppImage', sub: '.AppImage • x64', cardId: 'cardLinux' },
-    mac: { name: 'macOS Universal', icon: ICONS.mac, file: 'Pulsares-Explorer-macOS-universal.zip', sub: 'Apple Silicon & Intel', cardId: 'cardMac' },
+    windows: { name: 'Windows (x64)', icon: ICONS.windows, file: 'Pulsares-Explorer-Windows-x64-Setup.exe', fallback: 'Pulsares-Explorer-Windows-x64.exe', sub: 'Setup .exe • x64', fallbackSub: '.exe • x64', cardId: 'cardWindows' },
+    linux: { name: 'Linux (AppImage)', icon: ICONS.linux, file: 'Pulsares-Explorer-Linux-x64.AppImage', fallback: 'Pulsares-Explorer-Linux-x64.AppImage', sub: '.AppImage • x64', fallbackSub: '.AppImage • x64', cardId: 'cardLinux' },
+    mac: { name: 'macOS Universal', icon: ICONS.mac, file: 'Pulsares-Explorer-macOS-universal.dmg', fallback: 'Pulsares-Explorer-macOS-universal.zip', sub: '.dmg • Apple Silicon & Intel', fallbackSub: '.zip • Apple Silicon & Intel', cardId: 'cardMac' },
   };
 
   function detectOS() {
@@ -35,7 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const primaryData = DOWNLOADS[detectOS()];
-  let latestTag = 'v1.1.1';
+  let latestTag = 'v1.2.0';
+  let primarySubText = primaryData.sub;
 
   const primaryBtn = document.getElementById('primaryDownloadBtn');
   const primaryLabel = document.getElementById('primaryDownloadLabel');
@@ -43,13 +45,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const primaryIcon = document.getElementById('primaryOsIcon');
   const versionEl = document.getElementById('latestVersion');
   const detectedCard = document.getElementById(primaryData.cardId);
+  const assetLinks = document.querySelectorAll('[data-asset]');
 
   function renderDynamicTexts() {
     if (primaryLabel) primaryLabel.textContent = tr('dl.for', { os: primaryData.name });
-    if (primarySub) primarySub.textContent = `${primaryData.sub} • ${latestTag}`;
+    if (primarySub) primarySub.textContent = `${primarySubText} • ${latestTag}`;
     if (versionEl) versionEl.textContent = latestTag;
     if (detectedCard) detectedCard.setAttribute('data-label', tr('dl.detected'));
+    document.querySelectorAll('.download-file-btn.is-pending').forEach((el) => {
+      el.setAttribute('data-pending-label', tr('dl.pending'));
+    });
   }
+
+  // Links de download: cada elemento com data-asset aponta para o arquivo na release mais recente
+  assetLinks.forEach((el) => {
+    el.href = `${BASE_RELEASE_URL}/${el.dataset.asset}`;
+  });
 
   if (primaryBtn) {
     primaryBtn.href = `${BASE_RELEASE_URL}/${primaryData.file}`;
@@ -60,17 +71,36 @@ document.addEventListener('DOMContentLoaded', () => {
   renderDynamicTexts();
   document.addEventListener('pulsares:lang', renderDynamicTexts);
 
-  if (primaryBtn || versionEl) {
+  function applyReleaseAssets(release) {
+    const names = new Set((release.assets || []).map((a) => a.name));
+    if (names.size === 0) return;
+
+    // Botão principal: usa o instalador quando publicado; senão, o formato anterior
+    if (primaryBtn && !names.has(primaryData.file) && names.has(primaryData.fallback)) {
+      primaryBtn.href = `${BASE_RELEASE_URL}/${primaryData.fallback}`;
+      primarySubText = primaryData.fallbackSub;
+    }
+
+    // Arquivos ainda não presentes na release mais recente são sinalizados como "em breve"
+    assetLinks.forEach((el) => {
+      if (names.has(el.dataset.asset)) return;
+      el.classList.add('is-pending');
+      el.href = release.html_url || `https://github.com/${REPO}/releases`;
+    });
+  }
+
+  if (primaryBtn || versionEl || assetLinks.length) {
     fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github.v3+json' } })
       .then((res) => (res.ok ? res.json() : null))
       .then((release) => {
         if (release && release.tag_name) {
           latestTag = release.tag_name;
+          applyReleaseAssets(release);
           renderDynamicTexts();
         }
       })
       .catch(() => {
-        /* mantém a versão estática */
+        /* mantém a versão e os links estáticos */
       });
   }
 

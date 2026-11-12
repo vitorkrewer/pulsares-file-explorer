@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Recursos — Pulsares Explorer</title>
   <meta name="description"
-    content="Conheça a suíte do Pulsares Explorer: explorador por abas, Studio Editor com prévia web, Pulsares DB Studio com Mapa ER, SSH/SFTP e terminal integrado." />
+    content="Conheça a suíte do Pulsares Explorer: nuvens conectadas, Abrir com, extração inteligente, Studio Editor com Git, Pulsares DB Studio com edição inline, SSH/SFTP e terminal integrado." />
   <meta name="theme-color" content="#090d16" />
   <link rel="icon" type="image/png" href="appicon.png" />
   <link rel="stylesheet" href="styles.css" />
@@ -41,14 +41,136 @@
           <div class="suite-card suite-card-blue">
             <div class="suite-card-top"><span class="suite-cli"><code>--studio &lt;pasta|arquivo&gt;</code></span></div>
             <h3 class="suite-title" data-i18n="s2.title">Pulsares Studio Editor</h3>
-            <p class="suite-desc" data-i18n="s2.desc">Edite arquivos e pastas inteiras com árvore de projeto completa e
-              prévia web em tempo real (HTML, CSS e JS).</p>
+            <p class="suite-desc" data-i18n="s2.desc.v12">Edite projetos com árvore multinível e status Git, busca e substituição
+              global, prévia web e Markdown ao vivo, além de visualizadores de PDF, imagens, áudio e vídeo.</p>
           </div>
           <div class="suite-card suite-card-cyan">
             <div class="suite-card-top"><span class="suite-cli"><code>--dbstudio &lt;banco.db&gt;</code></span></div>
             <h3 class="suite-title" data-i18n="s3.title">Pulsares DB Studio</h3>
-            <p class="suite-desc" data-i18n="s3.desc">Console SQL, Mapa ER interativo e criador de bancos SQLite a
-              partir de CSV, TSV, JSON e JSONL.</p>
+            <p class="suite-desc" data-i18n="s3.desc.v12">Crie bancos SQLite do zero ou por templates, edite dados direto na
+              grade, desenhe tabelas visualmente e explore o Mapa ER e o console SQL com autocompletar.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features-section" id="novo">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title" data-i18n="new.title">Novo na versão 1.2.0</h2>
+          <p class="section-subtitle" data-i18n="new.subtitle">Integração mais profunda com o sistema operacional, nuvens e
+            o seu fluxo de trabalho.</p>
+        </div>
+        <div class="features-grid">
+          <div class="feature-card">
+            <span class="feature-new-tag">v1.2.0</span>
+            <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
+                stroke="#0ea5e9" stroke-width="2">
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z" />
+              </svg></div>
+            <h3 class="feature-title" data-i18n="nf1.title">Nuvens conectadas</h3>
+            <p class="feature-desc" data-i18n="nf1.desc">OneDrive, Google Drive, Dropbox, iCloud, Nextcloud, Proton Drive,
+              pCloud, Rclone e mais. Veja se o arquivo está no PC ou só na nuvem, libere espaço, mantenha offline e
+              compartilhe pelo menu de contexto.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-new-tag">v1.2.0</span>
+            <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
+                stroke="#3b82f6" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg></div>
+            <h3 class="feature-title" data-i18n="nf2.title">Abrir com…</h3>
+            <p class="feature-desc" data-i18n="nf2.desc">Submenu que lista os programas instalados capazes de abrir cada tipo
+              de arquivo, destaca o aplicativo padrão e permite escolher qualquer outro executável.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-new-tag">v1.2.0</span>
+            <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
+                stroke="#f59e0b" stroke-width="2">
+                <path d="M21 8v13H3V8" />
+                <rect x="1" y="3" width="22" height="5" />
+                <line x1="10" y1="12" x2="14" y2="12" />
+              </svg></div>
+            <h3 class="feature-title" data-i18n="nf3.title">Extração inteligente</h3>
+            <p class="feature-desc" data-i18n="nf3.desc">Extraia .zip, .tar e .tar.gz para uma pasta com o nome do arquivo,
+              aqui ou em qualquer destino. Nunca sobrescreve e evita pastas duplicadas como projeto/projeto.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-new-tag">v1.2.0</span>
+            <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
+                stroke="#10b981" stroke-width="2">
+                <rect x="2" y="2" width="20" height="8" rx="2" />
+                <rect x="2" y="14" width="20" height="8" rx="2" />
+                <line x1="6" y1="6" x2="6.01" y2="6" />
+                <line x1="6" y1="18" x2="6.01" y2="18" />
+              </svg></div>
+            <h3 class="feature-title" data-i18n="nf4.title">Unidades de rede</h3>
+            <p class="feature-desc" data-i18n="nf4.desc">Conecte compartilhamentos SMB/CIFS, NFS e AFP, navegue por caminhos
+              UNC e smb:// direto na barra de endereço e salve atalhos para reconectar com um clique.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-new-tag">v1.2.0</span>
+            <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
+                stroke="#a855f7" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" />
+              </svg></div>
+            <h3 class="feature-title" data-i18n="nf5.title">Área de transferência integrada</h3>
+            <p class="feature-desc" data-i18n="nf5.desc">Copie e cole arquivos entre o Pulsares e o explorador do sistema nos
+              dois sentidos, com histórico de textos, imagens e prints (Alt+V).</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-new-tag">v1.2.0</span>
+            <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
+                stroke="#ec4899" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                <line x1="11" y1="8" x2="11" y2="14" />
+                <line x1="8" y1="11" x2="14" y2="11" />
+              </svg></div>
+            <h3 class="feature-title" data-i18n="nf6.title">Zoom progressivo nas pastas</h3>
+            <p class="feature-desc" data-i18n="nf6.desc">Ctrl + roda do mouse alterna de detalhes compactos a ícones extra
+              grandes, com controle sempre visível na barra de ferramentas.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-new-tag">v1.2.0</span>
+            <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
+                stroke="#06b6d4" stroke-width="2">
+                <ellipse cx="12" cy="5" rx="9" ry="3" />
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+              </svg></div>
+            <h3 class="feature-title" data-i18n="nf7.title">DB Studio completo</h3>
+            <p class="feature-desc" data-i18n="nf7.desc">Crie bancos do zero ou por templates, edite células com duplo
+              clique, insira e exclua registros, construa tabelas visualmente e rode VACUUM, ANALYZE e dumps .sql.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-new-tag">v1.2.0</span>
+            <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
+                stroke="#3b82f6" stroke-width="2">
+                <circle cx="6" cy="6" r="3" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="9" r="3" />
+                <path d="M6 9v6" />
+                <path d="M18 12c0 3-3 3-6 3H9" />
+              </svg></div>
+            <h3 class="feature-title" data-i18n="nf8.title">Studio Editor com Git</h3>
+            <p class="feature-desc" data-i18n="nf8.desc">Árvore multinível com status Git, busca e substituição global
+              (Ctrl+Shift+F), console JS e viewports na prévia web, Markdown GFM e player de mídia.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-new-tag">v1.2.0</span>
+            <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
+                stroke="#10b981" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg></div>
+            <h3 class="feature-title" data-i18n="nf9.title">Instaladores nativos</h3>
+            <p class="feature-desc" data-i18n="nf9.desc">Setup .exe e .msi no Windows; .deb, .rpm, Flatpak, Snap, AppImage e
+              AUR no Linux; .dmg universal no macOS.</p>
           </div>
         </div>
       </div>
@@ -56,6 +178,9 @@
 
     <section class="features-section" id="features">
       <div class="container">
+        <div class="section-header">
+          <h2 class="section-title" data-i18n="features.core">Recursos essenciais</h2>
+        </div>
         <div class="features-grid">
           <div class="feature-card">
             <div class="feature-icon"><svg class="svg-icon" viewBox="0 0 24 24" width="28" height="28" fill="none"
