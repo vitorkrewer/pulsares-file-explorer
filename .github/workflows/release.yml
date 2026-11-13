@@ -556,6 +556,8 @@ jobs:
   publish:
     name: Publish GitHub Release
     needs: [meta, windows, linux, snap, flatpak, macos]
+    permissions:
+      contents: write
     # Snap e Flatpak dependem de serviços externos (Snap Store / Flathub); se falharem por instabilidade,
     # o release ainda é publicado com os demais formatos. Windows, Linux e macOS continuam obrigatórios.
     if: >-
@@ -719,6 +721,7 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ env.TAG }}
           target_commitish: ${{ github.sha }}
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
