@@ -28,9 +28,7 @@
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="Pulsares Explorer" />
     </StandardDirectory>
-    <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="AppMenuFolder" Name="Pulsares" />
-    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
     <StandardDirectory Id="DesktopFolder" />
 
     <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
@@ -42,7 +40,7 @@
       </Component>
     </ComponentGroup>
 
-    <Component Id="StartMenuShortcuts" Directory="AppMenuFolder" Guid="A3D1F6B2-8C47-4E59-B0D3-2F6E8A1C9B47">
+    <Component Id="StartMenuShortcuts" Directory="ProgramMenuFolder" Guid="A3D1F6B2-8C47-4E59-B0D3-2F6E8A1C9B47">
       <Shortcut Id="ExplorerStartShortcut"
                 Name="Pulsares Explorer"
                 Description="Explorador de arquivos rápido e multiplataforma"
@@ -63,7 +61,6 @@
                 Arguments="--dbstudio"
                 WorkingDirectory="INSTALLFOLDER"
                 Icon="DBStudioIcon" />
-      <RemoveFolder Id="RemoveAppMenuFolder" On="uninstall" />
       <RegistryValue Root="HKMU" Key="Software\Pulsares\Explorer" Name="StartMenuShortcuts" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
